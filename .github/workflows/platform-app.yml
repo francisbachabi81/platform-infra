@@ -133,11 +133,11 @@ jobs:
 
           # State storage by product
           if [ "$PRODUCT" = "pub" ]; then
-            STATE_RG="rg-core-infra-state-com"
-            STATE_SA="sacoretfstateinfra-com"
+            STATE_RG="rg-core-infra-state"
+            STATE_SA="sacoretfstateinfra"
           else
-            STATE_RG="rg-core-infra-state-gov"
-            STATE_SA="sacoretfstateinfra-gov"
+            STATE_RG="rg-core-infra-state"
+            STATE_SA="sacoretfstateinfra"
           fi
 
           # Per-stack key: product/env (env may be np/pr)
