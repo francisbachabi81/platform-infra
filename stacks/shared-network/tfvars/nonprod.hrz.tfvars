@@ -19,33 +19,17 @@ private_zones = [
   "privatelink.file.core.usgovcloudapi.net",
   "privatelink.queue.core.usgovcloudapi.net",
   "privatelink.table.core.usgovcloudapi.net",
-  "privatelink.dfs.core.usgovcloudapi.net",   # Data Lake Gen2 (dfs)
-  "privatelink.web.core.usgovcloudapi.net",   # Static website
-
-  # Key Vault
+  "privatelink.dfs.core.usgovcloudapi.net",
+  "privatelink.web.core.usgovcloudapi.net",
   "privatelink.vaultcore.usgovcloudapi.net",
-
-  # Redis
   "privatelink.redis.cache.usgovcloudapi.net",
-
-  # Cosmos DB (NoSQL / "documents")
   "privatelink.documents.azure.us",
-
-  # Azure Database for PostgreSQL (Flexible Server)
   "privatelink.postgres.database.usgovcloudapi.net",
-
-  # Cosmos DB for PostgreSQL (Citus)
   "privatelink.postgres.cosmos.azure.us",
-
-  # Service Bus / Event Hubs
   "privatelink.servicebus.usgovcloudapi.net",
-
-  # App Service (Web Apps + SCM/Kudu)
   "privatelink.azurewebsites.us",
   "privatelink.scm.azurewebsites.us",
-
-  # AKS (replace <region> with e.g., usgovvirginia, usgovarizona)
-  "privatelink.usgovarizona.azmk8s.us"             # e.g., privatelink.usgovarizona.azmk8s.us
+  "privatelink.usgovarizona.azmk8s.us"
 ]
 
 # public dns zones
