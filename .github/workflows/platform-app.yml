@@ -46,52 +46,46 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select cloud/tenant/subscription for Azure Login
+      - name: Select cloud/tenant/subscription
         id: subsel
         shell: bash
         run: |
           set -euo pipefail
-          ENV="${{ inputs.env }}"
           PRODUCT="${{ inputs.product }}"
-
-          # Resolve PLANE from ENV (np/pr) or env mapping
-          if [[ "$ENV" == "np" || "$ENV" == "dev" || "$ENV" == "qa" ]]; then
-            PLANE="nonprod"
-          else
-            PLANE="prod"
-          fi
-
+          # If your workflow also has inputs.plane, use it; otherwise derive plane here if you need it.
+          # PLANE="${{ inputs.plane || '' }}"
+      
           if [ "$PRODUCT" = "hrz" ]; then
             CLOUD_ENV="AzureUSGovernment"
             ARM_ENV="usgovernment"
             TENANT="${{ secrets.AZ_TENANT_HRZ }}"
             CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
             AUDIENCE="api://AzureADTokenExchangeUSGov"
-            if [ "$PLANE" = "nonprod" ]; then
-              SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}"
-            else
-              SUB="${{ secrets.AZ_SUB_HRZ_PROD }}"
-            fi
+            # choose sub nonprod/prod however you prefer; example for shared-network:
+            SUB_NONPROD="${{ secrets.AZ_SUB_HRZ_NONPROD }}"
+            SUB_PROD="${{ secrets.AZ_SUB_HRZ_PROD }}"
           else
             CLOUD_ENV="AzureCloud"
             ARM_ENV="public"
             TENANT="${{ secrets.AZ_TENANT_PUB }}"
             CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
             AUDIENCE="api://AzureADTokenExchange"
-            if [ "$PLANE" = "nonprod" ]; then
-              SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}"
-            else
-              SUB="${{ secrets.AZ_SUB_PUB_PROD }}"
-            fi
+            SUB_NONPROD="${{ secrets.AZ_SUB_PUB_NONPROD }}"
+            SUB_PROD="${{ secrets.AZ_SUB_PUB_PROD }}"
           fi
-
+      
+          # Decide which SUB you want here. For example:
+          # For shared-network: plane is an input (nonprod/prod)
+          PLANE="${{ inputs.plane || 'nonprod' }}"
+          if [ "$PLANE" = "prod" ]; then SUB="$SUB_PROD"; else SUB="$SUB_NONPROD"; fi
+      
           echo "CLOUD_ENV=$CLOUD_ENV" >> $GITHUB_OUTPUT
           echo "ARM_ENV=$ARM_ENV"     >> $GITHUB_OUTPUT
           echo "TENANT=$TENANT"       >> $GITHUB_OUTPUT
           echo "SUB=$SUB"             >> $GITHUB_OUTPUT
           echo "CLIENT_ID=$CLIENT_ID" >> $GITHUB_OUTPUT
           echo "AUDIENCE=$AUDIENCE"   >> $GITHUB_OUTPUT
-
+      
           {
             echo "ARM_ENVIRONMENT=$ARM_ENV"
             echo "ARM_TENANT_ID=$TENANT"
@@ -99,7 +93,6 @@ jobs:
             echo "TF_VAR_tenant_id=$TENANT"
             echo "TF_VAR_subscription_id=$SUB"
             echo "TF_VAR_product=${{ inputs.product }}"
-            echo "TF_VAR_env=${{ inputs.env }}"
           } >> $GITHUB_ENV
 
       - name: Azure Login
