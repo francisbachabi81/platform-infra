@@ -33,13 +33,11 @@ permissions:
 
 env:
   ARM_USE_OIDC: true
-  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
 
 jobs:
   terraform:
     name: "Terraform (shared-network: ${{ inputs.plane }}.${{ inputs.product }})"
     runs-on: ubuntu-latest
-    # If you use GitHub Environments, tie to plane or a separate env like 'nonprod-network'
     environment: ${{ inputs.plane }}
     defaults:
       run:
@@ -48,8 +46,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Select cloud/tenant/subscription by product × plane (Option A)
-      - name: Select cloud/tenant/subscription
+      # Select cloud/tenant/subscription/client-id by product × plane (Option A)
+      - name: Select cloud/tenant/subscription/client-id
         id: subsel
         shell: bash
         run: |
@@ -61,6 +59,7 @@ jobs:
             CLOUD_ENV="AzureUSGovernment"
             ARM_ENV="usgovernment"
             TENANT="${{ secrets.AZ_TENANT_HRZ }}"
+            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
             case "$PLANE" in
               nonprod) SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}";;
               prod)    SUB="${{ secrets.AZ_SUB_HRZ_PROD }}";;
@@ -70,6 +69,7 @@ jobs:
             CLOUD_ENV="AzureCloud"
             ARM_ENV="public"
             TENANT="${{ secrets.AZ_TENANT_PUB }}"
+            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
             case "$PLANE" in
               nonprod) SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}";;
               prod)    SUB="${{ secrets.AZ_SUB_PUB_PROD }}";;
@@ -81,26 +81,27 @@ jobs:
           echo "ARM_ENV=$ARM_ENV"     >> $GITHUB_OUTPUT
           echo "TENANT=$TENANT"       >> $GITHUB_OUTPUT
           echo "SUB=$SUB"             >> $GITHUB_OUTPUT
+          echo "CLIENT_ID=$CLIENT_ID" >> $GITHUB_OUTPUT
 
           {
             echo "ARM_ENVIRONMENT=$ARM_ENV"
             echo "ARM_TENANT_ID=$TENANT"
             echo "ARM_SUBSCRIPTION_ID=$SUB"
+            echo "ARM_CLIENT_ID=$CLIENT_ID"
             echo "TF_VAR_tenant_id=$TENANT"
             echo "TF_VAR_subscription_id=$SUB"
-            # If your provider uses product to switch environment:
             echo "TF_VAR_product=${{ inputs.product }}"
           } >> $GITHUB_ENV
 
       - name: Azure Login
         uses: azure/login@v2
         with:
-          client-id:       ${{ env.ARM_CLIENT_ID }}
+          client-id:       ${{ steps.subsel.outputs.CLIENT_ID }}
           tenant-id:       ${{ steps.subsel.outputs.TENANT }}
           subscription-id: ${{ steps.subsel.outputs.SUB }}
           environment:     ${{ steps.subsel.outputs.CLOUD_ENV }}
 
-      # Resolve tfvars file and backend by product; state key by plane
+      # Resolve tfvars & backend (state split by product, key by plane)
       - name: Resolve tfvars & backend
         id: paths
         shell: bash
@@ -121,7 +122,7 @@ jobs:
           fi
           echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
 
-          # Backend SA/RG per product (keeps hrz and pub states isolated)
+          # Backend SA/RG per product
           STATE_RG="rg-core-infra-state-com"
           STATE_SA="sacoretfstateinfra-com"
           if [ "$PRODUCT" != "pub" ]; then
