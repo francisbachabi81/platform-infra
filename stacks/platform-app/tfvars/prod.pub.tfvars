@@ -6,8 +6,8 @@ rg_name        = "rg-pub-prod-cus-01"
 subscription_id = "b055ea98-fdc4-4ec8-a599-67b1b6f88fe2"
 tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
-state_rg_name        = "rg-core-infra-state-com"
-state_sa_name        = "sacoretfstateinfra-com"
+state_rg_name        = "rg-core-infra-state"
+state_sa_name        = "sacoretfstateinfra"
 state_container_name = "tfstate"
 shared_network_rg    = "rg-pub-pr-cus-01"
 

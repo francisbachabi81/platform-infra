@@ -6,8 +6,8 @@ rg_name        = "rg-hrz-uat-usaz-01"
 subscription_id = "641d3872-8322-4bdb-83ce-bfbc119fa3cd"
 tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
-state_rg_name        = "rg-core-infra-state-gov"
-state_sa_name        = "sacoretfstateinfra-gov"
+state_rg_name        = "rg-core-infra-state"
+state_sa_name        = "sacoretfstateinfra"
 state_container_name = "tfstate"
 shared_network_rg    = "rg-hrz-pr-usaz-01"
 
