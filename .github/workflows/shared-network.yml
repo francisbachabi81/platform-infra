@@ -47,19 +47,19 @@ jobs:
       - uses: actions/checkout@v4
 
       # Select cloud/tenant/subscription/client-id by product × plane (Option A)
-      - name: Select cloud/tenant/subscription/client-id
+      - name: Select cloud/tenant/subscription
         id: subsel
         shell: bash
         run: |
           set -euo pipefail
-          PLANE="${{ inputs.plane }}"        # nonprod | prod
-          PRODUCT="${{ inputs.product }}"    # hrz | pub
-
+          PLANE="${{ inputs.plane }}"
+          PRODUCT="${{ inputs.product }}"
+    
           if [ "$PRODUCT" = "hrz" ]; then
             CLOUD_ENV="AzureUSGovernment"
             ARM_ENV="usgovernment"
             TENANT="${{ secrets.AZ_TENANT_HRZ }}"
-            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
+            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"   # <-- add this
             case "$PLANE" in
               nonprod) SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}";;
               prod)    SUB="${{ secrets.AZ_SUB_HRZ_PROD }}";;
@@ -69,34 +69,33 @@ jobs:
             CLOUD_ENV="AzureCloud"
             ARM_ENV="public"
             TENANT="${{ secrets.AZ_TENANT_PUB }}"
-            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
+            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"   # <-- add this
             case "$PLANE" in
               nonprod) SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}";;
               prod)    SUB="${{ secrets.AZ_SUB_PUB_PROD }}";;
               *) echo "Unknown plane: $PLANE"; exit 1;;
             esac
           fi
-
+    
           echo "CLOUD_ENV=$CLOUD_ENV" >> $GITHUB_OUTPUT
           echo "ARM_ENV=$ARM_ENV"     >> $GITHUB_OUTPUT
           echo "TENANT=$TENANT"       >> $GITHUB_OUTPUT
           echo "SUB=$SUB"             >> $GITHUB_OUTPUT
           echo "CLIENT_ID=$CLIENT_ID" >> $GITHUB_OUTPUT
-
+    
           {
             echo "ARM_ENVIRONMENT=$ARM_ENV"
             echo "ARM_TENANT_ID=$TENANT"
             echo "ARM_SUBSCRIPTION_ID=$SUB"
-            echo "ARM_CLIENT_ID=$CLIENT_ID"
             echo "TF_VAR_tenant_id=$TENANT"
             echo "TF_VAR_subscription_id=$SUB"
             echo "TF_VAR_product=${{ inputs.product }}"
           } >> $GITHUB_ENV
-
+    
       - name: Azure Login
         uses: azure/login@v2
         with:
-          client-id:       ${{ steps.subsel.outputs.CLIENT_ID }}
+          client-id:       ${{ steps.subsel.outputs.CLIENT_ID }}   # <-- use selected client id
           tenant-id:       ${{ steps.subsel.outputs.TENANT }}
           subscription-id: ${{ steps.subsel.outputs.SUB }}
           environment:     ${{ steps.subsel.outputs.CLOUD_ENV }}
