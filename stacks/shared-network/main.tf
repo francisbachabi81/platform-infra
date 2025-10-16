@@ -86,6 +86,7 @@ locals {
     "privatelink.documents.azure.com"         = "cosmos"
     "privatelink.postgres.database.azure.com" = "pg"
     "privatelink.postgres.cosmos.azure.com"   = "cpg"
+    "privatelink.servicebus.windows.net"      ="svb"
     "privatelink.azurewebsites.net"           = "app"
     "privatelink.scm.azurewebsites.net"       = "scm"
     "privatelink.centralus.azmk8s.io"         = "azmk8scus"
@@ -102,8 +103,9 @@ locals {
     "privatelink.documents.azure.us"            = "cosmos"
     "privatelink.postgres.database.usgovcloudapi.net" = "pg"
     "privatelink.postgres.cosmos.azure.us"            = "cpg"
+    "privatelink.servicebus.usgovcloudapi.net"  ="svb"
     "privatelink.azurewebsites.us"              = "app"
-    "scm.privatelink.azurewebsites.us"          = "scm"
+    "privatelink.scm.azurewebsites.us"          = "scm"
     # AKS Gov private DNS zones vary by region; keep your actual region entries
     "privatelink.usgovvirginia.azmk8s.us"       = "azmk8svag"
     "privatelink.usgovarizona.azmk8s.us"        = "azmk8sazg"
@@ -281,25 +283,6 @@ module "peering" {
 }
 
 # ── private dns (zones + links) ────────────────────────────────────────────────
-# locals {
-#   vnet_links_nonprod = local.is_nonprod ? flatten([
-#     for z in var.private_zones : [
-#       { name = "lnk-${lookup(local.short_zone_map, z, substr(replace(z, ".", "-"), 0, 16))}-hub-${local.plane_code}", zone = z, vnet_id = module.vnet["nphub"].id },
-#       { name = "lnk-${lookup(local.short_zone_map, z, substr(replace(z, ".", "-"), 0, 16))}-spk-dev",              zone = z, vnet_id = module.vnet["dev"].id },
-#       { name = "lnk-${lookup(local.short_zone_map, z, substr(replace(z, ".", "-"), 0, 16))}-spk-qa",               zone = z, vnet_id = module.vnet["qa"].id }
-#     ]
-#   ]) : []
-
-#   vnet_links_prod = local.is_prod ? flatten([
-#     for z in var.private_zones : [
-#       { name = "lnk-${lookup(local.short_zone_map, z, substr(replace(z, ".", "-"), 0, 16))}-hub-${local.plane_code}", zone = z, vnet_id = module.vnet["prhub"].id },
-#       { name = "lnk-${lookup(local.short_zone_map, z, substr(replace(z, ".", "-"), 0, 16))}-spk-prod",               zone = z, vnet_id = module.vnet["prod"].id },
-#       { name = "lnk-${lookup(local.short_zone_map, z, substr(replace(z, ".", "-"), 0, 16))}-spk-uat",                zone = z, vnet_id = module.vnet["uat"].id }
-#     ]
-#   ]) : []
-# }
-
-# ── build stable keys for PDNS links (caller) ──────────────────────────────────
 locals {
   # nonprod map
   vnet_links_nonprod_map = local.is_nonprod ? merge(
@@ -370,16 +353,6 @@ module "pdns" {
   tags                = merge(local.tag_base, { purpose = "private-dns" })
   depends_on          = [module.vnet]
 }
-
-# module "pdns" {
-#   source              = "../../modules/private-dns"
-#   resource_group_name = var.shared_network_rg
-#   zones               = var.private_zones
-#   vnet_links          = local.vnet_links              # <- map with static keys
-#   # vnet_links          = concat(local.vnet_links_nonprod, local.vnet_links_prod)
-#   tags                = merge(local.tag_base, { purpose = "private-dns" })
-#   depends_on          = [module.vnet]
-# }
 
 # ── connectivity: vpn gateway ──────────────────────────────────────────────────
 locals {
