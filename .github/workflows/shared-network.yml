@@ -33,6 +33,7 @@ permissions:
 
 env:
   ARM_USE_OIDC: true
+  TF_IN_AUTOMATION: true
 
 jobs:
   terraform:
@@ -93,12 +94,26 @@ jobs:
             echo "TF_VAR_tenant_id=$TENANT"
             echo "TF_VAR_subscription_id=$SUB"
             echo "TF_VAR_product=${{ inputs.product }}"
+
+            # NEW: always set hub_* to selected account for the plane
+            echo "TF_VAR_hub_tenant_id=$TENANT"
+            echo "TF_VAR_hub_subscription_id=$SUB"
+
+            # Optional convenience: explicitly null per-env overrides unless provided via tfvars
+            echo "TF_VAR_dev_subscription_id="
+            echo "TF_VAR_dev_tenant_id="
+            echo "TF_VAR_qa_subscription_id="
+            echo "TF_VAR_qa_tenant_id="
+            echo "TF_VAR_uat_subscription_id="
+            echo "TF_VAR_uat_tenant_id="
+            echo "TF_VAR_prod_subscription_id="
+            echo "TF_VAR_prod_tenant_id="
           } >> $GITHUB_ENV
     
       - name: Azure Login
         uses: azure/login@v2
         with:
-          client-id:       ${{ steps.subsel.outputs.CLIENT_ID }}   # <-- use selected client id
+          client-id:       ${{ steps.subsel.outputs.CLIENT_ID }}
           tenant-id:       ${{ steps.subsel.outputs.TENANT }}
           subscription-id: ${{ steps.subsel.outputs.SUB }}
           environment:     ${{ steps.subsel.outputs.CLOUD_ENV }}
@@ -125,7 +140,7 @@ jobs:
           fi
           echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
 
-          # Backend SA/RG per product
+          # Backend SA/RG per product (customize if you keep separate gov/com state stores)
           STATE_RG="rg-core-infra-state"
           STATE_SA="sacoretfstateinfra"
           if [ "$PRODUCT" != "pub" ]; then
