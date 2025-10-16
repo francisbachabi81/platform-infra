@@ -466,3 +466,75 @@ variable "fd_sku_name" {
     error_message = "fd_sku_name must be Standard_AzureFrontDoor or Premium_AzureFrontDoor."
   }
 }
+
+########################################
+# plane-scoped rg in hub subscription
+########################################
+variable "rg_plane_name" {
+  type        = string
+  description = "Name of the plane-scoped resource group in the hub subscription (used for plane-shared runs)."
+  default     = null
+}
+
+########################################
+# optional per-env subscription/tenant overrides
+########################################
+variable "hub_subscription_id" {
+  type        = string
+  description = "Hub subscription ID override (nullable)."
+  default     = null
+}
+
+variable "hub_tenant_id" {
+  type        = string
+  description = "Hub tenant ID override (nullable)."
+  default     = null
+}
+
+variable "dev_subscription_id" {
+  type        = string
+  description = "Dev subscription ID override (nullable)."
+  default     = null
+}
+
+variable "dev_tenant_id" {
+  type        = string
+  description = "Dev tenant ID override (nullable)."
+  default     = null
+}
+
+variable "qa_subscription_id" {
+  type        = string
+  description = "QA subscription ID override (nullable)."
+  default     = null
+}
+
+variable "qa_tenant_id" {
+  type        = string
+  description = "QA tenant ID override (nullable)."
+  default     = null
+}
+
+variable "uat_subscription_id" {
+  type        = string
+  description = "UAT subscription ID override (nullable)."
+  default     = null
+}
+
+variable "uat_tenant_id" {
+  type        = string
+  description = "UAT tenant ID override (nullable)."
+  default     = null
+}
+
+variable "prod_subscription_id" {
+  type        = string
+  description = "Prod subscription ID override (nullable)."
+  default     = null
+}
+
+variable "prod_tenant_id" {
+  type        = string
+  description = "Prod tenant ID override (nullable)."
+  default     = null
+}

@@ -1,6 +1,7 @@
-# context
+
+# Context
 variable "plane" {
-  description = "Which lane to deploy: nonprod | prod"
+  description = "Deployment plane: nonprod | prod"
   type        = string
   validation {
     condition     = contains(["nonprod", "prod"], var.plane)
@@ -8,35 +9,23 @@ variable "plane" {
   }
 }
 
-variable "subscription_id" {
-  description = "Azure subscription ID to deploy into."
+variable "product" {
+  description = "Product/system code used in naming (hrz | pub)."
   type        = string
-}
-
-variable "tenant_id" {
-  description = "Azure tenant (Entra ID) ID."
-  type        = string
+  default     = "hrz"
+  validation {
+    condition     = contains(["hrz", "pub"], var.product)
+    error_message = "product must be one of: hrz, pub."
+  }
 }
 
 variable "location" {
-  description = "Azure region display/name (e.g., Central US)."
+  description = "Azure region name (e.g., westus3, usgovvirginia)."
   type        = string
-}
-
-variable "tags" {
-  description = "Base tags to merge onto resources (layer- and plane-specific tags are added automatically)."
-  type        = map(string)
-  default     = {}
-}
-
-variable "product" {
-  description = "Product/system code used in resource naming."
-  type        = string
-  default     = "hrz"
 }
 
 variable "region" {
-  description = "Short region code used in naming (e.g., cus)."
+  description = "Short region code used in naming (e.g., cus, usaz)."
   type        = string
   default     = "cus"
 }
@@ -47,7 +36,72 @@ variable "seq" {
   default     = "01"
 }
 
-# hub & spokes
+variable "tags" {
+  description = "Base tags to merge onto resources (layer- and plane-specific tags are added automatically)."
+  type        = map(string)
+  default     = {}
+}
+
+# Subscriptions
+variable "hub_subscription_id" {
+  description = "Subscription ID for the HUB (shared-network) resources."
+  type        = string
+}
+
+variable "hub_tenant_id" {
+  description = "Tenant (Entra ID) ID for the HUB subscription."
+  type        = string
+}
+
+variable "dev_subscription_id" {
+  description = "Optional override subscription ID for DEV spoke resources."
+  type        = string
+  default     = null
+}
+
+variable "dev_tenant_id" {
+  description = "Optional override tenant ID for DEV spoke resources."
+  type        = string
+  default     = null
+}
+
+variable "qa_subscription_id" {
+  description = "Optional override subscription ID for QA spoke resources."
+  type        = string
+  default     = null
+}
+
+variable "qa_tenant_id" {
+  description = "Optional override tenant ID for QA spoke resources."
+  type        = string
+  default     = null
+}
+
+variable "prod_subscription_id" {
+  description = "Optional override subscription ID for PROD spoke resources."
+  type        = string
+  default     = null
+}
+
+variable "prod_tenant_id" {
+  description = "Optional override tenant ID for PROD spoke resources."
+  type        = string
+  default     = null
+}
+
+variable "uat_subscription_id" {
+  description = "Optional override subscription ID for UAT spoke resources."
+  type        = string
+  default     = null
+}
+
+variable "uat_tenant_id" {
+  description = "Optional override tenant ID for UAT spoke resources."
+  type        = string
+  default     = null
+}
+
+# Hub & Spokes (VNets)
 variable "nonprod_hub" {
   description = "Nonprod hub VNet definition."
   type = object({
@@ -74,7 +128,7 @@ variable "nonprod_hub" {
 }
 
 variable "dev_spoke" {
-  description = "Dev spoke VNet."
+  description = "DEV spoke VNet definition."
   type = object({
     rg    = string
     vnet  = string
@@ -99,7 +153,7 @@ variable "dev_spoke" {
 }
 
 variable "qa_spoke" {
-  description = "QA spoke VNet."
+  description = "QA spoke VNet definition."
   type = object({
     rg    = string
     vnet  = string
@@ -124,7 +178,7 @@ variable "qa_spoke" {
 }
 
 variable "prod_hub" {
-  description = "Prod hub VNet."
+  description = "Prod hub VNet definition."
   type = object({
     rg    = string
     vnet  = string
@@ -149,7 +203,7 @@ variable "prod_hub" {
 }
 
 variable "prod_spoke" {
-  description = "Prod spoke VNet."
+  description = "PROD spoke VNet definition."
   type = object({
     rg    = string
     vnet  = string
@@ -174,7 +228,7 @@ variable "prod_spoke" {
 }
 
 variable "uat_spoke" {
-  description = "UAT spoke VNet."
+  description = "UAT spoke VNet definition."
   type = object({
     rg    = string
     vnet  = string
@@ -198,24 +252,26 @@ variable "uat_spoke" {
   nullable = true
 }
 
-# dns
+# DNS
 variable "shared_network_rg" {
-  description = "Resource group for private and public DNS zones."
+  description = "Resource group for Private DNS zones (and optionally Public DNS zones)."
   type        = string
 }
 
 variable "private_zones" {
-  description = "List of Private DNS zones to create + link."
+  description = "Private DNS zone FQDNs to create and link (e.g., privatelink.blob.core.usgovcloudapi.net)."
   type        = list(string)
 }
 
 variable "public_dns_zones" {
-  description = "Public DNS zones."
+  description = "Public DNS zones to create in the shared network RG."
   type        = list(string)
   default     = ["dev.horizon.intterra.io"]
 }
 
-# connectivity & ingress
+
+# Connectivity & Ingress
+
 variable "create_vpn_gateway" {
   description = "Create P2S VPN gateway in the hub?"
   type        = bool
@@ -229,7 +285,7 @@ variable "vpn_sku" {
 }
 
 variable "public_ip_sku" {
-  description = "Public IP SKU for gateways / app gateway."
+  description = "Public IP SKU for gateways / Application Gateway."
   type        = string
   default     = "Standard"
 }
@@ -238,6 +294,18 @@ variable "public_ip_allocation_method" {
   description = "Public IP allocation method."
   type        = string
   default     = "Static"
+}
+
+variable "create_vpng_public_ip" {
+  description = "If true, let the VPN Gateway module create its own Public IP; otherwise pass an external PIP."
+  type        = bool
+  default     = false
+}
+
+variable "create_app_gateway" {
+  description = "Create Application Gateway (and WAF policy)."
+  type        = bool
+  default     = true
 }
 
 variable "waf_mode" {
@@ -271,12 +339,12 @@ variable "appgw_capacity" {
 }
 
 variable "appgw_cookie_based_affinity" {
-  description = "Cookie based affinity (Enabled | Disabled)."
+  description = "Cookie based affinity for Application Gateway (Enabled | Disabled)."
   type        = string
   default     = "Disabled"
 }
 
-# nsg stuff + dns resolver
+# NSGs & DNS Resolver
 variable "nsg_exclude_subnets" {
   description = "Subnet names where generic NSGs should NOT be attached."
   type        = list(string)
@@ -306,19 +374,7 @@ variable "dns_forwarding_rules" {
 }
 
 variable "dnsr_inbound_static_ip" {
-  description = "optional static ip for the dns private resolver inbound endpoint"
+  description = "Optional static IP for the DNS Private Resolver inbound endpoint."
   type        = string
   default     = null
-}
-
-variable "create_app_gateway" {
-  description = "create application gateway (and waf policy)?"
-  type        = bool
-  default     = true
-}
-
-variable "create_vpng_public_ip" {
-  description = "Create a managed vpng Public IP when public_ip_id is not supplied."
-  type        = bool
-  default     = false
 }

@@ -1,66 +1,67 @@
-# core / env
-plane           = "nonprod"      # nonprod | prod
-subscription_id = "641d3872-8322-4bdb-83ce-bfbc119fa3cd"
-tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
-location        = "USGov Arizona"
+# Core / plane
+plane    = "nonprod"                # nonprod | prod
+product  = "hrz"                    # hrz | pub
+location = "usgovarizona"           # canonical region name for azurerm provider
+region   = "usaz"                   # short code used in names
+seq      = "01"                     # sequence in names
 
-# naming
-product = "hrz"
-region  = "usaz"                  # short region (e.g. cus, eus)
-seq     = "01"
 
-# shared network rg
+# Subscriptions / Tenants (cross-subscription support)
+# HUB (shared-network) subscription/tenant — REQUIRED
+hub_subscription_id = "641d3872-8322-4bdb-83ce-bfbc119fa3cd"
+hub_tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
+
+# If DEV/QA VNets live in *different* subscriptions, set these:
+dev_subscription_id = null  # e.g. "11111111-2222-3333-4444-555555555555"
+dev_tenant_id       = null  # e.g. "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+qa_subscription_id  = null  # e.g. "66666666-7777-8888-9999-000000000000"
+qa_tenant_id        = null  # e.g. "ffffffff-1111-2222-3333-444444444444"
+
+# Shared Network RG for DNS
 shared_network_rg = "rg-hrz-np-usaz-01"
 
-# private dns zones (privatelink)
+# Private DNS zones (Azure Government)
 private_zones = [
-  # Storage (Blob/File/Queue/Table + Data Lake Gen2 + Static Website)
+  # Storage
   "privatelink.blob.core.usgovcloudapi.net",
   "privatelink.file.core.usgovcloudapi.net",
   "privatelink.queue.core.usgovcloudapi.net",
   "privatelink.table.core.usgovcloudapi.net",
-  "privatelink.dfs.core.usgovcloudapi.net",   # Data Lake Gen2 (dfs)
+  "privatelink.dfs.core.usgovcloudapi.net",   # Data Lake Gen2
   "privatelink.web.core.usgovcloudapi.net",   # Static website
-
   # Key Vault
   "privatelink.vaultcore.usgovcloudapi.net",
-
   # Redis
   "privatelink.redis.cache.usgovcloudapi.net",
-
-  # Cosmos DB (NoSQL / "documents")
+  # Cosmos DB (NoSQL)
   "privatelink.documents.azure.us",
-
-  # Azure Database for PostgreSQL (Flexible Server)
+  # Azure Database for PostgreSQL (Flexible)
   "privatelink.postgres.database.usgovcloudapi.net",
-
   # Cosmos DB for PostgreSQL (Citus)
   "privatelink.postgres.cosmos.azure.us",
-
   # Service Bus / Event Hubs
   "privatelink.servicebus.usgovcloudapi.net",
-
   # App Service (Web Apps + SCM/Kudu)
   "privatelink.azurewebsites.us",
   "privatelink.scm.azurewebsites.us",
-
-  # AKS (replace <region> with e.g., usgovvirginia, usgovarizona)
-  "privatelink.usgovarizona.azmk8s.us"             # e.g., privatelink.usgovarizona.azmk8s.us
+  # AKS (region-specific)
+  "privatelink.usgovarizona.azmk8s.us"
 ]
 
-# public dns zones
+# Public DNS zones
 public_dns_zones = [
   "dev.horizon.intterra.io"
 ]
 
-# vnets
+# VNets — NONPROD plane: hub + dev + qa
 nonprod_hub = {
   rg    = "rg-hrz-np-usaz-01"
   vnet  = "vnet-hrz-np-hub-usaz-01"
   cidrs = ["10.10.0.0/16"]
 
   subnets = {
-    GatewaySubnet                 = { address_prefixes = ["10.10.0.0/24"] }   # vpn gateway
+    GatewaySubnet                 = { address_prefixes = ["10.10.0.0/24"] }
     AzureFirewallSubnet           = { address_prefixes = ["10.10.1.0/26"] }
     AzureFirewallManagementSubnet = { address_prefixes = ["10.10.1.64/26"] }
     RouteServerSubnet             = { address_prefixes = ["10.10.1.128/27"] }
@@ -69,7 +70,7 @@ nonprod_hub = {
     internal                      = { address_prefixes = ["10.10.13.0/24"] }
     external                      = { address_prefixes = ["10.10.14.0/24"] }
     "shared-svc"                  = { address_prefixes = ["10.10.20.0/24"] }
-    appgw                         = { address_prefixes = ["10.10.40.0/27"] }  # app gateway
+    appgw                         = { address_prefixes = ["10.10.40.0/27"] }
 
     "dns-inbound" = {
       address_prefixes = ["10.10.50.0/27"]
@@ -94,7 +95,7 @@ nonprod_hub = {
 
     "privatelink-hub" = {
       address_prefixes                  = ["10.10.30.0/27"]
-      private_endpoint_network_policies = "Disabled"        # required for private endpoints
+      private_endpoint_network_policies = "Disabled"
     }
   }
 }
@@ -291,25 +292,37 @@ qa_spoke = {
   }
 }
 
-# connectivity & ingress
-create_vpn_gateway          = true      # create vpng
-vpn_sku                     = "VpnGw1"  # e.g. VpnGw1, VpnGw2, VpnGw3
+# Connectivity & Ingress
+create_vpn_gateway          = true       # create VPN gateway in hub
+vpn_sku                     = "VpnGw1"
 public_ip_sku               = "Standard"
 public_ip_allocation_method = "Static"
 
-create_app_gateway          = false     # create app gw
+# If true → VPN module creates its own PIP; if false → this stack creates an external PIP
+create_vpng_public_ip       = false
+
+# App Gateway (disabled for now in nonprod example)
+create_app_gateway          = false
 waf_mode                    = "Detection"   # Detection | Prevention
 appgw_public_ip_enabled     = true
 appgw_sku_name              = "WAF_v2"
 appgw_sku_tier              = "WAF_v2"
 appgw_capacity              = 1
-appgw_cookie_based_affinity = "Disabled"    # Enabled | Disabled
+appgw_cookie_based_affinity = "Disabled"
 
-# tags
+# DNS Private Resolver – optional static inbound IP & forwarding rules
+dnsr_inbound_static_ip = "10.10.50.4"
+dns_forwarding_rules   = [
+  # example:
+  # {
+  #   domain_name = "corp.contoso.com."
+  #   target_ips  = ["10.100.0.10", "10.100.0.11"]
+  # }
+]
+
+# Tags
 tags = {
-  product = "horizon"
-  owner   = "it operations"
+  product = "hrz"
+  owner   = "itops-team"
+  lane    = "nonprod"
 }
-
-# dns resolver inbound static ip
-dnsr_inbound_static_ip = "10.10.50.4"   # points to dns-inbound endpoint ip
