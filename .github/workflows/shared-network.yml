@@ -123,11 +123,11 @@ jobs:
           echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
 
           # Backend SA/RG per product
-          STATE_RG="rg-core-infra-state-com"
-          STATE_SA="sacoretfstateinfra-com"
+          STATE_RG="rg-core-infra-state"
+          STATE_SA="sacoretfstateinfra"
           if [ "$PRODUCT" != "pub" ]; then
-            STATE_RG="rg-core-infra-state-gov"
-            STATE_SA="sacoretfstateinfra-gov"
+            STATE_RG="rg-core-infra-state"
+            STATE_SA="sacoretfstateinfra"
           fi
 
           # Key pattern by plane — matches platform-app's remote_state lookup
