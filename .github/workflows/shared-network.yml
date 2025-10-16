@@ -63,8 +63,8 @@ jobs:
             CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
             AUDIENCE="api://AzureADTokenExchangeUSGov"
             case "$PLANE" in
-              nonprod) SUB="${{ secrets.AZ_SUB_HRZ_HUB_NONPROD }}";;
-              prod)    SUB="${{ secrets.AZ_SUB_HRZ_HUB_PROD }}";;
+              nonprod) SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}";;
+              prod)    SUB="${{ secrets.AZ_SUB_HRZ_PROD }}";;
               *) echo "Unknown plane: $PLANE"; exit 1;;
             esac
           else
@@ -74,8 +74,8 @@ jobs:
             CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
             AUDIENCE="api://AzureADTokenExchange"
             case "$PLANE" in
-              nonprod) SUB="${{ secrets.AZ_SUB_PUB_HUB_NONPROD }}";;
-              prod)    SUB="${{ secrets.AZ_SUB_PUB_HUB_PROD }}";;
+              nonprod) SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}";;
+              prod)    SUB="${{ secrets.AZ_SUB_PUB_PROD }}";;
               *) echo "Unknown plane: $PLANE"; exit 1;;
             esac
           fi
