@@ -31,25 +31,24 @@ permissions:
   id-token: write
   contents: read
 
-# Only the OIDC Client ID is static here; tenant/subscription will be selected dynamically.
+# OIDC enabled; client-id/tenant/subscription selected dynamically below
 env:
   ARM_USE_OIDC: true
-  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
 
 jobs:
   terraform:
-    name: "Terraform (envs/${{ inputs.env }}.${{ inputs.product }})"
+    name: "Terraform (platform-app: ${{ inputs.env }}.${{ inputs.product }})"
     runs-on: ubuntu-latest
     environment: ${{ inputs.env }}
     defaults:
       run:
-        working-directory: stacks/envs
+        working-directory: stacks/platform-app
 
     steps:
       - uses: actions/checkout@v4
 
-      # Select cloud, tenant, and subscription based on product×env (Option A)
-      - name: Select cloud/tenant/subscription
+      # Select cloud, tenant, subscription, and client-id based on product×env (Option A)
+      - name: Select cloud/tenant/subscription/client-id
         id: subsel
         shell: bash
         run: |
@@ -61,6 +60,7 @@ jobs:
             CLOUD_ENV="AzureUSGovernment"
             ARM_ENV="usgovernment"
             TENANT="${{ secrets.AZ_TENANT_HRZ }}"
+            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
             case "$ENV" in
               dev)  SUB="${{ secrets.AZ_SUB_HRZ_DEV }}";;
               qa)   SUB="${{ secrets.AZ_SUB_HRZ_QA }}";;
@@ -72,6 +72,7 @@ jobs:
             CLOUD_ENV="AzureCloud"
             ARM_ENV="public"
             TENANT="${{ secrets.AZ_TENANT_PUB }}"
+            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
             case "$ENV" in
               dev)  SUB="${{ secrets.AZ_SUB_PUB_DEV }}";;
               qa)   SUB="${{ secrets.AZ_SUB_PUB_QA }}";;
@@ -85,12 +86,14 @@ jobs:
           echo "ARM_ENV=$ARM_ENV"     >> $GITHUB_OUTPUT
           echo "TENANT=$TENANT"       >> $GITHUB_OUTPUT
           echo "SUB=$SUB"             >> $GITHUB_OUTPUT
+          echo "CLIENT_ID=$CLIENT_ID" >> $GITHUB_OUTPUT
 
-          # Export for provider and Terraform (so you don't need to pass -var for these)
+          # Export for provider & Terraform variables
           {
             echo "ARM_ENVIRONMENT=$ARM_ENV"
             echo "ARM_TENANT_ID=$TENANT"
             echo "ARM_SUBSCRIPTION_ID=$SUB"
+            echo "ARM_CLIENT_ID=$CLIENT_ID"
             echo "TF_VAR_tenant_id=$TENANT"
             echo "TF_VAR_subscription_id=$SUB"
           } >> $GITHUB_ENV
@@ -98,12 +101,12 @@ jobs:
       - name: Azure Login
         uses: azure/login@v2
         with:
-          client-id:      ${{ env.ARM_CLIENT_ID }}
-          tenant-id:      ${{ steps.subsel.outputs.TENANT }}
+          client-id:       ${{ steps.subsel.outputs.CLIENT_ID }}
+          tenant-id:       ${{ steps.subsel.outputs.TENANT }}
           subscription-id: ${{ steps.subsel.outputs.SUB }}
-          environment:    ${{ steps.subsel.outputs.CLOUD_ENV }}
+          environment:     ${{ steps.subsel.outputs.CLOUD_ENV }}
 
-      # Resolve tfvars path and choose backend RG/SA by product
+      # Resolve tfvars and choose backend (state split by product)
       - name: Resolve tfvars & backend
         id: paths
         shell: bash
@@ -113,8 +116,8 @@ jobs:
           PRODUCT="${{ inputs.product }}"
 
           # Prefer env.product.tfvars; fallback to env.tfvars
-          TV1="${GITHUB_WORKSPACE}/stacks/envs/tfvars/${ENV}.${PRODUCT}.tfvars"
-          TVFALLBACK="${GITHUB_WORKSPACE}/stacks/envs/tfvars/${ENV}.tfvars"
+          TV1="${GITHUB_WORKSPACE}/stacks/platform-app/tfvars/${ENV}.${PRODUCT}.tfvars"
+          TVFALLBACK="${GITHUB_WORKSPACE}/stacks/platform-app/tfvars/${ENV}.tfvars"
           if [ -f "$TV1" ]; then
             TFVARS_PATH="$TV1"
           elif [ -f "$TVFALLBACK" ]; then
@@ -131,7 +134,9 @@ jobs:
             STATE_RG="rg-core-infra-state-gov"
             STATE_SA="sacoretfstateinfra-gov"
           fi
-          STATE_KEY="env/${ENV}/terraform.tfstate"
+
+          # Per-stack key pattern: product/env to avoid collisions
+          STATE_KEY="platform-app/${PRODUCT}/${ENV}/terraform.tfstate"
 
           echo "STATE_RG=$STATE_RG"   >> "$GITHUB_OUTPUT"
           echo "STATE_SA=$STATE_SA"   >> "$GITHUB_OUTPUT"
@@ -202,11 +207,11 @@ jobs:
         if: ${{ !inputs.destroy }}
         uses: actions/upload-artifact@v4
         with:
-          name: tfplan-${{ github.run_id }}
+          name: platform-app-tfplan-${{ github.run_id }}
           if-no-files-found: error
           path: |
-            ${{ github.workspace }}/stacks/envs/tfplan
-            ${{ github.workspace }}/stacks/envs/plan.txt
+            ${{ github.workspace }}/stacks/platform-app/tfplan
+            ${{ github.workspace }}/stacks/platform-app/plan.txt
 
       - name: Terraform Apply
         if: ${{ inputs.apply && !inputs.destroy }}
