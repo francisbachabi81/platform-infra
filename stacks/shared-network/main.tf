@@ -371,15 +371,15 @@ module "pdns" {
   depends_on          = [module.vnet]
 }
 
-module "pdns" {
-  source              = "../../modules/private-dns"
-  resource_group_name = var.shared_network_rg
-  zones               = var.private_zones
-  vnet_links          = local.vnet_links              # <- map with static keys
-  # vnet_links          = concat(local.vnet_links_nonprod, local.vnet_links_prod)
-  tags                = merge(local.tag_base, { purpose = "private-dns" })
-  depends_on          = [module.vnet]
-}
+# module "pdns" {
+#   source              = "../../modules/private-dns"
+#   resource_group_name = var.shared_network_rg
+#   zones               = var.private_zones
+#   vnet_links          = local.vnet_links              # <- map with static keys
+#   # vnet_links          = concat(local.vnet_links_nonprod, local.vnet_links_prod)
+#   tags                = merge(local.tag_base, { purpose = "private-dns" })
+#   depends_on          = [module.vnet]
+# }
 
 # ── connectivity: vpn gateway ──────────────────────────────────────────────────
 locals {
