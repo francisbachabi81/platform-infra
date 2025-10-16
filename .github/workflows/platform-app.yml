@@ -104,13 +104,19 @@ jobs:
 
       - name: Validate required auth settings
         shell: bash
+        env:
+          CLIENT_ID: ${{ steps.subsel.outputs.CLIENT_ID }}
+          TENANT: ${{ steps.subsel.outputs.TENANT }}
+          SUB: ${{ steps.subsel.outputs.SUB }}
+          CLOUD_ENV: ${{ steps.subsel.outputs.CLOUD_ENV }}
+          AUDIENCE: ${{ steps.subsel.outputs.AUDIENCE }}
         run: |
           set -euo pipefail
-          : "${{ steps.subsel.outputs.CLIENT_ID:?Missing CLIENT_ID (AZURE_CLIENT_ID_*) secret }}"
-          : "${{ steps.subsel.outputs.TENANT:?Missing TENANT (AZ_TENANT_*) secret }}"
-          : "${{ steps.subsel.outputs.SUB:?Missing SUB (AZ_SUB_*_NONPROD/PROD) secret }}"
-          : "${{ steps.subsel.outputs.CLOUD_ENV:?Missing CLOUD_ENV }}"
-          : "${{ steps.subsel.outputs.AUDIENCE:?Missing AUDIENCE }}"
+          : "${CLIENT_ID:?Missing CLIENT_ID (AZURE_CLIENT_ID_*) secret}"
+          : "${TENANT:?Missing TENANT (AZ_TENANT_*) secret}"
+          : "${SUB:?Missing SUB (AZ_SUB_*_NONPROD/PROD) secret}"
+          : "${CLOUD_ENV:?Missing CLOUD_ENV}"
+          : "${AUDIENCE:?Missing AUDIENCE}"
           echo "Auth inputs validated."
 
       - name: Azure Login
