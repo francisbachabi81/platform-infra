@@ -23,8 +23,8 @@ variable "region" {
 variable "env" {
   type = string
   validation {
-    condition     = contains(["dev", "qa", "uat", "prod"], var.env)
-    error_message = "env must be one of: dev, qa, uat, prod"
+    condition     = contains(["dev", "qa", "uat", "prod", "np", "pr"], var.env)
+    error_message = "env must be one of: dev, qa, uat, prod, np, pr"
   }
 }
 
@@ -331,8 +331,8 @@ variable "pg_admin_password" {
 }
 
 variable "pg_geo_redundant_backup" {
-  type    = string
-  default = "Disabled"
+  type    = bool
+  default = false
 }
 
 variable "pg_ha_enabled" {

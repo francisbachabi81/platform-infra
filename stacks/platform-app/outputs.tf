@@ -2,20 +2,19 @@
 output "ids" {
   description = "primary resource ids created by this stack"
   value = {
-    kv1    = try(module.kv1[0].id, null)
-    sa1    = try(module.sa1.id, null)
-    cosmos = try(module.cosmos1.id, null)
+    kv1    = local.kv1_id
+    sa1    = local.sa1_id
+    cosmos = local.cosmos1_id
 
-    rsv1   = try(module.rsv1[0].id, null)
-    aks1   = try(module.aks1[0].id, null)
-    acr1   = try(module.acr1[0].id, null)
-    sbns1  = try(module.sbns1[0].id, null)
-    cdbpg1 = try(module.cdbpg1[0].id, null)
+    rsv1 = local.rsv1_id
+    aks1 = local.aks_id
+    acr1 = local.acr_id
 
-    law  = try(azurerm_log_analytics_workspace.obs[0].id, null)
-    appi = try(azurerm_application_insights.obs[0].id, null)
-    # postgres = try(module.postgres.id, null)
-    # redis    = try(module.redis1.id, null)
+    cdbpg1 = try(module.cdbpg1[0].id, null)  # if you keep cdbpg module elsewhere
+
+    law  = local.law_id
+    appi = try(azurerm_application_insights.obs_env[0].id,
+               azurerm_application_insights.obs_hub[0].id, null)
   }
 }
 
@@ -23,20 +22,18 @@ output "ids" {
 output "names" {
   description = "common resource names"
   value = {
-    kv1     = try(module.kv1[0].name, null)
-    sa1     = try(module.sa1.name, null)
-    cosmos1 = try(module.cosmos1.name, null)
+    kv1     = local.kv1_name
+    sa1     = local.sa1_name
+    cosmos1 = local.cosmos1_name
 
-    rsv1   = try(module.rsv1[0].name, null)
-    aks1   = try(module.aks1[0].name, null)
-    acr1   = try(module.acr1[0].name, null)
-    sbns1  = try(module.sbns1[0].name, null)
-    cdbpg1 = try(module.cdbpg1[0].name, null)
+    rsv1 = local.rsv1_name
+    aks1 = local.aks_name
+    acr1 = try(module.acr1_env[0].name, module.acr1_hub[0].name, null)
 
-    law  = try(azurerm_log_analytics_workspace.obs[0].name, null)
-    appi = try(azurerm_application_insights.obs[0].name, null)
-    # postgres = try(module.postgres.name, null)
-    # redis    = try(module.redis1.name, null)
+    law  = try(azurerm_log_analytics_workspace.obs_env[0].name,
+               azurerm_log_analytics_workspace.obs_hub[0].name, null)
+    appi = try(azurerm_application_insights.obs_env[0].name,
+               azurerm_application_insights.obs_hub[0].name, null)
   }
 }
 
@@ -44,11 +41,8 @@ output "names" {
 output "endpoints" {
   description = "non-secret endpoints or hostnames"
   value = {
-    acr_login_server  = try(module.acr1[0].login_server, null)
-    sb_namespace_fqdn = try(module.sbns1[0].fqdn, null)
+    acr_login_server  = local.acr_loginserver
     cdbpg_coordinator = try(module.cdbpg1[0].coordinator_hostname, null)
-    # postgres_fqdn   = try(module.postgres.fqdn, null)
-    # redis_hostname  = try(module.redis1.hostname, null)
   }
 }
 
@@ -59,39 +53,24 @@ output "features" {
     create_servicebus = try(var.create_servicebus, false)
     servicebus_sku    = try(var.servicebus_sku, null)
 
-    aks1_created   = try(length(module.aks1) > 0, false)
-    acr1_created   = try(length(module.acr1) > 0, false)
-    rsv1_created   = try(length(module.rsv1) > 0, false)
-    sbns1_created  = try(length(module.sbns1) > 0, false)
+    aks1_created   = local.aks_id != null
+    acr1_created   = local.acr_id != null
+    rsv1_created   = local.rsv1_id != null
     cdbpg1_created = try(length(module.cdbpg1) > 0, false)
-    obs_created    = try(length(azurerm_log_analytics_workspace.obs) > 0, false)
+    obs_created    = local.law_id != null
   }
 }
 
-# aks summary (id + name)
+# aks summary
 output "aks" {
   description = "aks cluster created in this environment"
-  value = try({
-    id   = module.aks1[0].id
-    name = module.aks1[0].name
-  }, null)
+  value = (local.aks_id == null ? null : {
+    id   = local.aks_id
+    name = local.aks_name
+  })
 }
 
-# service bus summary
-output "servicebus" {
-  description = "service bus namespace details (no keys)"
-  value = try({
-    id                            = module.sbns1[0].id
-    name                          = module.sbns1[0].name
-    sku                           = var.servicebus_sku
-    capacity                      = var.servicebus_capacity
-    public_network_access_enabled = try(module.sbns1[0].public_network_access_enabled, null)
-    sas_policy_name               = try(module.sbns1[0].sas_policy_name, null)
-    sas_policy_id                 = try(module.sbns1[0].sas_policy_id, null)
-  }, null)
-}
-
-# citus summary (non-secret)
+# cosmos db for postgresql (citus) summary (kept as you had)
 output "cdbpg" {
   description = "cosmos db for postgresql (citus) details (no passwords)"
   value = try({
@@ -112,20 +91,20 @@ output "fd_endpoint_hostname" {
 
 output "postgres" {
   description = "postgres flexible server (no secrets)"
-  value = try({
-    id                  = module.postgres[0].id
-    name                = module.postgres[0].name
-    fqdn                = try(module.postgres[0].fqdn, null)
-    private_dns_zone_id = try(module.postgres[0].private_dns_zone_id, null)
-  }, null)
+  value = (local.pg_id == null ? null : {
+    id                  = local.pg_id
+    name                = local.pg_name
+    fqdn                = local.pg_fqdn
+    private_dns_zone_id = try(local.pg_private_zone_id, null)
+  })
 }
 
 output "redis" {
   description = "azure cache for redis (no secrets)"
-  value = try({
-    id       = module.redis1[0].id
-    name     = module.redis1[0].name
-    hostname = try(module.redis1[0].hostname, null)
-    sku_name = try(var.redis_sku_name, null)
-  }, null)
+  value = (local.redis_id == null ? null : {
+    id       = local.redis_id
+    name     = local.redis_name
+    hostname = local.redis_hostname
+    sku_name = var.redis_sku_name
+  })
 }
