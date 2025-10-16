@@ -170,20 +170,18 @@ jobs:
       - name: Export optional per-env / hub overrides to TF_VAR_*
         shell: bash
         run: |
-          # Optional exports: do NOT use -u so empty/missing secrets don't crash the step
           set -e -o pipefail
 
           echo "[export] begin"
 
-          # Safe writer: supports multiline values and skips empties
           write_env () {
             local name="$1"
             local value="$2"
             if [ -n "$value" ]; then
               {
-                echo "${name}<<'__EOF__'"
+                echo "${name}<<EOF"
                 printf '%s\n' "$value"
-                echo "__EOF__"
+                echo "EOF"
               } >> "$GITHUB_ENV"
               echo "[export] set ${name}"
             else
