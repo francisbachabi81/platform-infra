@@ -109,6 +109,11 @@ locals {
     "privatelink.usgovarizona.azmk8s.us"        = "azmk8sazg"
   }
 
+  zone_token = {
+    for z in var.private_zones :
+    z => coalesce(lookup(local.short_zone_map, z, null), "z${substr(md5(z), 0, 6)}")
+  }
+
   name_vpng_pip  = "pip-${var.product}-${local.plane_code}-vpng-${var.region}-${var.seq}"
   name_vpng      = "vpng-${var.product}-${local.plane_code}-${var.region}-${var.seq}"
   name_wafp      = "wafp-${var.product}-${local.plane_code}-${var.region}-${var.seq}"
@@ -276,20 +281,40 @@ module "peering" {
 }
 
 # ── private dns (zones + links) ────────────────────────────────────────────────
+# locals {
+#   vnet_links_nonprod = local.is_nonprod ? flatten([
+#     for z in var.private_zones : [
+#       { name = "lnk-${lookup(local.short_zone_map, z, substr(replace(z, ".", "-"), 0, 16))}-hub-${local.plane_code}", zone = z, vnet_id = module.vnet["nphub"].id },
+#       { name = "lnk-${lookup(local.short_zone_map, z, substr(replace(z, ".", "-"), 0, 16))}-spk-dev",              zone = z, vnet_id = module.vnet["dev"].id },
+#       { name = "lnk-${lookup(local.short_zone_map, z, substr(replace(z, ".", "-"), 0, 16))}-spk-qa",               zone = z, vnet_id = module.vnet["qa"].id }
+#     ]
+#   ]) : []
+
+#   vnet_links_prod = local.is_prod ? flatten([
+#     for z in var.private_zones : [
+#       { name = "lnk-${lookup(local.short_zone_map, z, substr(replace(z, ".", "-"), 0, 16))}-hub-${local.plane_code}", zone = z, vnet_id = module.vnet["prhub"].id },
+#       { name = "lnk-${lookup(local.short_zone_map, z, substr(replace(z, ".", "-"), 0, 16))}-spk-prod",               zone = z, vnet_id = module.vnet["prod"].id },
+#       { name = "lnk-${lookup(local.short_zone_map, z, substr(replace(z, ".", "-"), 0, 16))}-spk-uat",                zone = z, vnet_id = module.vnet["uat"].id }
+#     ]
+#   ]) : []
+# }
+
+# nonprod
 locals {
   vnet_links_nonprod = local.is_nonprod ? flatten([
     for z in var.private_zones : [
-      { name = "lnk-${lookup(local.short_zone_map, z, substr(replace(z, ".", "-"), 0, 16))}-hub-${local.plane_code}", zone = z, vnet_id = module.vnet["nphub"].id },
-      { name = "lnk-${lookup(local.short_zone_map, z, substr(replace(z, ".", "-"), 0, 16))}-spk-dev",              zone = z, vnet_id = module.vnet["dev"].id },
-      { name = "lnk-${lookup(local.short_zone_map, z, substr(replace(z, ".", "-"), 0, 16))}-spk-qa",               zone = z, vnet_id = module.vnet["qa"].id }
+      { name = "lnk-${local.zone_token[z]}-hub-${local.plane_code}", zone = z, vnet_id = module.vnet["nphub"].id },
+      { name = "lnk-${local.zone_token[z]}-spk-dev",                  zone = z, vnet_id = module.vnet["dev"].id },
+      { name = "lnk-${local.zone_token[z]}-spk-qa",                   zone = z, vnet_id = module.vnet["qa"].id }
     ]
   ]) : []
 
+  # prod
   vnet_links_prod = local.is_prod ? flatten([
     for z in var.private_zones : [
-      { name = "lnk-${lookup(local.short_zone_map, z, substr(replace(z, ".", "-"), 0, 16))}-hub-${local.plane_code}", zone = z, vnet_id = module.vnet["prhub"].id },
-      { name = "lnk-${lookup(local.short_zone_map, z, substr(replace(z, ".", "-"), 0, 16))}-spk-prod",               zone = z, vnet_id = module.vnet["prod"].id },
-      { name = "lnk-${lookup(local.short_zone_map, z, substr(replace(z, ".", "-"), 0, 16))}-spk-uat",                zone = z, vnet_id = module.vnet["uat"].id }
+      { name = "lnk-${local.zone_token[z]}-hub-${local.plane_code}", zone = z, vnet_id = module.vnet["prhub"].id },
+      { name = "lnk-${local.zone_token[z]}-spk-prod",                zone = z, vnet_id = module.vnet["prod"].id },
+      { name = "lnk-${local.zone_token[z]}-spk-uat",                 zone = z, vnet_id = module.vnet["uat"].id }
     ]
   ]) : []
 }
