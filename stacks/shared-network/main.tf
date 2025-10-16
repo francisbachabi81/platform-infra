@@ -76,6 +76,7 @@ locals {
   prod_only_tags = { environment = "prod", purpose = "env-prod", criticality = "High",   patchgroup = "Monthly", lane = "prod" }
 
   short_zone_map = {
+    # Storage (Commercial)
     "privatelink.blob.core.windows.net"       = "plb"
     "privatelink.file.core.windows.net"       = "plf"
     "privatelink.queue.core.windows.net"      = "plq"
@@ -84,11 +85,28 @@ locals {
     "privatelink.redis.cache.windows.net"     = "redis"
     "privatelink.documents.azure.com"         = "cosmos"
     "privatelink.postgres.database.azure.com" = "pg"
-    "privatelink.servicebus.windows.net"      = "sb"
     "privatelink.postgres.cosmos.azure.com"   = "cpg"
     "privatelink.azurewebsites.net"           = "app"
     "privatelink.scm.azurewebsites.net"       = "scm"
     "privatelink.centralus.azmk8s.io"         = "azmk8scus"
+
+    # Storage (Gov)
+    "privatelink.blob.core.usgovcloudapi.net"   = "plb"
+    "privatelink.file.core.usgovcloudapi.net"   = "plf"
+    "privatelink.queue.core.usgovcloudapi.net"  = "plq"
+    "privatelink.table.core.usgovcloudapi.net"  = "plt"
+    "privatelink.dfs.core.usgovcloudapi.net"    = "pldfs"
+    "privatelink.web.core.usgovcloudapi.net"    = "plweb"
+    "privatelink.vaultcore.usgovcloudapi.net"   = "kv"
+    "privatelink.redis.cache.usgovcloudapi.net" = "redis"
+    "privatelink.documents.azure.us"            = "cosmos"
+    "privatelink.postgres.database.usgovcloudapi.net" = "pg"
+    "privatelink.postgres.cosmos.azure.us"            = "cpg"
+    "privatelink.azurewebsites.us"              = "app"
+    "scm.privatelink.azurewebsites.us"          = "scm"
+    # AKS Gov private DNS zones vary by region; keep your actual region entries
+    "privatelink.usgovvirginia.azmk8s.us"       = "azmk8svag"
+    "privatelink.usgovarizona.azmk8s.us"        = "azmk8sazg"
   }
 
   name_vpng_pip  = "pip-${var.product}-${local.plane_code}-vpng-${var.region}-${var.seq}"

@@ -55,8 +55,8 @@ The **provision-secrets.yaml** workflow automates the process of populating Azur
 |---------|-------------|
 | `AZURE_CLIENT_ID_HRZ`, `AZURE_CLIENT_ID_PUB` | Client IDs for Azure OIDC authentication. |
 | `AZ_TENANT_HRZ`, `AZ_TENANT_PUB` | Tenant IDs for Azure Gov and Commercial. |
-| `AZ_SUB_HRZ_DEV`, `AZ_SUB_HRZ_QA`, `AZ_SUB_HRZ_UAT`, `AZ_SUB_HRZ_PROD` | Subscription IDs for Azure Gov. |
-| `AZ_SUB_PUB_DEV`, `AZ_SUB_PUB_QA`, `AZ_SUB_PUB_UAT`, `AZ_SUB_PUB_PROD` | Subscription IDs for Azure Commercial. |
+| `AZ_SUB_HRZ_DEV`, `AZ_SUB_HRZ_QA`, `AZ_SUB_HRZ_UAT`, `AZ_SUB_HRZ_NONPROD`, `AZ_SUB_HRZ_PROD` | Subscription IDs for Azure Gov. |
+| `AZ_SUB_PUB_DEV`, `AZ_SUB_PUB_QA`, `AZ_SUB_PUB_UAT`, `AZ_SUB_PUB_NONPROD`, `AZ_SUB_PUB_PROD` | Subscription IDs for Azure Commercial. |
 | `SEED_JSON` | JSON bundle of literal secrets used in `literal_bundle_ref` entries. |
 
 ### Usage Example
