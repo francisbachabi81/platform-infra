@@ -13,6 +13,7 @@ provider "azurerm" {
   features {}
   subscription_id = var.subscription_id
   tenant_id       = var.tenant_id
+  environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
 # ── globals ────────────────────────────────────────────────────────────────────
@@ -289,10 +290,13 @@ locals {
   create_vpng_effective  = var.create_vpn_gateway
   vpng_hub_rg            = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
   vpng_gateway_subnet_id = try(module.vnet[local.hub_key].subnet_ids["GatewaySubnet"], null)
+
+  # create a standalone PIP only when the module is NOT creating it
+  create_external_vpng_pip = local.create_vpng_effective && !var.create_vpng_public_ip
 }
 
 resource "azurerm_public_ip" "vpngw" {
-  count               = local.create_vpng_effective ? 1 : 0
+  count               = local.create_external_vpng_pip ? 1 : 0
   name                = local.name_vpng_pip
   location            = var.location
   resource_group_name = local.vpng_hub_rg
@@ -313,8 +317,11 @@ module "vpng" {
   location            = var.location
   resource_group_name = local.vpng_hub_rg
   sku                 = var.vpn_sku
+
+  # if module is creating PIP, do not pass an external ip id
   create_public_ip    = var.create_vpng_public_ip
-  public_ip_id        = azurerm_public_ip.vpngw[0].id
+  public_ip_id        = local.create_external_vpng_pip ? azurerm_public_ip.vpngw[0].id : null
+
   gateway_subnet_id   = local.vpng_gateway_subnet_id
   tenant_id           = var.tenant_id
   tags = merge(local.tag_base, {
@@ -322,17 +329,21 @@ module "vpng" {
     service = "connectivity"
     lane    = local.lane
   })
-  depends_on = [azurerm_public_ip.vpngw]
+  depends_on = [module.vnet]
 }
 
 # ── ingress: waf & appgw ──────────────────────────────────────────────────────
 locals {
   appgw_hub_rg     = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
   has_appgw_subnet = local.is_nonprod ? contains(keys(var.nonprod_hub.subnets), "appgw") : contains(keys(var.prod_hub.subnets), "appgw")
+
+  # require the actual subnet ID to exist to avoid partial creation
+  appgw_subnet_id  = try(module.vnet[local.hub_key].subnet_ids["appgw"], null)
+  appgw_enabled    = var.create_app_gateway && local.has_appgw_subnet && local.appgw_subnet_id != null
 }
 
 module "waf" {
-  count               = (var.create_app_gateway && local.has_appgw_subnet) ? 1 : 0
+  count               = local.appgw_enabled ? 1 : 0
   source              = "../../modules/waf-policy"
   name                = local.name_wafp
   location            = var.location
@@ -347,7 +358,7 @@ module "waf" {
 }
 
 resource "azurerm_network_security_group" "appgw_nsg" {
-  count               = (var.create_app_gateway && local.has_appgw_subnet) ? 1 : 0
+  count               = local.appgw_enabled ? 1 : 0
   name                = local.name_appgw_nsg
   location            = var.location
   resource_group_name = local.appgw_hub_rg
@@ -389,8 +400,8 @@ resource "azurerm_network_security_rule" "appgw_allow_inbound_snat" {
 }
 
 resource "azurerm_subnet_network_security_group_association" "appgw_assoc" {
-  count                     = (var.create_app_gateway && local.has_appgw_subnet) ? 1 : 0
-  subnet_id                 = module.vnet[local.hub_key].subnet_ids["appgw"]
+  count                     = local.appgw_enabled ? 1 : 0
+  subnet_id                 = local.appgw_subnet_id
   network_security_group_id = azurerm_network_security_group.appgw_nsg[0].id
   depends_on = [
     azurerm_network_security_rule.appgw_allow_alb,
@@ -416,14 +427,14 @@ resource "azurerm_network_security_rule" "appgw_deny_other_internet" {
 }
 
 module "appgw" {
-  count                 = (var.create_app_gateway && local.has_appgw_subnet) ? 1 : 0
+  count                 = local.appgw_enabled ? 1 : 0
   source                = "../../modules/app-gateway"
   name                  = local.name_agw
   location              = var.location
   resource_group_name   = local.appgw_hub_rg
   public_ip_enabled     = var.appgw_public_ip_enabled
   public_ip_name        = local.name_agw_pip
-  subnet_id             = module.vnet[local.hub_key].subnet_ids["appgw"]
+  subnet_id             = local.appgw_subnet_id
   sku_name              = var.appgw_sku_name
   sku_tier              = var.appgw_sku_tier
   capacity              = var.appgw_capacity
@@ -772,7 +783,7 @@ locals {
   aks_nsg_targets = {
     for k in local.nsg_keys :
     k => local.nsg_name_by_key[k]
-    if can(regex("-(akshrz)$", k))
+    if can(regex("-(aks${var.product})$", k))
   }
 }
 

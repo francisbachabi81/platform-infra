@@ -11,7 +11,10 @@ state_sa_name        = "sacoretfstateinfra-com"
 state_container_name = "tfstate"
 shared_network_rg    = "rg-pub-pr-cus-01"
 
-tags = { env = "prod", product = "pub" }
+tags = { 
+    env = "prod"
+    product = "pub" 
+}
 
 purge_protection_enabled   = true
 soft_delete_retention_days = 30

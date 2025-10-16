@@ -11,7 +11,10 @@ state_sa_name        = "sacoretfstateinfra-gov"
 state_container_name = "tfstate"
 shared_network_rg    = "rg-hrz-np-usaz-01"
 
-tags = { env = "qa", product = "hrz" }
+tags = { 
+    env = "qa"
+    product = "hrz" 
+}
 
 purge_protection_enabled   = false
 soft_delete_retention_days = 7

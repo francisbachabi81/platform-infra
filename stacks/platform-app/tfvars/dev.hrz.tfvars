@@ -14,7 +14,10 @@ state_container_name = "tfstate"
 shared_network_rg    = "rg-hrz-np-usaz-01"
 
 # tags
-tags = { env = "dev", product = "hrz" }
+tags = { 
+    env = "dev"
+    product = "hrz" 
+}
 
 # key vault
 purge_protection_enabled   = false

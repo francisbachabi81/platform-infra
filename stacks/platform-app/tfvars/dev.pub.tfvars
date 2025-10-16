@@ -14,7 +14,10 @@ state_container_name = "tfstate"
 shared_network_rg    = "rg-pub-np-cus-01"
 
 # tags
-tags = { env = "dev", product = "pub" }
+tags = { 
+    env = "dev"
+    product = "pub" 
+}
 
 # key vault
 purge_protection_enabled   = false

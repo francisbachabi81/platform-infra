@@ -1,32 +1,51 @@
 # core / env
 plane           = "prod"         # nonprod | prod
-subscription_id = "aab00dd1-a61d-4ecc-9010-e1b43ef16c9f"
-tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
-location        = "Central US"
+subscription_id = "641d3872-8322-4bdb-83ce-bfbc119fa3cd"
+tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
+location        = "USGov Arizona"
 
 # naming
 product = "hrz"
-region  = "cus"                  # short region (e.g. cus, eus)
+region  = "usaz"                  # short region (e.g. cus, eus)
 seq     = "01"
 
 # shared network rg
-shared_network_rg = "rg-hrz-pr-cus-01"
+shared_network_rg = "rg-hrz-pr-usaz-01"
 
 # private dns zones (privatelink)
 private_zones = [
-  "privatelink.blob.core.windows.net",
-  "privatelink.file.core.windows.net",
-  "privatelink.queue.core.windows.net",
-  "privatelink.table.core.windows.net",
-  "privatelink.vaultcore.azure.net",
-  "privatelink.redis.cache.windows.net",
-  "privatelink.documents.azure.com",
-  "privatelink.postgres.database.azure.com",
-  "privatelink.servicebus.windows.net",
-  "privatelink.postgres.cosmos.azure.com",
-  "privatelink.azurewebsites.net",
-  "privatelink.scm.azurewebsites.net",
-  "privatelink.centralus.azmk8s.io"
+  # Storage (Blob/File/Queue/Table + Data Lake Gen2 + Static Website)
+  "privatelink.blob.core.usgovcloudapi.net",
+  "privatelink.file.core.usgovcloudapi.net",
+  "privatelink.queue.core.usgovcloudapi.net",
+  "privatelink.table.core.usgovcloudapi.net",
+  "privatelink.dfs.core.usgovcloudapi.net",   # Data Lake Gen2 (dfs)
+  "privatelink.web.core.usgovcloudapi.net",   # Static website
+
+  # Key Vault
+  "privatelink.vaultcore.usgovcloudapi.net",
+
+  # Redis
+  "privatelink.redis.cache.usgovcloudapi.net",
+
+  # Cosmos DB (NoSQL / "documents")
+  "privatelink.documents.azure.us",
+
+  # Azure Database for PostgreSQL (Flexible Server)
+  "privatelink.postgres.database.usgovcloudapi.net",
+
+  # Cosmos DB for PostgreSQL (Citus)
+  "privatelink.postgres.cosmos.azure.us",
+
+  # Service Bus / Event Hubs
+  "privatelink.servicebus.usgovcloudapi.net",
+
+  # App Service (Web Apps + SCM/Kudu)
+  "privatelink.azurewebsites.us",
+  "privatelink.scm.azurewebsites.us",
+
+  # AKS (replace <region> with e.g., usgovvirginia, usgovarizona)
+  "privatelink.usgovarizona.azmk8s.us"             # e.g., privatelink.usgovarizona.azmk8s.us
 ]
 
 # public dns zones
@@ -36,8 +55,8 @@ public_dns_zones = [
 
 # vnets
 prod_hub = {
-  rg    = "rg-hrz-pr-cus-01"
-  vnet  = "vnet-hrz-pr-hub-cus-01"
+  rg    = "rg-hrz-pr-usaz-01"
+  vnet  = "vnet-hrz-pr-hub-usaz-01"
   cidrs = ["10.13.0.0/16"]
 
   subnets = {
@@ -81,8 +100,8 @@ prod_hub = {
 }
 
 prod_spoke = {
-  rg    = "rg-hrz-prod-cus-01"
-  vnet  = "vnet-hrz-prod-cus-01"
+  rg    = "rg-hrz-prod-usaz-01"
+  vnet  = "vnet-hrz-prod-usaz-01"
   cidrs = ["10.14.0.0/16"]
 
   subnets = {
@@ -177,8 +196,8 @@ prod_spoke = {
 }
 
 uat_spoke = {
-  rg    = "rg-hrz-uat-cus-01"
-  vnet  = "vnet-hrz-uat-cus-01"
+  rg    = "rg-hrz-uat-usaz-01"
+  vnet  = "vnet-hrz-uat-usaz-01"
   cidrs = ["10.15.0.0/16"]
 
   subnets = {

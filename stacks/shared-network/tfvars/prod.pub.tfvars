@@ -5,28 +5,47 @@ tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 location        = "Central US"
 
 # naming
-product = "hrz"
+product = "pub"
 region  = "cus"                  # short region (e.g. cus, eus)
 seq     = "01"
 
 # shared network rg
-shared_network_rg = "rg-hrz-pr-cus-01"
+shared_network_rg = "rg-pub-pr-cus-01"
 
 # private dns zones (privatelink)
 private_zones = [
+  # Storage (Blob/File/Queue/Table + Data Lake Gen2 + Static Website)
   "privatelink.blob.core.windows.net",
   "privatelink.file.core.windows.net",
   "privatelink.queue.core.windows.net",
   "privatelink.table.core.windows.net",
+  "privatelink.dfs.core.windows.net",          # Data Lake Gen2 (dfs)
+  "privatelink.web.core.windows.net",          # Static website
+
+  # Key Vault
   "privatelink.vaultcore.azure.net",
+
+  # Redis
   "privatelink.redis.cache.windows.net",
+
+  # Cosmos DB (NoSQL / "documents")
   "privatelink.documents.azure.com",
+
+  # Azure Database for PostgreSQL (Flexible Server)
   "privatelink.postgres.database.azure.com",
-  "privatelink.servicebus.windows.net",
+
+  # Cosmos DB for PostgreSQL (Citus)
   "privatelink.postgres.cosmos.azure.com",
+
+  # Service Bus / Event Hubs
+  "privatelink.servicebus.windows.net",
+
+  # App Service (Web Apps + SCM/Kudu)
   "privatelink.azurewebsites.net",
   "privatelink.scm.azurewebsites.net",
-  "privatelink.centralus.azmk8s.io"
+
+  # AKS (replace <region> with e.g., centralus, eastus2)
+  "privatelink.centralus.azmk8s.io"             # e.g., privatelink.centralus.azmk8s.io
 ]
 
 # public dns zones
@@ -36,8 +55,8 @@ public_dns_zones = [
 
 # vnets
 prod_hub = {
-  rg    = "rg-hrz-pr-cus-01"
-  vnet  = "vnet-hrz-pr-hub-cus-01"
+  rg    = "rg-pub-pr-cus-01"
+  vnet  = "vnet-pub-pr-hub-cus-01"
   cidrs = ["10.13.0.0/16"]
 
   subnets = {
@@ -46,7 +65,7 @@ prod_hub = {
     AzureFirewallManagementSubnet = { address_prefixes = ["10.13.1.64/26"] }
     RouteServerSubnet             = { address_prefixes = ["10.13.1.128/27"] }
     AzureBastionSubnet            = { address_prefixes = ["10.13.3.0/26"] }
-    akshrz                        = { address_prefixes = ["10.13.2.0/24"] }
+    akspub                        = { address_prefixes = ["10.13.2.0/24"] }
     internal                      = { address_prefixes = ["10.13.13.0/24"] }
     external                      = { address_prefixes = ["10.13.14.0/24"] }
     "shared-svc"                  = { address_prefixes = ["10.13.20.0/24"] }
@@ -81,8 +100,8 @@ prod_hub = {
 }
 
 prod_spoke = {
-  rg    = "rg-hrz-prod-cus-01"
-  vnet  = "vnet-hrz-prod-cus-01"
+  rg    = "rg-pub-prod-cus-01"
+  vnet  = "vnet-pub-prod-cus-01"
   cidrs = ["10.14.0.0/16"]
 
   subnets = {
@@ -153,7 +172,7 @@ prod_spoke = {
 
     internal = { address_prefixes = ["10.14.13.0/24"] }
     external = { address_prefixes = ["10.14.14.0/24"] }
-    akshrz   = { address_prefixes = ["10.14.2.0/24"] }
+    akspub   = { address_prefixes = ["10.14.2.0/24"] }
 
     pgflex = {
       address_prefixes = ["10.14.3.0/24"]
@@ -177,8 +196,8 @@ prod_spoke = {
 }
 
 uat_spoke = {
-  rg    = "rg-hrz-uat-cus-01"
-  vnet  = "vnet-hrz-uat-cus-01"
+  rg    = "rg-pub-uat-cus-01"
+  vnet  = "vnet-pub-uat-cus-01"
   cidrs = ["10.15.0.0/16"]
 
   subnets = {
@@ -249,7 +268,7 @@ uat_spoke = {
 
     internal = { address_prefixes = ["10.15.13.0/24"] }
     external = { address_prefixes = ["10.15.14.0/24"] }
-    akshrz   = { address_prefixes = ["10.15.2.0/24"] }
+    akspub   = { address_prefixes = ["10.15.2.0/24"] }
 
     pgflex = {
       address_prefixes = ["10.15.3.0/24"]
