@@ -299,31 +299,84 @@ module "peering" {
 #   ]) : []
 # }
 
-# nonprod
+# ── build stable keys for PDNS links (caller) ──────────────────────────────────
 locals {
-  vnet_links_nonprod = local.is_nonprod ? flatten([
-    for z in var.private_zones : [
-      { name = "lnk-${local.zone_token[z]}-hub-${local.plane_code}", zone = z, vnet_id = module.vnet["nphub"].id },
-      { name = "lnk-${local.zone_token[z]}-spk-dev",                  zone = z, vnet_id = module.vnet["dev"].id },
-      { name = "lnk-${local.zone_token[z]}-spk-qa",                   zone = z, vnet_id = module.vnet["qa"].id }
-    ]
-  ]) : []
+  # nonprod map
+  vnet_links_nonprod_map = local.is_nonprod ? merge(
+    # hub ↔ all zones
+    { for z in var.private_zones :
+      "hub-${local.zone_token[z]}" => {
+        name    = "lnk-${local.zone_token[z]}-hub-${local.plane_code}"
+        zone    = z
+        vnet_id = module.vnet["nphub"].id
+      }
+    },
+    # dev spoke ↔ all zones
+    { for z in var.private_zones :
+      "dev-${local.zone_token[z]}" => {
+        name    = "lnk-${local.zone_token[z]}-spk-dev"
+        zone    = z
+        vnet_id = module.vnet["dev"].id
+      }
+    },
+    # qa spoke ↔ all zones
+    { for z in var.private_zones :
+      "qa-${local.zone_token[z]}" => {
+        name    = "lnk-${local.zone_token[z]}-spk-qa"
+        zone    = z
+        vnet_id = module.vnet["qa"].id
+      }
+    }
+  ) : {}
 
-  # prod
-  vnet_links_prod = local.is_prod ? flatten([
-    for z in var.private_zones : [
-      { name = "lnk-${local.zone_token[z]}-hub-${local.plane_code}", zone = z, vnet_id = module.vnet["prhub"].id },
-      { name = "lnk-${local.zone_token[z]}-spk-prod",                zone = z, vnet_id = module.vnet["prod"].id },
-      { name = "lnk-${local.zone_token[z]}-spk-uat",                 zone = z, vnet_id = module.vnet["uat"].id }
-    ]
-  ]) : []
+  # prod map
+  vnet_links_prod_map = local.is_prod ? merge(
+    # hub ↔ all zones
+    { for z in var.private_zones :
+      "hub-${local.zone_token[z]}" => {
+        name    = "lnk-${local.zone_token[z]}-hub-${local.plane_code}"
+        zone    = z
+        vnet_id = module.vnet["prhub"].id
+      }
+    },
+    # prod spoke ↔ all zones
+    { for z in var.private_zones :
+      "prod-${local.zone_token[z]}" => {
+        name    = "lnk-${local.zone_token[z]}-spk-prod"
+        zone    = z
+        vnet_id = module.vnet["prod"].id
+      }
+    },
+    # uat spoke ↔ all zones
+    { for z in var.private_zones :
+      "uat-${local.zone_token[z]}" => {
+        name    = "lnk-${local.zone_token[z]}-spk-uat"
+        zone    = z
+        vnet_id = module.vnet["uat"].id
+      }
+    }
+  ) : {}
+
+  # final map (plane-aware)
+  vnet_links = merge(local.vnet_links_nonprod_map, local.vnet_links_prod_map)
+}
+
+# pass the map into the module
+module "pdns" {
+  source              = "../../modules/private-dns"
+  resource_group_name = var.shared_network_rg
+  zones               = var.private_zones
+  vnet_links          = local.vnet_links              # <- map with static keys
+  tags                = merge(local.tag_base, { purpose = "private-dns" })
+  depends_on          = [module.vnet]
 }
 
 module "pdns" {
   source              = "../../modules/private-dns"
   resource_group_name = var.shared_network_rg
   zones               = var.private_zones
-  vnet_links          = concat(local.vnet_links_nonprod, local.vnet_links_prod)
+  vnet_links          = local.vnet_links              # <- map with static keys
+  # vnet_links          = concat(local.vnet_links_nonprod, local.vnet_links_prod)
   tags                = merge(local.tag_base, { purpose = "private-dns" })
   depends_on          = [module.vnet]
 }
