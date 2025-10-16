@@ -1,14 +1,14 @@
 name: shared-network-deploy
-run-name: ${{ format('{0}-{1}-{2} {3}', github.workflow, inputs.product, inputs.env, (inputs.destroy && 'destroy' || (inputs.apply && 'apply' || 'plan'))) }}
+run-name: ${{ format('{0}-{1}-{2} {3}', github.workflow, inputs.product, inputs.plane, (inputs.destroy && 'destroy' || (inputs.apply && 'apply' || 'plan'))) }}
 
 on:
   workflow_dispatch:
     inputs:
-      env:
-        description: "Environment to deploy"
+      plane:
+        description: "Plane to deploy (shared across envs)"
         type: choice
-        options: [dev, qa, uat, prod]
-        default: dev
+        options: [nonprod, prod]
+        default: nonprod
       product:
         description: "Product (hrz = Azure Gov, pub = Azure Commercial)"
         type: choice
@@ -37,9 +37,10 @@ env:
 
 jobs:
   terraform:
-    name: "Terraform (shared-network: ${{ inputs.env }}.${{ inputs.product }})"
+    name: "Terraform (shared-network: ${{ inputs.plane }}.${{ inputs.product }})"
     runs-on: ubuntu-latest
-    environment: ${{ inputs.env }}
+    # If you use GitHub Environments, tie to plane or a separate env like 'nonprod-network'
+    environment: ${{ inputs.plane }}
     defaults:
       run:
         working-directory: stacks/shared-network
@@ -47,36 +48,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Select cloud/tenant/subscription from product×env (Option A)
+      # Select cloud/tenant/subscription by product × plane (Option A)
       - name: Select cloud/tenant/subscription
         id: subsel
         shell: bash
         run: |
           set -euo pipefail
-          ENV="${{ inputs.env }}"          # dev|qa|uat|prod
-          PRODUCT="${{ inputs.product }}"  # hrz|pub
+          PLANE="${{ inputs.plane }}"        # nonprod | prod
+          PRODUCT="${{ inputs.product }}"    # hrz | pub
 
           if [ "$PRODUCT" = "hrz" ]; then
             CLOUD_ENV="AzureUSGovernment"
             ARM_ENV="usgovernment"
             TENANT="${{ secrets.AZ_TENANT_HRZ }}"
-            case "$ENV" in
-              dev)  SUB="${{ secrets.AZ_SUB_HRZ_DEV }}";;
-              qa)   SUB="${{ secrets.AZ_SUB_HRZ_QA }}";;
-              uat)  SUB="${{ secrets.AZ_SUB_HRZ_UAT }}";;
-              prod) SUB="${{ secrets.AZ_SUB_HRZ_PROD }}";;
-              *) echo "Unknown env: $ENV"; exit 1;;
+            case "$PLANE" in
+              nonprod) SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}";;
+              prod)    SUB="${{ secrets.AZ_SUB_HRZ_PROD }}";;
+              *) echo "Unknown plane: $PLANE"; exit 1;;
             esac
           else
             CLOUD_ENV="AzureCloud"
             ARM_ENV="public"
             TENANT="${{ secrets.AZ_TENANT_PUB }}"
-            case "$ENV" in
-              dev)  SUB="${{ secrets.AZ_SUB_PUB_DEV }}";;
-              qa)   SUB="${{ secrets.AZ_SUB_PUB_QA }}";;
-              uat)  SUB="${{ secrets.AZ_SUB_PUB_UAT }}";;
-              prod) SUB="${{ secrets.AZ_SUB_PUB_PROD }}";;
-              *) echo "Unknown env: $ENV"; exit 1;;
+            case "$PLANE" in
+              nonprod) SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}";;
+              prod)    SUB="${{ secrets.AZ_SUB_PUB_PROD }}";;
+              *) echo "Unknown plane: $PLANE"; exit 1;;
             esac
           fi
 
@@ -85,35 +82,36 @@ jobs:
           echo "TENANT=$TENANT"       >> $GITHUB_OUTPUT
           echo "SUB=$SUB"             >> $GITHUB_OUTPUT
 
-          # Export for provider & Terraform variables
           {
             echo "ARM_ENVIRONMENT=$ARM_ENV"
             echo "ARM_TENANT_ID=$TENANT"
             echo "ARM_SUBSCRIPTION_ID=$SUB"
             echo "TF_VAR_tenant_id=$TENANT"
             echo "TF_VAR_subscription_id=$SUB"
+            # If your provider uses product to switch environment:
+            echo "TF_VAR_product=${{ inputs.product }}"
           } >> $GITHUB_ENV
 
       - name: Azure Login
         uses: azure/login@v2
         with:
-          client-id:      ${{ env.ARM_CLIENT_ID }}
-          tenant-id:      ${{ steps.subsel.outputs.TENANT }}
+          client-id:       ${{ env.ARM_CLIENT_ID }}
+          tenant-id:       ${{ steps.subsel.outputs.TENANT }}
           subscription-id: ${{ steps.subsel.outputs.SUB }}
-          environment:    ${{ steps.subsel.outputs.CLOUD_ENV }}
+          environment:     ${{ steps.subsel.outputs.CLOUD_ENV }}
 
-      # Resolve tfvars file and backend by product; compute plane from env
+      # Resolve tfvars file and backend by product; state key by plane
       - name: Resolve tfvars & backend
         id: paths
         shell: bash
         run: |
           set -euo pipefail
-          ENV="${{ inputs.env }}"
+          PLANE="${{ inputs.plane }}"
           PRODUCT="${{ inputs.product }}"
 
-          # Prefer env.product.tfvars; fallback to env.tfvars
-          TV1="${GITHUB_WORKSPACE}/stacks/shared-network/tfvars/${ENV}.${PRODUCT}.tfvars"
-          TVFALLBACK="${GITHUB_WORKSPACE}/stacks/shared-network/tfvars/${ENV}.tfvars"
+          # Prefer plane.product.tfvars; fallback to plane.tfvars
+          TV1="${GITHUB_WORKSPACE}/stacks/shared-network/tfvars/${PLANE}.${PRODUCT}.tfvars"
+          TVFALLBACK="${GITHUB_WORKSPACE}/stacks/shared-network/tfvars/${PLANE}.tfvars"
           if [ -f "$TV1" ]; then
             TFVARS_PATH="$TV1"
           elif [ -f "$TVFALLBACK" ]; then
@@ -123,15 +121,7 @@ jobs:
           fi
           echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
 
-          # Plane (dev/qa -> nonprod; uat/prod -> prod)
-          case "$ENV" in
-            dev|qa) PLANE="nonprod";;
-            uat|prod) PLANE="prod";;
-            *) echo "Unknown env: $ENV"; exit 1;;
-          esac
-          echo "PLANE=$PLANE" >> "$GITHUB_OUTPUT"
-
-          # Backend storage per product (separate SA/RG per cloud)
+          # Backend SA/RG per product (keeps hrz and pub states isolated)
           STATE_RG="rg-core-infra-state-com"
           STATE_SA="sacoretfstateinfra-com"
           if [ "$PRODUCT" != "pub" ]; then
@@ -139,7 +129,7 @@ jobs:
             STATE_SA="sacoretfstateinfra-gov"
           fi
 
-          # Key pattern for shared-network: by PLANE (matches platform-app's remote_state lookup)
+          # Key pattern by plane — matches platform-app's remote_state lookup
           STATE_KEY="shared-network/${PLANE}/terraform.tfstate"
 
           echo "STATE_RG=$STATE_RG"   >> "$GITHUB_OUTPUT"
@@ -175,7 +165,7 @@ jobs:
           terraform plan -input=false -lock-timeout=5m \
             -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
             -var "product=${{ inputs.product }}" \
-            -var "env=${{ inputs.env }}" \
+            -var "plane=${{ inputs.plane }}" \
             -out=tfplan
           terraform show -no-color tfplan > plan.txt
 
@@ -199,4 +189,4 @@ jobs:
           terraform destroy -auto-approve -lock-timeout=5m \
             -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
             -var "product=${{ inputs.product }}" \
-            -var "env=${{ inputs.env }}"
+            -var "plane=${{ inputs.plane }}"
