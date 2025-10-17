@@ -424,7 +424,7 @@ module "pdns" {
   zones               = var.private_zones
   vnet_links          = local.vnet_links
   tags                = merge(local.tag_base, { purpose = "private-dns" })
-  # no explicit depends_on needed; VNet IDs create implicit deps
+  depends_on          = [module.rg_hub]
 }
 
 # ── connectivity: vpn gateway ─────────────────────────────────────────────────
@@ -1012,5 +1012,5 @@ resource "azurerm_dns_zone" "public" {
     environment = local.public_dns_env
     lane        = local.public_dns_env
   })
-  # no explicit dependency required
+  depends_on = [module.rg_hub]
 }
