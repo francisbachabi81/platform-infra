@@ -6,6 +6,7 @@ region          = "usaz"                        # short region (e.g., usaz, cus)
 rg_name         = "rg-hrz-dev-usaz-01"
 subscription_id = "641d3872-8322-4bdb-83ce-bfbc119fa3cd"
 tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
+require_foundation = false
 
 # Optional: explicitly tie dev env to a specific sub/tenant (provider default if omitted)
 dev_subscription_id = "641d3872-8322-4bdb-83ce-bfbc119fa3cd"

@@ -463,3 +463,9 @@ variable "prod_tenant_id" {
   description = "Prod tenant ID override (nullable)."
   default     = null
 }
+
+variable "require_foundation" {
+  description = "If true, fail fast when shared-network (PDZs/VNET subnets) is not ready."
+  type        = bool
+  default     = false
+}
