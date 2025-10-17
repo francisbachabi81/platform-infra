@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source = "hashicorp/azurerm"
+    }
+  }
+}
+
 resource "azurerm_private_dns_zone" "zones" {
   for_each            = toset(var.zones)
   name                = each.value

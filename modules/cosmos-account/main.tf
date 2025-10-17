@@ -1,3 +1,12 @@
+
+terraform {
+  required_providers {
+    azurerm = {
+      source = "hashicorp/azurerm"
+    }
+  }
+}
+
 resource "azurerm_cosmosdb_account" "cosmos" {
   name                               = var.name
   location                           = var.location

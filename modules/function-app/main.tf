@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source = "hashicorp/azurerm"
+    }
+  }
+}
+
 # locals
 locals {
   app_name_clean           = replace(lower(trimspace(var.name)), "-", "")

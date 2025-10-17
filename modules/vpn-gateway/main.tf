@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source = "hashicorp/azurerm"
+    }
+  }
+}
+
 # locals
 locals {
   _p2s_tenant_id       = coalesce(var.p2s_aad_tenant_id_override, var.tenant_id)

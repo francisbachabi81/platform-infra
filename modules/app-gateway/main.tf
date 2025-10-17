@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source = "hashicorp/azurerm"
+    }
+  }
+}
+
 resource "azurerm_public_ip" "pip" {
   count               = (var.public_ip_enabled && var.public_ip_id == null) ? 1 : 0
   name                = coalesce(var.public_ip_name, "${var.name}-pip")

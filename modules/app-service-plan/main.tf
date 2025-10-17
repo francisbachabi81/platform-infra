@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source = "hashicorp/azurerm"
+    }
+  }
+}
+
 # app service plan
 resource "azurerm_service_plan" "this" {
   name                          = var.name

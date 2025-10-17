@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source = "hashicorp/azurerm"
+    }
+  }
+}
+
 locals {
   enable_ruleset = length(var.forwarding_rules) > 0
 

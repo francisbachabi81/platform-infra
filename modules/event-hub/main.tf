@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source = "hashicorp/azurerm"
+    }
+  }
+}
+
 # locals
 locals {
   is_premium_sku          = lower(var.namespace_sku) == "premium"

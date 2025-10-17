@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source = "hashicorp/azurerm"
+    }
+  }
+}
+
 locals {
   name_clean              = lower(trimspace(var.name))
   name_nodash             = replace(local.name_clean, "-", "")

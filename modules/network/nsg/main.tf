@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source = "hashicorp/azurerm"
+    }
+  }
+}
+
 resource "azurerm_network_security_group" "nsg" {
   for_each            = var.subnet_nsgs
   name                = each.value.name

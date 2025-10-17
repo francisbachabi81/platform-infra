@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source = "hashicorp/azurerm"
+    }
+  }
+}
+
 locals {
   sb_is_premium = lower(var.sku) == "premium"
   create_pe     = local.sb_is_premium && var.privatelink_subnet_id != null && var.private_dns_zone_id != null

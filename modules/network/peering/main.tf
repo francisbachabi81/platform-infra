@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source = "hashicorp/azurerm"
+    }
+  }
+}
+
 locals {
   l2r_name = coalesce(var.left_to_right_name,  "peer-${var.left_vnet_name}-to-${var.right_vnet_name}")
   r2l_name = coalesce(var.right_to_left_name, "peer-${var.right_vnet_name}-to-${var.left_vnet_name}")

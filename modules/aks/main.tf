@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source = "hashicorp/azurerm"
+    }
+  }
+}
+
 locals {
   use_managed_outbound = var.outbound_public_ip_id == null && length(var.outbound_public_ip_prefix_ids) == 0
 }

@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    azurerm = {
+      source = "hashicorp/azurerm"
+    }
+  }
+}
+
 resource "azurerm_eventhub_consumer_group" "cgs" {
   for_each           = toset(var.consumer_group_names)
   name               = each.value
