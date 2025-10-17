@@ -9,7 +9,7 @@ terraform {
   }
 }
 
-# ENV subscription (dev/qa/uat/prod)
+# env subscription (dev/qa/uat/prod)
 provider "azurerm" {
   features {}
   subscription_id = var.subscription_id
@@ -17,17 +17,17 @@ provider "azurerm" {
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
-# HUB subscription (shared resources like dev AKS, RSV, ACR)
+# hub subscription (shared: dev AKS, RSV, ACR)
 provider "azurerm" {
   alias           = "hub"
   features {}
   subscription_id = coalesce(var.hub_subscription_id, var.subscription_id)
-  tenant_id       = coalesce(var.hub_tenant_id, var.tenant_id)
+  tenant_id       = coalesce(var.hub_tenant_id,       var.tenant_id)
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
 ############################################
-# env flags, plane, tags
+# env flags, naming, tags
 ############################################
 locals {
   enable_public_features = var.product == "pub"
@@ -43,23 +43,12 @@ locals {
   plane      = contains(["dev","qa"], var.env) ? "nonprod" : "prod"
   plane_code = local.plane == "nonprod" ? "np" : "pr"
 
-  # Which vnet group would supply subnets if foundation is present?
+  # vnet source for subnets (from shared stack)
   vnet_key = (
     var.env == "dev"  ? "dev_spoke"  :
     var.env == "qa"   ? "qa_spoke"   :
     var.env == "uat"  ? "uat_spoke"  : "prod_spoke"
   )
-  # AKS placement rule: dev → HUB (shared); uat/prod → ENV (env-specific); qa → none
-  aks_vnet_key_for_subnet = local.is_dev ? "nonprod_hub" : local.is_uat ? "uat_spoke" : local.is_prod ? "prod_spoke" : null
-
-  # feature toggles
-  create_rsv = contains(["dev","prod"], var.env)
-  create_aks = var.env != "qa"
-  create_acr = contains(["dev","prod"], var.env)
-  deploy_obs = local.is_dev || local.is_prod
-
-  # foundation policy
-  want_foundation = var.require_foundation
 
   # names
   sa_suffix_raw   = lower(var.name_suffix)
@@ -72,7 +61,6 @@ locals {
   acr_name          = "acr${var.product}${local.plane_code}${var.region}01"
   acr_pna_effective = lower(var.acr_sku) == "premium" ? var.public_network_access_enabled : true
 
-  # Hub “platform” RG for shared (non-network) resources
   rg_hub = coalesce(var.rg_plane_name, "rg-${var.product}-${local.plane_code}-${var.region}-platform-01")
 
   # tags
@@ -96,12 +84,19 @@ locals {
   tags_acr      = { purpose = "container-registry", service = "acr" }
   tags_postgres = { purpose = "postgres-database",  service = "postgresql" }
   tags_redis    = { purpose = "redis-cache",        service = "redis" }
+
+  # feature toggles
+  create_rsv = contains(["dev","prod"], var.env)
+  create_aks = var.env != "qa"
+  create_acr = contains(["dev","prod"], var.env)
+  deploy_obs = local.is_dev || local.is_prod
 }
 
 ############################################
-# Remote state (shared-network) — Azure AD auth
+# remote state (optional)
 ############################################
 data "terraform_remote_state" "shared" {
+  count   = var.shared_state_enabled ? 1 : 0
   backend = "azurerm"
   config = {
     resource_group_name  = var.state_rg_name
@@ -115,38 +110,53 @@ data "terraform_remote_state" "shared" {
 }
 
 ############################################
-# Foundation inputs (subnets & PDZs) with guards
+# effective private networking inputs
 ############################################
 locals {
-  _subnet_ids_raw = try(data.terraform_remote_state.shared.outputs.vnets[local.vnet_key].subnets, null)
-  _zone_ids_raw   = try(data.terraform_remote_state.shared.outputs.private_dns_zone_ids_by_name, null)
+  rs_outputs            = var.shared_state_enabled ? try(data.terraform_remote_state.shared[0].outputs, {}) : {}
+  subnet_ids_from_state = try(local.rs_outputs.vnets[local.vnet_key].subnets, {})
+  zone_ids_from_state   = try(local.rs_outputs.private_dns_zone_ids_by_name, {})
 
-  subnet_ids = local.want_foundation ? coalesce(local._subnet_ids_raw, tomap({})) : tomap({})
-  zone_ids   = local.want_foundation ? coalesce(local._zone_ids_raw,   tomap({})) : tomap({})
+  zone_ids_effective            = length(var.private_dns_zone_ids) > 0 ? var.private_dns_zone_ids : local.zone_ids_from_state
+  pe_subnet_id_effective        = coalesce(var.pe_subnet_id,           try(local.subnet_ids_from_state["privatelink"], null))
+  aks_nodepool_subnet_effective = coalesce(var.aks_nodepool_subnet_id, try(local.subnet_ids_from_state["aks${var.product}"], null))
 
-  aks_nodepool_subnet_id = try(local.subnet_ids["aks${var.product}"], null)
-  pe_subnet_id           = try(local.subnet_ids["privatelink"], null)
+  region_nospace = replace(lower(var.location), " ", "")
+  aks_pdns_name  = "privatelink.${local.region_nospace}.azmk8s.io"
 
-  region_nospace   = replace(lower(var.location), " ", "")
-  aks_pdns_name    = "privatelink.${local.region_nospace}.azmk8s.io"
-  foundation_ready = local.want_foundation && length(local.subnet_ids) > 0 && length(local.zone_ids) > 0
+  # placement (no provider conditionals)
+  deploy_aks_in_hub = local.is_dev  && local.enable_both && local.create_aks
+  deploy_aks_in_env = (local.is_uat || local.is_prod) && local.enable_both && local.create_aks
 }
 
-check "foundation_subnets_present" {
+############################################
+# fail-fast checks
+############################################
+check "private_net_basics_present" {
   assert {
-    condition     = !local.want_foundation || (local._subnet_ids_raw != null && length(local._subnet_ids_raw) > 0)
-    error_message = "require_foundation=true but no subnets were found for '${local.vnet_key}' in shared-network state."
+    condition = !var.require_private_networking || (
+      local.pe_subnet_id_effective != null && length(local.zone_ids_effective) > 0
+    )
+    error_message = "Private networking required, but pe_subnet_id and/or private_dns_zone_ids are missing. Provide overrides or ensure shared-network is applied."
   }
 }
-check "foundation_pdz_present" {
+
+check "aks_requires_subnet" {
   assert {
-    condition     = !local.want_foundation || (local._zone_ids_raw != null && length(local._zone_ids_raw) > 0)
-    error_message = "require_foundation=true but private DNS zone IDs were not found in shared-network state."
+    condition     = !local.create_aks || local.aks_nodepool_subnet_effective != null
+    error_message = "AKS requested but no nodepool subnet found (set var.aks_nodepool_subnet_id or apply shared-network)."
+  }
+}
+
+check "aks_pdz_exists" {
+  assert {
+    condition     = !local.create_aks || try(local.zone_ids_effective[local.aks_pdns_name], null) != null
+    error_message = "AKS PDZ '${local.aks_pdns_name}' not found (supply via var.private_dns_zone_ids or shared-network)."
   }
 }
 
 ############################################
-# Key Vault (ENV)
+# key vault (env)
 ############################################
 locals {
   kv1_base_name    = "kvt-${var.product}-${var.env}-${var.region}-01"
@@ -154,37 +164,37 @@ locals {
 }
 
 module "kv1" {
-  count                = (local.enable_both && local.foundation_ready) ? 1 : 0
+  count                = local.enable_both ? 1 : 0
   source               = "../../modules/keyvault"
   name                 = local.kv1_base_name
   location             = var.location
   resource_group_name  = var.rg_name
   tenant_id            = var.tenant_id
-  pe_subnet_id         = local.foundation_ready ? local.pe_subnet_id : null
-  private_dns_zone_ids = local.foundation_ready ? local.zone_ids : {}
+  pe_subnet_id         = local.pe_subnet_id_effective
+  private_dns_zone_ids = local.zone_ids_effective
   pe_name                = "pep-${local.kv1_name_cleaned}-vault"
   psc_name               = "psc-${local.kv1_name_cleaned}-vault"
   pe_dns_zone_group_name = "pdns-${local.kv1_name_cleaned}-vault"
   purge_protection_enabled   = var.purge_protection_enabled
   soft_delete_retention_days = var.soft_delete_retention_days
-  tags                       = merge(local.tags_common, local.tags_kv, var.tags)
+  tags = merge(local.tags_common, local.tags_kv, var.tags)
 }
 
 ############################################
-# Storage Account (ENV)
+# storage account (env)
 ############################################
 locals { sa1_name_cleaned = replace(lower(trimspace(local.sa1_name)), "-", "") }
 
 module "sa1" {
-  count               = (local.enable_both && local.foundation_ready) ? 1 : 0
+  count                = local.enable_both ? 1 : 0
   source               = "../../modules/storage-account"
   name                 = local.sa1_name
   location             = var.location
   resource_group_name  = var.rg_name
   replication_type     = var.sa_replication_type
   container_names      = ["json-image-storage", "video-data"]
-  pe_subnet_id         = local.foundation_ready ? local.pe_subnet_id : null
-  private_dns_zone_ids = local.foundation_ready ? local.zone_ids : {}
+  pe_subnet_id         = local.pe_subnet_id_effective
+  private_dns_zone_ids = local.zone_ids_effective
   pe_blob_name         = "pep-${local.sa1_name_cleaned}-blob"
   psc_blob_name        = "psc-${local.sa1_name_cleaned}-blob"
   blob_zone_group_name = "pdns-${local.sa1_name_cleaned}-blob"
@@ -196,7 +206,7 @@ module "sa1" {
 }
 
 ############################################
-# Cosmos (NoSQL) (ENV)
+# cosmos (nosql) (env)
 ############################################
 locals {
   cosmos1_name         = "cosno-${var.product}-${var.env}-${var.region}-01"
@@ -205,17 +215,17 @@ locals {
 }
 
 module "cosmos1" {
-  count                = (local.cosmos_enabled && local.foundation_ready) ? 1 : 0
-  source               = "../../modules/cosmos-account"
-  name                 = local.cosmos1_name
-  location             = var.location
-  resource_group_name  = var.rg_name
-  pe_subnet_id         = local.foundation_ready ? local.pe_subnet_id : null
-  private_dns_zone_ids = local.foundation_ready ? local.zone_ids : {}
+  count                  = local.cosmos_enabled ? 1 : 0
+  source                 = "../../modules/cosmos-account"
+  name                   = local.cosmos1_name
+  location               = var.location
+  resource_group_name    = var.rg_name
+  pe_subnet_id           = local.pe_subnet_id_effective
+  private_dns_zone_ids   = local.zone_ids_effective
   total_throughput_limit = var.cosno_total_throughput_limit
-  pe_sql_name         = "pep-${local.cosmos1_name_cleaned}-sql"
-  psc_sql_name        = "psc-${local.cosmos1_name_cleaned}-sql"
-  sql_zone_group_name = "pdns-${local.cosmos1_name_cleaned}-sql"
+  pe_sql_name            = "pep-${local.cosmos1_name_cleaned}-sql"
+  psc_sql_name           = "psc-${local.cosmos1_name_cleaned}-sql"
+  sql_zone_group_name    = "pdns-${local.cosmos1_name_cleaned}-sql"
   tags = merge(local.tags_common, local.tags_cosmos, var.tags, {
     workload_purpose     = "Stores notification_jobs and notification_history"
     workload_description = "Scalable fan-out with dedup via partitioned containers"
@@ -224,7 +234,7 @@ module "cosmos1" {
 }
 
 resource "azurerm_cosmosdb_sql_database" "app" {
-  count                = (local.cosmos_enabled && local.foundation_ready) ? 1 : 0
+  count               = local.cosmos_enabled ? 1 : 0
   name                = "cosnodb-${var.product}"
   resource_group_name = var.rg_name
   account_name        = local.cosmos1_name
@@ -233,7 +243,7 @@ resource "azurerm_cosmosdb_sql_database" "app" {
 }
 
 resource "azurerm_cosmosdb_sql_container" "items" {
-  count                = (local.cosmos_enabled && local.foundation_ready) ? 1 : 0
+  count                 = local.cosmos_enabled ? 1 : 0
   name                  = "notification_jobs"
   resource_group_name   = var.rg_name
   account_name          = local.cosmos1_name
@@ -244,7 +254,7 @@ resource "azurerm_cosmosdb_sql_container" "items" {
 }
 
 resource "azurerm_cosmosdb_sql_container" "events" {
-  count                = (local.cosmos_enabled && local.foundation_ready) ? 1 : 0
+  count                 = local.cosmos_enabled ? 1 : 0
   name                  = "notification_history"
   resource_group_name   = var.rg_name
   account_name          = local.cosmos1_name
@@ -255,7 +265,7 @@ resource "azurerm_cosmosdb_sql_container" "events" {
 }
 
 ############################################
-# AKS (shared in DEV via HUB; env-specific in UAT/PROD)
+# aks (dev shared in hub; uat/prod in env)
 ############################################
 locals {
   aks_service_cidr = coalesce(
@@ -265,13 +275,9 @@ locals {
     "10.125.0.0/16"
   )
   aks_dns_service_ip = coalesce(var.aks_dns_service_ip, cidrhost(local.aks_service_cidr, 10))
-
-  # Placement toggles (no conditionals in provider args)
-  deploy_aks_in_hub = local.is_dev  && local.enable_both && local.create_aks && local.foundation_ready
-  deploy_aks_in_env = (local.is_uat || local.is_prod) && local.enable_both && local.create_aks && local.foundation_ready
 }
 
-# ---------- Identity ----------
+# identities
 resource "azurerm_user_assigned_identity" "aks_hub" {
   count               = local.deploy_aks_in_hub ? 1 : 0
   provider            = azurerm.hub
@@ -290,18 +296,18 @@ resource "azurerm_user_assigned_identity" "aks_env" {
   tags                = merge(local.tags_common, { purpose = "aks-control-plane-identity" }, var.tags)
 }
 
-# ---------- PDZ Role Assignment ----------
+# pdz role assignment
 resource "azurerm_role_assignment" "aks_pdz_contrib_hub" {
   count                = local.deploy_aks_in_hub ? 1 : 0
   provider             = azurerm.hub
-  scope                = try(local.zone_ids[local.aks_pdns_name], null)
+  scope                = try(local.zone_ids_effective[local.aks_pdns_name], null)
   role_definition_name = "Private DNS Zone Contributor"
   principal_id         = azurerm_user_assigned_identity.aks_hub[0].principal_id
 
   lifecycle {
     precondition {
-      condition     = try(local.zone_ids[local.aks_pdns_name], null) != null
-      error_message = "AKS PDZ '${local.aks_pdns_name}' not found in zone_ids."
+      condition     = try(local.zone_ids_effective[local.aks_pdns_name], null) != null
+      error_message = "AKS PDZ '${local.aks_pdns_name}' not found."
     }
   }
 }
@@ -309,21 +315,21 @@ resource "azurerm_role_assignment" "aks_pdz_contrib_hub" {
 resource "azurerm_role_assignment" "aks_pdz_contrib_env" {
   count                = local.deploy_aks_in_env ? 1 : 0
   provider             = azurerm
-  scope                = try(local.zone_ids[local.aks_pdns_name], null)
+  scope                = try(local.zone_ids_effective[local.aks_pdns_name], null)
   role_definition_name = "Private DNS Zone Contributor"
   principal_id         = azurerm_user_assigned_identity.aks_env[0].principal_id
 
   lifecycle {
     precondition {
-      condition     = try(local.zone_ids[local.aks_pdns_name], null) != null
-      error_message = "AKS PDZ '${local.aks_pdns_name}' not found in zone_ids."
+      condition     = try(local.zone_ids_effective[local.aks_pdns_name], null) != null
+      error_message = "AKS PDZ '${local.aks_pdns_name}' not found."
     }
   }
 }
 
-# ---------- AKS Cluster ----------
+# clusters
 module "aks1_hub" {
-  count     = (local.deploy_aks_in_hub && local.aks_nodepool_subnet_id != null) ? 1 : 0
+  count     = local.deploy_aks_in_hub ? 1 : 0
   source    = "../../modules/aks"
   providers = { azurerm = azurerm.hub }
 
@@ -331,7 +337,7 @@ module "aks1_hub" {
   location                    = var.location
   resource_group_name         = local.rg_hub
   node_resource_group         = "${var.node_resource_group}-01"
-  default_nodepool_subnet_id  = local.aks_nodepool_subnet_id
+  default_nodepool_subnet_id  = local.aks_nodepool_subnet_effective
 
   kubernetes_version = var.kubernetes_version
   node_vm_size       = var.aks_node_vm_size
@@ -342,7 +348,7 @@ module "aks1_hub" {
   service_cidr   = local.aks_service_cidr
   dns_service_ip = local.aks_dns_service_ip
 
-  private_dns_zone_id       = local.zone_ids[local.aks_pdns_name]
+  private_dns_zone_id       = try(local.zone_ids_effective[local.aks_pdns_name], null)
   identity_type             = "UserAssigned"
   user_assigned_identity_id = azurerm_user_assigned_identity.aks_hub[0].id
 
@@ -351,14 +357,14 @@ module "aks1_hub" {
 }
 
 module "aks1_env" {
-  count    = (local.deploy_aks_in_env && local.aks_nodepool_subnet_id != null) ? 1 : 0
-  source   = "../../modules/aks"
+  count   = local.deploy_aks_in_env ? 1 : 0
+  source  = "../../modules/aks"
 
   name                        = local.aks1_name
   location                    = var.location
   resource_group_name         = var.rg_name
   node_resource_group         = "${var.node_resource_group}-01"
-  default_nodepool_subnet_id  = local.aks_nodepool_subnet_id
+  default_nodepool_subnet_id  = local.aks_nodepool_subnet_effective
 
   kubernetes_version = var.kubernetes_version
   node_vm_size       = var.aks_node_vm_size
@@ -369,7 +375,7 @@ module "aks1_env" {
   service_cidr   = local.aks_service_cidr
   dns_service_ip = local.aks_dns_service_ip
 
-  private_dns_zone_id       = local.zone_ids[local.aks_pdns_name]
+  private_dns_zone_id       = try(local.zone_ids_effective[local.aks_pdns_name], null)
   identity_type             = "UserAssigned"
   user_assigned_identity_id = azurerm_user_assigned_identity.aks_env[0].id
 
@@ -377,14 +383,14 @@ module "aks1_env" {
   depends_on = [azurerm_role_assignment.aks_pdz_contrib_env]
 }
 
-# Unified AKS refs
+# unified aks refs
 locals {
   aks_id   = try(module.aks1_hub[0].id, module.aks1_env[0].id, null)
   aks_name = try(module.aks1_hub[0].name, module.aks1_env[0].name, null)
 }
 
 ############################################
-# Observability (ENV)
+# observability (env)
 ############################################
 resource "azurerm_log_analytics_workspace" "obs" {
   count               = (local.enable_both && local.deploy_obs) ? 1 : 0
@@ -424,7 +430,7 @@ resource "azurerm_application_insights" "obs" {
   })
 }
 
-locals { manage_aks_diag = (local.enable_both && local.create_aks && local.deploy_obs && local.foundation_ready) }
+locals { manage_aks_diag = local.enable_both && local.create_aks && local.deploy_obs && local.aks_id != null }
 
 resource "azurerm_monitor_diagnostic_setting" "aks" {
   for_each = local.manage_aks_diag ? { "aks-diag" = true } : {}
@@ -438,7 +444,27 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
 }
 
 ############################################
-# Recovery Services Vault (SHARED → HUB)
+# acr (hub)
+############################################
+module "acr1" {
+  count               = (local.enable_both && local.create_acr) ? 1 : 0
+  source              = "../../modules/acr"
+  providers           = { azurerm = azurerm.hub }
+  name                = local.acr_name
+  resource_group_name = local.rg_hub
+  location            = var.location
+  sku                           = var.acr_sku
+  admin_enabled                 = var.admin_enabled
+  public_network_access_enabled = local.acr_pna_effective
+  network_rule_bypass_option    = var.acr_network_rule_bypass_option
+  anonymous_pull_enabled        = var.acr_anonymous_pull_enabled
+  data_endpoint_enabled         = var.acr_data_endpoint_enabled
+  zone_redundancy_enabled       = var.acr_zone_redundancy_enabled
+  tags                          = merge(local.tags_common, local.tags_acr, var.tags, { layer = "plane-resources" })
+}
+
+############################################
+# recovery services vault (hub)
 ############################################
 module "rsv1" {
   count               = (local.enable_both && local.create_rsv) ? 1 : 0
@@ -451,7 +477,7 @@ module "rsv1" {
 }
 
 ############################################
-# Service Bus (ENV) – Premium uses private endpoints
+# service bus (env) – premium uses pe
 ############################################
 locals { sb_is_premium = lower(var.servicebus_sku) == "premium" }
 
@@ -473,8 +499,8 @@ module "sbns1" {
   queues = var.servicebus_queues
   topics = var.servicebus_topics
 
-  privatelink_subnet_id = (local.sb_is_premium && local.foundation_ready) ? local.pe_subnet_id : null
-  private_dns_zone_id   = (local.sb_is_premium && local.foundation_ready) ? try(local.zone_ids[var.product == "pub" ? "privatelink.servicebus.windows.net" : "privatelink.servicebus.usgovcloudapi.net"], null) : null
+  privatelink_subnet_id = local.sb_is_premium ? local.pe_subnet_id_effective : null
+  private_dns_zone_id   = local.sb_is_premium ? try(local.zone_ids_effective[var.product == "pub" ? "privatelink.servicebus.windows.net" : "privatelink.servicebus.usgovcloudapi.net"], null) : null
 
   manage_policy_name = var.servicebus_manage_policy_name
   tags = merge(local.tags_common, { component = "servicebus" }, {
@@ -484,7 +510,7 @@ module "sbns1" {
 }
 
 ############################################
-# App Service Plan + Function Apps (ENV)
+# app service plan + function apps (env)
 ############################################
 module "plan1_func" {
   count               = local.enable_public_features ? 1 : 0
@@ -505,7 +531,7 @@ locals {
 }
 
 module "funcapp1" {
-  count                      = (local.enable_public_features && local.foundation_ready) ? 1 : 0
+  count                      = local.enable_public_features ? 1 : 0
   source                     = "../../modules/function-app"
   name                       = local.funcapp1_name
   location                   = var.location
@@ -515,12 +541,12 @@ module "funcapp1" {
   storage_account_name       = module.sa1[0].name
   storage_account_access_key = module.sa1[0].primary_access_key
 
-  vnet_integration_subnet_id = try(local.subnet_ids["appsvc-int-linux-01"], null)
-  pe_subnet_id               = local.foundation_ready ? local.pe_subnet_id : null
-  private_dns_zone_ids       = local.foundation_ready ? local.zone_ids : {}
+  vnet_integration_subnet_id = try(local.subnet_ids_from_state["appsvc-int-linux-01"], null)
+  pe_subnet_id               = local.pe_subnet_id_effective
+  private_dns_zone_ids       = local.zone_ids_effective
 
-  enable_private_endpoint     = local.foundation_ready
-  enable_scm_private_endpoint = local.foundation_ready
+  enable_private_endpoint     = local.pe_subnet_id_effective != null
+  enable_scm_private_endpoint = local.pe_subnet_id_effective != null
 
   pe_site_name         = "pep-${local.funcapp1_name_clean}-site"
   psc_site_name        = "psc-${local.funcapp1_name_clean}-site"
@@ -540,7 +566,7 @@ module "funcapp1" {
 }
 
 module "funcapp2" {
-  count                      = (local.enable_public_features && local.foundation_ready) ? 1 : 0
+  count                      = local.enable_public_features ? 1 : 0
   source                     = "../../modules/function-app"
   name                       = local.funcapp2_name
   location                   = var.location
@@ -550,12 +576,12 @@ module "funcapp2" {
   storage_account_name       = module.sa1[0].name
   storage_account_access_key = module.sa1[0].primary_access_key
 
-  vnet_integration_subnet_id = try(local.subnet_ids["appsvc-int-linux-01"], null)
-  pe_subnet_id               = local.foundation_ready ? local.pe_subnet_id : null
-  private_dns_zone_ids       = local.foundation_ready ? local.zone_ids : {}
+  vnet_integration_subnet_id = try(local.subnet_ids_from_state["appsvc-int-linux-01"], null)
+  pe_subnet_id               = local.pe_subnet_id_effective
+  private_dns_zone_ids       = local.zone_ids_effective
 
-  enable_private_endpoint     = local.foundation_ready
-  enable_scm_private_endpoint = local.foundation_ready
+  enable_private_endpoint     = local.pe_subnet_id_effective != null
+  enable_scm_private_endpoint = local.pe_subnet_id_effective != null
 
   pe_site_name         = "pep-${local.funcapp2_name_clean}-site"
   psc_site_name        = "psc-${local.funcapp2_name_clean}-site"
@@ -575,7 +601,7 @@ module "funcapp2" {
 }
 
 ############################################
-# Event Hubs (ENV)
+# event hubs (env)
 ############################################
 locals {
   create_eventhub      = var.env == "dev" || var.env == "prod"
@@ -588,7 +614,7 @@ locals {
 }
 
 module "eventhub" {
-  count                         = (local.enable_public_features && local.create_eventhub && local.foundation_ready) ? 1 : 0
+  count                         = (local.enable_public_features && local.create_eventhub) ? 1 : 0
   source                        = "../../modules/event-hub"
   namespace_name                = local.eh1_namespace
   eventhub_name                 = "locations-eh"
@@ -600,9 +626,9 @@ module "eventhub" {
   maximum_throughput_units      = 10
   min_tls_version               = var.servicebus_min_tls_version
   public_network_access_enabled = false
-  enable_private_endpoint       = local.foundation_ready
-  pe_subnet_id                  = local.foundation_ready ? local.pe_subnet_id : null
-  private_dns_zone_id           = local.foundation_ready ? try(local.zone_ids[local.eh_private_zone_name], null) : null
+  enable_private_endpoint       = local.pe_subnet_id_effective != null
+  pe_subnet_id                  = local.pe_subnet_id_effective
+  private_dns_zone_id           = try(local.zone_ids_effective[local.eh_private_zone_name], null)
   pe_name                       = local.eh1_pe_name
   psc_name                      = local.eh1_psc_name
   pe_zone_group_name            = local.eh1_pdz_group_name
@@ -622,7 +648,7 @@ module "eventhub_cgs" {
 }
 
 ############################################
-# Cosmos DB for PostgreSQL (Citus) (ENV)
+# cosmos db for postgresql (citus) (env)
 ############################################
 locals {
   cdbpg_name         = "cdbpg-${var.product}-${var.env}-${var.region}-01"
@@ -630,7 +656,7 @@ locals {
 }
 
 module "cdbpg1" {
-  count  = (local.enable_both && var.create_cdbpg && local.foundation_ready) ? 1 : 0
+  count  = (local.enable_both && var.create_cdbpg) ? 1 : 0
   source = "../../modules/cosmosdb-postgresql"
 
   name                = local.cdbpg_name
@@ -646,13 +672,13 @@ module "cdbpg1" {
   node_server_edition      = var.cdbpg_node_server_edition
   node_storage_quota_in_mb = var.cdbpg_node_storage_quota_in_mb
 
-  citus_version              = var.cdbpg_citus_version
-  preferred_primary_zone     = var.cdbpg_preferred_primary_zone
+  citus_version                = var.cdbpg_citus_version
+  preferred_primary_zone       = var.cdbpg_preferred_primary_zone
   administrator_login_password = var.cdbpg_admin_password
 
-  enable_private_endpoint = local.foundation_ready && var.cdbpg_enable_private_endpoint
-  privatelink_subnet_id   = local.foundation_ready ? try(local.subnet_ids["privatelink-cdbpg"], null) : null
-  private_dns_zone_id     = local.foundation_ready ? try(local.zone_ids["privatelink.postgres.cosmos.azure.com"], null) : null
+  enable_private_endpoint = var.cdbpg_enable_private_endpoint && local.pe_subnet_id_effective != null
+  privatelink_subnet_id   = local.pe_subnet_id_effective
+  private_dns_zone_id     = try(local.zone_ids_effective["privatelink.postgres.cosmos.azure.com"], null)
 
   pe_coordinator_name         = "pep-${local.cdbpg_name_cleaned}-coordinator"
   psc_coordinator_name        = "psc-${local.cdbpg_name_cleaned}-coordinator"
@@ -662,17 +688,17 @@ module "cdbpg1" {
 }
 
 ############################################
-# Postgres Flexible (ENV)
+# postgres flexible (env)
 ############################################
 locals {
-  pgflex_subnet_id        = try(local.subnet_ids[var.pg_delegated_subnet_name], null)
-  pg_private_zone_id      = try(local.zone_ids["privatelink.postgres.database.azure.com"], null)
-  pg_name1                = "pgflex-${var.product}-${var.env}-${var.region}-01"
+  pgflex_subnet_id   = try(local.subnet_ids_from_state[var.pg_delegated_subnet_name], null)
+  pg_private_zone_id = try(local.zone_ids_effective["privatelink.postgres.database.azure.com"], null)
+  pg_name1           = "pgflex-${var.product}-${var.env}-${var.region}-01"
   pg_geo_backup_effective = var.env == "prod" ? true : var.pg_geo_redundant_backup
 }
 
 module "postgres" {
-  count               = (local.enable_public_features && local.foundation_ready) ? 1 : 0
+  count               = local.enable_public_features ? 1 : 0
   source              = "../../modules/postgres-flex"
   name                = local.pg_name1
   resource_group_name = var.rg_name
@@ -688,8 +714,8 @@ module "postgres" {
   ha_zone    = var.pg_ha_zone
 
   network_mode        = "private"
-  delegated_subnet_id = local.foundation_ready ? local.pgflex_subnet_id : null
-  private_dns_zone_id = local.foundation_ready ? local.pg_private_zone_id : null
+  delegated_subnet_id = coalesce(local.pgflex_subnet_id, var.pg_delegated_subnet_id, null)
+  private_dns_zone_id = local.pg_private_zone_id
 
   aad_auth_enabled             = var.pg_aad_auth_enabled
   aad_tenant_id                = var.tenant_id
@@ -703,7 +729,7 @@ module "postgres" {
 }
 
 module "postgres_replica" {
-  count  = (local.enable_both && (var.pg_replica_enabled && !var.pg_ha_enabled) && local.foundation_ready) ? 1 : 0
+  count  = (local.enable_both && (var.pg_replica_enabled && !var.pg_ha_enabled)) ? 1 : 0
   source = "../../modules/postgres-flex"
 
   name                = local.pg_name1
@@ -716,8 +742,8 @@ module "postgres_replica" {
   storage_mb                   = var.pg_storage_mb
 
   network_mode        = "private"
-  delegated_subnet_id = local.foundation_ready ? local.pgflex_subnet_id : null
-  private_dns_zone_id = local.foundation_ready ? local.pg_private_zone_id : null
+  delegated_subnet_id = coalesce(local.pgflex_subnet_id, var.pg_delegated_subnet_id, null)
+  private_dns_zone_id = local.pg_private_zone_id
 
   replica_enabled  = true
   source_server_id = module.postgres[0].id
@@ -727,7 +753,7 @@ module "postgres_replica" {
 }
 
 ############################################
-# Redis (ENV)
+# redis (env)
 ############################################
 locals {
   redis1_name       = "redis-${var.product}-${var.env}-${var.region}-01-${local.uniq}"
@@ -735,7 +761,7 @@ locals {
 }
 
 module "redis1" {
-  count               = (local.enable_both && local.foundation_ready) ? 1 : 0
+  count               = local.enable_both ? 1 : 0
   source              = "../../modules/redis"
   name                = local.redis1_name
   location            = var.location
@@ -745,8 +771,8 @@ module "redis1" {
   redis_sku_family = var.redis_sku_family
   capacity         = var.redis_capacity
 
-  pe_subnet_id         = local.foundation_ready ? local.pe_subnet_id : null
-  private_dns_zone_ids = local.foundation_ready ? local.zone_ids : {}
+  pe_subnet_id         = local.pe_subnet_id_effective
+  private_dns_zone_ids = local.zone_ids_effective
 
   pe_name         = "pep-${local.redis1_name_clean}-cache"
   psc_name        = "psc-${local.redis1_name_clean}-cache"
@@ -756,7 +782,39 @@ module "redis1" {
 }
 
 ############################################
-# Front Door (shared-network RG; ENV-neutral config stays as-is)
+# env rbac (dev/qa)
+############################################
+locals {
+  is_dev_or_qa   = local.is_dev || local.is_qa
+  env_to_rg      = { dev = "rg-${var.product}-dev-cus-01", qa = "rg-${var.product}-qa-cus-01" }
+  target_rg_name = local.is_dev ? local.env_to_rg.dev : local.is_qa ? local.env_to_rg.qa : null
+
+  dev_team_principals = ["e7d56a14-7c2d-4802-827b-bc81db286bf0"]
+  qa_team_principals  = ["e7d56a14-7c2d-4802-827b-bc81db286bf0"]
+  team_principals     = local.is_dev ? local.dev_team_principals : local.is_qa ? local.qa_team_principals : []
+}
+
+data "azurerm_resource_group" "scope" {
+  count = local.is_dev_or_qa ? 1 : 0
+  name  = local.target_rg_name
+}
+
+module "rbac_team_env" {
+  count                 = (local.enable_both && local.is_dev_or_qa) ? 1 : 0
+  source                = "../../modules/rbac"
+  scope_id              = data.azurerm_resource_group.scope[0].id
+  principal_object_ids  = local.team_principals
+  role_definition_names = [
+    "Azure Kubernetes Service RBAC Cluster Admin",
+    "Key Vault Secrets User",
+    "Storage Blob Data Contributor",
+    "Azure Service Bus Data Owner"
+  ]
+  depends_on = [module.redis1]
+}
+
+############################################
+# front door (shared-network rg)
 ############################################
 locals {
   fd_is_nonprod    = local.plane == "nonprod"
