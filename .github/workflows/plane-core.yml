@@ -1,0 +1,203 @@
+name: plane-core-deploy
+run-name: ${{ format('{0}-{1}-{2} {3}', github.workflow, inputs.product, inputs.plane, (inputs.destroy && 'destroy' || (inputs.apply && 'apply' || 'plan'))) }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      plane:
+        description: "Plane (np = dev/qa, pr = uat/prod)"
+        type: choice
+        options: [np, pr]
+        default: np
+      product:
+        description: "Product (hrz = Azure Gov, pub = Azure Commercial)"
+        type: choice
+        options: [hrz, pub]
+        default: hrz
+      apply:
+        description: "Apply changes"
+        type: boolean
+        default: false
+      destroy:
+        description: "Destroy resources (danger)"
+        type: boolean
+        default: false
+      terraform_version:
+        description: "Terraform version"
+        type: string
+        default: "1.13.3"
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ARM_USE_OIDC: true
+
+jobs:
+  terraform:
+    name: "Terraform (core: ${{ inputs.plane }}.${{ inputs.product }})"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.plane == 'np' && 'nonprod' || 'prod' }}
+    defaults:
+      run:
+        working-directory: stacks/core
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select cloud/tenant/subscription
+        id: subsel
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PLANE="${{ inputs.plane }}"
+          PRODUCT="${{ inputs.product }}"
+
+          if [ "$PRODUCT" = "hrz" ]; then
+            CLOUD_ENV="AzureUSGovernment"
+            ARM_ENV="usgovernment"
+            TENANT="${{ secrets.AZ_TENANT_HRZ }}"
+            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
+            AUDIENCE="api://AzureADTokenExchangeUSGov"
+            SUB_NONPROD="${{ secrets.AZ_SUB_HRZ_NONPROD }}"
+            SUB_PROD="${{ secrets.AZ_SUB_HRZ_PROD }}"
+          else
+            CLOUD_ENV="AzureCloud"
+            ARM_ENV="public"
+            TENANT="${{ secrets.AZ_TENANT_PUB }}"
+            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
+            AUDIENCE="api://AzureADTokenExchange"
+            SUB_NONPROD="${{ secrets.AZ_SUB_PUB_NONPROD }}"
+            SUB_PROD="${{ secrets.AZ_SUB_PUB_PROD }}"
+          fi
+
+          if [ "$PLANE" = "pr" ]; then SUB="$SUB_PROD"; else SUB="$SUB_NONPROD"; fi
+
+          echo "CLOUD_ENV=$CLOUD_ENV" >> $GITHUB_OUTPUT
+          echo "ARM_ENV=$ARM_ENV"     >> $GITHUB_OUTPUT
+          echo "TENANT=$TENANT"       >> $GITHUB_OUTPUT
+          echo "SUB=$SUB"             >> $GITHUB_OUTPUT
+          echo "CLIENT_ID=$CLIENT_ID" >> $GITHUB_OUTPUT
+          echo "AUDIENCE=$AUDIENCE"   >> $GITHUB_OUTPUT
+
+          {
+            echo "ARM_ENVIRONMENT=$ARM_ENV"
+            echo "ARM_TENANT_ID=$TENANT"
+            echo "ARM_SUBSCRIPTION_ID=$SUB"
+            echo "TF_VAR_tenant_id=$TENANT"
+            echo "TF_VAR_subscription_id=$SUB"
+            echo "TF_VAR_product=${{ inputs.product }}"
+            echo "TF_VAR_plane=${{ inputs.plane }}"
+          } >> $GITHUB_ENV
+
+      - name: Validate required auth settings
+        shell: bash
+        env:
+          CLIENT_ID: ${{ steps.subsel.outputs.CLIENT_ID }}
+          TENANT: ${{ steps.subsel.outputs.TENANT }}
+          SUB: ${{ steps.subsel.outputs.SUB }}
+          CLOUD_ENV: ${{ steps.subsel.outputs.CLOUD_ENV }}
+          AUDIENCE: ${{ steps.subsel.outputs.AUDIENCE }}
+        run: |
+          set -euo pipefail
+          : "${CLIENT_ID:?Missing CLIENT_ID (AZURE_CLIENT_ID_*) secret}"
+          : "${TENANT:?Missing TENANT (AZ_TENANT_*) secret}"
+          : "${SUB:?Missing SUB (AZ_SUB_*_NONPROD/PROD) secret}"
+          : "${CLOUD_ENV:?Missing CLOUD_ENV}"
+          : "${AUDIENCE:?Missing AUDIENCE}"
+          echo "Auth inputs validated."
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ steps.subsel.outputs.CLIENT_ID }}
+          tenant-id:       ${{ steps.subsel.outputs.TENANT }}
+          subscription-id: ${{ steps.subsel.outputs.SUB }}
+          environment:     ${{ steps.subsel.outputs.CLOUD_ENV }}
+          audience:        ${{ steps.subsel.outputs.AUDIENCE }}
+
+      - name: Resolve tfvars & backend
+        id: paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          PLANE="${{ inputs.plane }}"
+          PRODUCT="${{ inputs.product }}"
+
+          TV1="${GITHUB_WORKSPACE}/stacks/core/tfvars/${PLANE}.${PRODUCT}.tfvars"
+          TVFALLBACK="${GITHUB_WORKSPACE}/stacks/core/tfvars/${PLANE}.tfvars"
+          if [ -f "$TV1" ]; then
+            TFVARS_PATH="$TV1"
+          elif [ -f "$TVFALLBACK" ]; then
+            TFVARS_PATH="$TVFALLBACK"
+          else
+            echo "❌ Missing tfvars: $TV1 (or fallback $TVFALLBACK)"; exit 1
+          fi
+          echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
+
+          # State storage (same as platform-app)
+          STATE_RG="rg-core-infra-state"
+          STATE_SA="sacoretfstateinfra"
+          # IMPORTANT: this must match what platform-app expects by default: core/<plane>/terraform.tfstate
+          STATE_KEY="core/${PLANE}/terraform.tfstate"
+
+          echo "STATE_RG=$STATE_RG"   >> "$GITHUB_OUTPUT"
+          echo "STATE_SA=$STATE_SA"   >> "$GITHUB_OUTPUT"
+          echo "STATE_KEY=$STATE_KEY" >> "$GITHUB_OUTPUT"
+
+          echo "Selected tfvars: $TFVARS_PATH"
+          echo "Backend: $STATE_RG / $STATE_SA ($STATE_KEY)"
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform_version }}
+
+      - name: Terraform Init
+        run: |
+          terraform init -input=false -reconfigure \
+            -backend-config="resource_group_name=${{ steps.paths.outputs.STATE_RG }}" \
+            -backend-config="storage_account_name=${{ steps.paths.outputs.STATE_SA }}" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=${{ steps.paths.outputs.STATE_KEY }}" \
+            -backend-config="use_azuread_auth=true"
+
+      - name: Terraform Fmt
+        run: terraform fmt -recursive
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        if: ${{ !inputs.destroy }}
+        run: |
+          terraform plan -input=false -lock-timeout=5m \
+            -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
+            -var "product=${{ inputs.product }}" \
+            -var "plane=${{ inputs.plane }}" \
+            -out=tfplan
+          terraform show -no-color tfplan > plan.txt
+
+      - name: Upload plan
+        if: ${{ !inputs.destroy }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-tfplan-${{ github.run_id }}
+          if-no-files-found: error
+          path: |
+            ${{ github.workspace }}/stacks/core/tfplan
+            ${{ github.workspace }}/stacks/core/plan.txt
+
+      - name: Terraform Apply
+        if: ${{ inputs.apply && !inputs.destroy }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Terraform Destroy (danger)
+        if: ${{ inputs.destroy }}
+        run: |
+          terraform destroy -auto-approve -lock-timeout=5m \
+            -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
+            -var "product=${{ inputs.product }}" \
+            -var "plane=${{ inputs.plane }}"
