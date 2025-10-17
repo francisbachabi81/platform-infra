@@ -20,7 +20,7 @@ provider "azurerm" {
 # Per-env aliases (fallback to hub if not provided)
 provider "azurerm" {
   alias           = "dev"
-  # features        = {}
+  features {}
   subscription_id = coalesce(var.dev_subscription_id,  var.hub_subscription_id)
   tenant_id       = coalesce(var.dev_tenant_id,        var.hub_tenant_id)
   environment     = var.product == "hrz" ? "usgovernment" : "public"
@@ -28,7 +28,7 @@ provider "azurerm" {
 
 provider "azurerm" {
   alias           = "qa"
-  # features        = {}
+  features {}
   subscription_id = coalesce(var.qa_subscription_id,   var.hub_subscription_id)
   tenant_id       = coalesce(var.qa_tenant_id,         var.hub_tenant_id)
   environment     = var.product == "hrz" ? "usgovernment" : "public"
@@ -36,7 +36,7 @@ provider "azurerm" {
 
 provider "azurerm" {
   alias           = "prod"
-  # features        = {}
+  features {}
   subscription_id = coalesce(var.prod_subscription_id, var.hub_subscription_id)
   tenant_id       = coalesce(var.prod_tenant_id,       var.hub_tenant_id)
   environment     = var.product == "hrz" ? "usgovernment" : "public"
@@ -44,7 +44,7 @@ provider "azurerm" {
 
 provider "azurerm" {
   alias           = "uat"
-  # features        = {}
+  features {}
   subscription_id = coalesce(var.uat_subscription_id,  var.hub_subscription_id)
   tenant_id       = coalesce(var.uat_tenant_id,        var.hub_tenant_id)
   environment     = var.product == "hrz" ? "usgovernment" : "public"
