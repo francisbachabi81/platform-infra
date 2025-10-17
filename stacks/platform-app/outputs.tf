@@ -8,7 +8,7 @@ output "ids" {
 
     rsv1   = try(module.rsv1_hub[0].id, null)
     aks1   = try(module.aks1_hub[0].id, null)
-    acr1   = try(module.acr1_hub[0].id, null)
+    # acr1   = try(module.acr1_hub[0].id, null)
     sbns1  = try(module.eventhub_env[0].id, null)
 
     law  = try(azurerm_log_analytics_workspace.obs_hub[0].id, azurerm_log_analytics_workspace.obs_env[0].id, null)
@@ -30,7 +30,7 @@ output "names" {
 
     rsv1   = try(module.rsv1_hub[0].name, null)
     aks1   = try(module.aks1_hub[0].name, null)
-    acr1   = try(module.acr1_hub[0].name, null)
+    # acr1   = try(module.acr1_hub[0].name, null)
     sbns1  = try(module.eventhub_env[0].namespace_name, null)
 
     law  = try(azurerm_log_analytics_workspace.obs_hub[0].name, azurerm_log_analytics_workspace.obs_env[0].name, null)
@@ -45,7 +45,7 @@ output "names" {
 output "endpoints" {
   description = "non-secret endpoints or hostnames"
   value = {
-    acr_login_server  = try(module.acr1_hub[0].login_server, null)
+    # acr_login_server  = try(module.acr1_hub[0].login_server, null)
     sb_namespace_fqdn = null # event-hub module may expose fqdn if implemented
     postgres_fqdn     = try(module.postgres_env[0].fqdn, null)
     redis_hostname    = try(module.redis1_env[0].hostname, null)
@@ -60,7 +60,7 @@ output "features" {
     servicebus_sku    = try(var.servicebus_sku, null)
 
     aks1_created   = try(length(module.aks1_hub) > 0, false)
-    acr1_created   = try(length(module.acr1_hub) > 0, false)
+    # acr1_created   = try(length(module.acr1_hub) > 0, false)
     rsv1_created   = try(length(module.rsv1_hub) > 0, false)
     sbns1_created  = try(length(module.eventhub_env) > 0, false)
     obs_created    = try(length(azurerm_log_analytics_workspace.obs_hub) > 0, false) || try(length(azurerm_log_analytics_workspace.obs_env) > 0, false)
