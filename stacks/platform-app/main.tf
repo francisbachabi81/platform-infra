@@ -760,76 +760,34 @@ module "redis1" {
   tags = merge(local.tags_common, local.tags_redis, var.tags)
 }
 
-############################################
-# env rbac (example: dev/qa)
-############################################
-locals {
-  is_dev_or_qa   = local.is_dev || local.is_qa
-  env_to_rg      = { dev = "rg-${var.product}-dev-cus-01", qa = "rg-${var.product}-qa-cus-01" }
-  target_rg_name = local.is_dev ? local.env_to_rg.dev : local.is_qa ? local.env_to_rg.qa : null
+# ############################################
+# # env rbac (example: dev/qa)
+# ############################################
+# locals {
+#   is_dev_or_qa   = local.is_dev || local.is_qa
+#   env_to_rg      = { dev = "rg-${var.product}-dev-cus-01", qa = "rg-${var.product}-qa-cus-01" }
+#   target_rg_name = local.is_dev ? local.env_to_rg.dev : local.is_qa ? local.env_to_rg.qa : null
 
-  dev_team_principals = ["e7d56a14-7c2d-4802-827b-bc81db286bf0"]
-  qa_team_principals  = ["e7d56a14-7c2d-4802-827b-bc81db286bf0"]
-  team_principals     = local.is_dev ? local.dev_team_principals : local.is_qa ? local.qa_team_principals : []
-}
+#   dev_team_principals = ["e7d56a14-7c2d-4802-827b-bc81db286bf0"]
+#   qa_team_principals  = ["e7d56a14-7c2d-4802-827b-bc81db286bf0"]
+#   team_principals     = local.is_dev ? local.dev_team_principals : local.is_qa ? local.qa_team_principals : []
+# }
 
-data "azurerm_resource_group" "scope" {
-  count = local.is_dev_or_qa ? 1 : 0
-  name  = local.target_rg_name
-}
+# data "azurerm_resource_group" "scope" {
+#   count = local.is_dev_or_qa ? 1 : 0
+#   name  = local.target_rg_name
+# }
 
-module "rbac_team_env" {
-  count                 = (local.enable_both && local.is_dev_or_qa) ? 1 : 0
-  source                = "../../modules/rbac"
-  scope_id              = data.azurerm_resource_group.scope[0].id
-  principal_object_ids  = local.team_principals
-  role_definition_names = [
-    "Azure Kubernetes Service RBAC Cluster Admin",
-    "Key Vault Secrets User",
-    "Storage Blob Data Contributor",
-    "Azure Service Bus Data Owner"
-  ]
-  depends_on = [module.redis1]
-}
-
-############################################
-# front door (shared-network rg)
-############################################
-locals {
-  fd_is_nonprod    = local.plane == "nonprod"
-  fd_profile_name  = "afd-${var.product}-${local.plane_code}-${var.region}-01"
-  fd_endpoint_name = "fde-${var.product}-${local.plane_code}-${var.region}-01"
-
-  fd_plane_overlay_tags = local.fd_is_nonprod ? {
-    lane         = "nonprod"
-    purpose      = "edge-frontdoor"
-    criticality  = "medium"
-    layer        = "shared-network"
-    managed_by   = "terraform"
-    deployed_via = "github-actions"
-  } : {
-    lane         = "prod"
-    purpose      = "edge-frontdoor"
-    criticality  = "high"
-    layer        = "shared-network"
-    managed_by   = "terraform"
-    deployed_via = "github-actions"
-  }
-
-  fd_tags = merge(
-    var.tags,
-    local.org_base_tags,
-    local.fd_plane_overlay_tags,
-    { service = "frontdoor", product = var.product }
-  )
-}
-
-module "fd" {
-  count               = var.fd_create_frontdoor ? 1 : 0
-  source              = "../../modules/frontdoor-profile"
-  resource_group_name = var.shared_network_rg
-  profile_name        = local.fd_profile_name
-  endpoint_name       = local.fd_endpoint_name
-  sku_name            = var.fd_sku_name
-  tags                = local.fd_tags
-}
+# module "rbac_team_env" {
+#   count                 = (local.enable_both && local.is_dev_or_qa) ? 1 : 0
+#   source                = "../../modules/rbac"
+#   scope_id              = data.azurerm_resource_group.scope[0].id
+#   principal_object_ids  = local.team_principals
+#   role_definition_names = [
+#     "Azure Kubernetes Service RBAC Cluster Admin",
+#     "Key Vault Secrets User",
+#     "Storage Blob Data Contributor",
+#     "Azure Service Bus Data Owner"
+#   ]
+#   depends_on = [module.redis1]
+# }

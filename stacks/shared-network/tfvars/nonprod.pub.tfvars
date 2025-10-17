@@ -328,3 +328,7 @@ tags = {
   owner   = "it operations"
   lane    = "nonprod"
 }
+
+# ── Front Door ────────────────────────────────────
+fd_create_frontdoor = true
+fd_sku_name         = "Standard_AzureFrontDoor"

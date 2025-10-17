@@ -313,3 +313,7 @@ tags = {
 
 # dns resolver inbound static ip
 dnsr_inbound_static_ip = "10.13.50.4"   # points to dns-inbound endpoint ip
+
+# ── Front Door ────────────────────────────────────
+fd_create_frontdoor = true
+fd_sku_name         = "Standard_AzureFrontDoor"

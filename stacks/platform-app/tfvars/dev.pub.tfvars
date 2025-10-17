@@ -113,10 +113,6 @@ redis_capacity   = 1
 asp_os_type              = "Linux"
 func_linux_plan_sku_name = "P0v3"
 
-# ── Front Door (Commercial often enabled) ────────────────────────────────────
-fd_create_frontdoor = true
-fd_sku_name         = "Standard_AzureFrontDoor"
-
 # ── Optional networking overrides (only if shared-state not ready) ───────────
 # pe_subnet_id           = "/subscriptions/.../subnets/privatelink"
 # aks_nodepool_subnet_id = "/subscriptions/.../subnets/aks-pub-np-cus"

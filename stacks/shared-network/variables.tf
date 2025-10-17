@@ -378,3 +378,17 @@ variable "dnsr_inbound_static_ip" {
   type        = string
   default     = null
 }
+
+variable "fd_create_frontdoor" {
+  type    = bool
+  default = false
+}
+
+variable "fd_sku_name" {
+  type    = string
+  default = "Premium_AzureFrontDoor"
+  validation {
+    condition     = contains(["Standard_AzureFrontDoor", "Premium_AzureFrontDoor"], var.fd_sku_name)
+    error_message = "fd_sku_name invalid"
+  }
+}

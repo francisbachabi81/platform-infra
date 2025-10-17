@@ -423,23 +423,6 @@ variable "redis_capacity" {
 }
 
 ########################################
-# front door
-########################################
-variable "fd_create_frontdoor" {
-  type    = bool
-  default = false
-}
-
-variable "fd_sku_name" {
-  type    = string
-  default = "Premium_AzureFrontDoor"
-  validation {
-    condition     = contains(["Standard_AzureFrontDoor", "Premium_AzureFrontDoor"], var.fd_sku_name)
-    error_message = "fd_sku_name invalid"
-  }
-}
-
-########################################
 # plane-scoped hub rg
 ########################################
 variable "rg_plane_name" {

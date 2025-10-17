@@ -108,10 +108,6 @@ redis_capacity   = 2
 asp_os_type              = "Linux"
 func_linux_plan_sku_name = "S1"
 
-# ── Front Door (usually disabled in Gov) ─────────────────────────────────────
-fd_create_frontdoor = false
-fd_sku_name         = "Standard_AzureFrontDoor"
-
 # ── Optional networking overrides (only if shared-state not ready) ───────────
 # pe_subnet_id           = "/subscriptions/.../subnets/privatelink"
 # aks_nodepool_subnet_id = "/subscriptions/.../subnets/aks-hrz-pr-usaz"

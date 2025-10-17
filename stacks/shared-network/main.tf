@@ -1014,3 +1014,45 @@ resource "azurerm_dns_zone" "public" {
   })
   depends_on = [module.rg_hub]
 }
+
+############################################
+# front door (shared-network rg)
+############################################
+locals {
+  fd_is_nonprod    = local.lane == "nonprod"
+  fd_profile_name  = "afd-${var.product}-${local.plane_code}-${var.region}-01"
+  fd_endpoint_name = "fde-${var.product}-${local.plane_code}-${var.region}-01"
+
+  fd_plane_overlay_tags = local.fd_is_nonprod ? {
+    lane         = "nonprod"
+    purpose      = "edge-frontdoor"
+    criticality  = "medium"
+    layer        = "shared-network"
+    managed_by   = "terraform"
+    deployed_via = "github-actions"
+  } : {
+    lane         = "prod"
+    purpose      = "edge-frontdoor"
+    criticality  = "high"
+    layer        = "shared-network"
+    managed_by   = "terraform"
+    deployed_via = "github-actions"
+  }
+
+  fd_tags = merge(
+    var.tags,
+    local.org_base_tags,
+    local.fd_plane_overlay_tags,
+    { service = "frontdoor", product = var.product }
+  )
+}
+
+module "fd" {
+  count               = var.fd_create_frontdoor ? 1 : 0
+  source              = "../../modules/frontdoor-profile"
+  resource_group_name = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
+  profile_name        = local.fd_profile_name
+  endpoint_name       = local.fd_endpoint_name
+  sku_name            = var.fd_sku_name
+  tags                = local.fd_tags
+}

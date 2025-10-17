@@ -326,3 +326,7 @@ tags = {
   owner   = "itops-team"
   lane    = "nonprod"
 }
+
+# ── Front Door ────────────────────────────────────
+fd_create_frontdoor = true
+fd_sku_name         = "Standard_AzureFrontDoor"
