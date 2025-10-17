@@ -1,14 +1,14 @@
-name: platform-app-deploy
-run-name: ${{ format('{0}-{1}-{2} {3}', github.workflow, inputs.product, inputs.env, (inputs.destroy && 'destroy' || (inputs.apply && 'apply' || 'plan'))) }}
+name: plane-core-deploy
+run-name: ${{ format('{0}-{1}-{2} {3}', github.workflow, inputs.product, inputs.plane, (inputs.destroy && 'destroy' || (inputs.apply && 'apply' || 'plan'))) }}
 
 on:
   workflow_dispatch:
     inputs:
-      env:
-        description: "Environment (dev, qa, uat, prod) or plane (np, pr)"
+      plane:
+        description: "Plane (np = dev/qa, pr = uat/prod)"
         type: choice
-        options: [dev, qa, uat, prod, np, pr]
-        default: dev
+        options: [np, pr]
+        default: np
       product:
         description: "Product (hrz = Azure Gov, pub = Azure Commercial)"
         type: choice
@@ -36,13 +36,12 @@ env:
 
 jobs:
   terraform:
-    name: "Terraform (platform-app: ${{ inputs.env }}.${{ inputs.product }})"
+    name: "Terraform (core: ${{ inputs.plane }}.${{ inputs.product }})"
     runs-on: ubuntu-latest
-    # If env is np/pr, map to environment names; otherwise use env as-is
-    environment: ${{ inputs.env == 'np' && 'nonprod' || inputs.env == 'pr' && 'prod' || inputs.env }}
+    environment: ${{ inputs.plane == 'np' && 'nonprod' || 'prod' }}
     defaults:
       run:
-        working-directory: stacks/platform-app
+        working-directory: stacks/core
 
     steps:
       - uses: actions/checkout@v4
@@ -53,15 +52,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          ENV="${{ inputs.env }}"
+          PLANE="${{ inputs.plane }}"
           PRODUCT="${{ inputs.product }}"
-
-          # Derive plane from env (np/pr supported explicitly)
-          case "$ENV" in
-            dev|qa|np) PLANE="nonprod" ;;
-            uat|prod|pr) PLANE="prod" ;;
-            *) echo "Unknown env: $ENV"; exit 1 ;;
-          esac
 
           if [ "$PRODUCT" = "hrz" ]; then
             CLOUD_ENV="AzureUSGovernment"
@@ -81,8 +73,7 @@ jobs:
             SUB_PROD="${{ secrets.AZ_SUB_PUB_PROD }}"
           fi
 
-          # Pick subscription by plane
-          if [ "$PLANE" = "prod" ]; then SUB="$SUB_PROD"; else SUB="$SUB_NONPROD"; fi
+          if [ "$PLANE" = "pr" ]; then SUB="$SUB_PROD"; else SUB="$SUB_NONPROD"; fi
 
           echo "CLOUD_ENV=$CLOUD_ENV" >> $GITHUB_OUTPUT
           echo "ARM_ENV=$ARM_ENV"     >> $GITHUB_OUTPUT
@@ -90,7 +81,6 @@ jobs:
           echo "SUB=$SUB"             >> $GITHUB_OUTPUT
           echo "CLIENT_ID=$CLIENT_ID" >> $GITHUB_OUTPUT
           echo "AUDIENCE=$AUDIENCE"   >> $GITHUB_OUTPUT
-          echo "PLANE=$PLANE"         >> $GITHUB_OUTPUT
 
           {
             echo "ARM_ENVIRONMENT=$ARM_ENV"
@@ -99,7 +89,7 @@ jobs:
             echo "TF_VAR_tenant_id=$TENANT"
             echo "TF_VAR_subscription_id=$SUB"
             echo "TF_VAR_product=${{ inputs.product }}"
-            echo "TF_VAR_env=$ENV"
+            echo "TF_VAR_plane=${{ inputs.plane }}"
           } >> $GITHUB_ENV
 
       - name: Validate required auth settings
@@ -133,12 +123,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ENV="${{ inputs.env }}"
+          PLANE="${{ inputs.plane }}"
           PRODUCT="${{ inputs.product }}"
 
-          # prefer env.product.tfvars; fallback env.tfvars; allow plane (np/pr)
-          TV1="${GITHUB_WORKSPACE}/stacks/platform-app/tfvars/${ENV}.${PRODUCT}.tfvars"
-          TVFALLBACK="${GITHUB_WORKSPACE}/stacks/platform-app/tfvars/${ENV}.tfvars"
+          TV1="${GITHUB_WORKSPACE}/stacks/core/tfvars/${PLANE}.${PRODUCT}.tfvars"
+          TVFALLBACK="${GITHUB_WORKSPACE}/stacks/core/tfvars/${PLANE}.tfvars"
           if [ -f "$TV1" ]; then
             TFVARS_PATH="$TV1"
           elif [ -f "$TVFALLBACK" ]; then
@@ -148,17 +137,11 @@ jobs:
           fi
           echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
 
-          # State storage by product
-          if [ "$PRODUCT" = "pub" ]; then
-            STATE_RG="rg-core-infra-state"
-            STATE_SA="sacoretfstateinfra"
-          else
-            STATE_RG="rg-core-infra-state"
-            STATE_SA="sacoretfstateinfra"
-          fi
-
-          # Per-stack key: product/env (env may be np/pr)
-          STATE_KEY="platform-app/${PRODUCT}/${ENV}/terraform.tfstate"
+          # State storage (same as platform-app)
+          STATE_RG="rg-core-infra-state"
+          STATE_SA="sacoretfstateinfra"
+          # IMPORTANT: this must match what platform-app expects by default: core/<plane>/terraform.tfstate
+          STATE_KEY="core/${PLANE}/terraform.tfstate"
 
           echo "STATE_RG=$STATE_RG"   >> "$GITHUB_OUTPUT"
           echo "STATE_SA=$STATE_SA"   >> "$GITHUB_OUTPUT"
@@ -167,70 +150,6 @@ jobs:
           echo "Selected tfvars: $TFVARS_PATH"
           echo "Backend: $STATE_RG / $STATE_SA ($STATE_KEY)"
 
-      - name: Export optional per-env / hub overrides to TF_VAR_*
-        shell: bash
-        run: |
-          set -e -o pipefail
-
-          echo "[export] begin"
-
-          write_env () {
-            local name="$1"
-            local value="$2"
-            if [ -n "$value" ]; then
-              {
-                echo "${name}<<EOF"
-                printf '%s\n' "$value"
-                echo "EOF"
-              } >> "$GITHUB_ENV"
-              echo "[export] set ${name}"
-            else
-              echo "[export] skip ${name} (empty)"
-            fi
-          }
-
-          PRODUCT="${{ inputs.product }}"
-          ENV_INPUT="${{ inputs.env }}"
-          echo "[export] PRODUCT=${PRODUCT} ENV=${ENV_INPUT}"
-
-          # Hub (plane-shared np/pr) subscription/tenant overrides (optional)
-          if [ "$PRODUCT" = "hrz" ]; then
-            write_env TF_VAR_hub_subscription_id "${{ secrets.HUB_SUB_ID_HRZ }}"
-            write_env TF_VAR_hub_tenant_id       "${{ secrets.HUB_TENANT_ID_HRZ }}"
-          else
-            write_env TF_VAR_hub_subscription_id "${{ secrets.HUB_SUB_ID_PUB }}"
-            write_env TF_VAR_hub_tenant_id       "${{ secrets.HUB_TENANT_ID_PUB }}"
-          fi
-
-          # Per-environment subscription/tenant overrides (optional)
-          if [ "$PRODUCT" = "hrz" ]; then
-            write_env TF_VAR_dev_subscription_id   "${{ secrets.AZ_SUB_HRZ_DEV }}"
-            write_env TF_VAR_qa_subscription_id    "${{ secrets.AZ_SUB_HRZ_QA }}"
-            write_env TF_VAR_uat_subscription_id   "${{ secrets.AZ_SUB_HRZ_UAT }}"
-            write_env TF_VAR_prod_subscription_id  "${{ secrets.AZ_SUB_HRZ_PROD }}"
-            write_env TF_VAR_dev_tenant_id         "${{ secrets.AZ_TENANT_HRZ }}"
-            write_env TF_VAR_qa_tenant_id          "${{ secrets.AZ_TENANT_HRZ }}"
-            write_env TF_VAR_uat_tenant_id         "${{ secrets.AZ_TENANT_HRZ }}"
-            write_env TF_VAR_prod_tenant_id        "${{ secrets.AZ_TENANT_HRZ }}"
-          else
-            write_env TF_VAR_dev_subscription_id   "${{ secrets.AZ_SUB_PUB_DEV }}"
-            write_env TF_VAR_qa_subscription_id    "${{ secrets.AZ_SUB_PUB_QA }}"
-            write_env TF_VAR_uat_subscription_id   "${{ secrets.AZ_SUB_PUB_UAT }}"
-            write_env TF_VAR_prod_subscription_id  "${{ secrets.AZ_SUB_PUB_PROD }}"
-            write_env TF_VAR_dev_tenant_id         "${{ secrets.AZ_TENANT_PUB }}"
-            write_env TF_VAR_qa_tenant_id          "${{ secrets.AZ_TENANT_PUB }}"
-            write_env TF_VAR_uat_tenant_id         "${{ secrets.AZ_TENANT_PUB }}"
-            write_env TF_VAR_prod_tenant_id        "${{ secrets.AZ_TENANT_PUB }}"
-          fi
-
-          # Optional DB secrets (mask them first if you want)
-          [ -n "${{ secrets.PG_ADMIN_PASSWORD }}" ] && echo "::add-mask::${{ secrets.PG_ADMIN_PASSWORD }}"
-          [ -n "${{ secrets.CDBPG_ADMIN_PASSWORD }}" ] && echo "::add-mask::${{ secrets.CDBPG_ADMIN_PASSWORD }}"
-          write_env TF_VAR_pg_admin_password       "${{ secrets.PG_ADMIN_PASSWORD }}"
-          write_env TF_VAR_cdbpg_admin_password    "${{ secrets.CDBPG_ADMIN_PASSWORD }}"
-
-          echo "[export] end"
-          
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -257,7 +176,7 @@ jobs:
           terraform plan -input=false -lock-timeout=5m \
             -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
             -var "product=${{ inputs.product }}" \
-            -var "env=${{ inputs.env }}" \
+            -var "plane=${{ inputs.plane }}" \
             -out=tfplan
           terraform show -no-color tfplan > plan.txt
 
@@ -265,11 +184,11 @@ jobs:
         if: ${{ !inputs.destroy }}
         uses: actions/upload-artifact@v4
         with:
-          name: platform-app-tfplan-${{ github.run_id }}
+          name: core-tfplan-${{ github.run_id }}
           if-no-files-found: error
           path: |
-            ${{ github.workspace }}/stacks/platform-app/tfplan
-            ${{ github.workspace }}/stacks/platform-app/plan.txt
+            ${{ github.workspace }}/stacks/core/tfplan
+            ${{ github.workspace }}/stacks/core/plan.txt
 
       - name: Terraform Apply
         if: ${{ inputs.apply && !inputs.destroy }}
@@ -281,4 +200,4 @@ jobs:
           terraform destroy -auto-approve -lock-timeout=5m \
             -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
             -var "product=${{ inputs.product }}" \
-            -var "env=${{ inputs.env }}"
+            -var "plane=${{ inputs.plane }}"
