@@ -21,4 +21,5 @@ output "observability" {
     appi_connection_string   = azurerm_application_insights.plane.connection_string
     appi_instrumentation_key = azurerm_application_insights.plane.instrumentation_key
   }
+  sensitive = true
 }
