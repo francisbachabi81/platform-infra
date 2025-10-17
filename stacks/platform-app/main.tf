@@ -20,7 +20,7 @@ provider "azurerm" {
 # HUB subscription (shared resources like dev AKS, RSV, ACR)
 provider "azurerm" {
   alias           = "hub"
-  # features        = {}
+  features {}
   subscription_id = coalesce(var.hub_subscription_id, var.subscription_id)
   tenant_id       = coalesce(var.hub_tenant_id, var.tenant_id)
   environment     = var.product == "hrz" ? "usgovernment" : "public"
