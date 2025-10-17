@@ -10,7 +10,7 @@ output "ids" {
 
     # Shared (hub) vs env variants supported
     rsv1 = try(module.rsv1_hub[0].id, module.rsv1[0].id, null)
-    acr1 = try(module.acr1_hub[0].id, module.acr1[0].id, null)
+    # acr1 = try(module.acr1_hub[0].id, module.acr1[0].id, null)
 
     # AKS is shared (hub) in dev, env-specific in uat/prod
     aks1 = try(
@@ -46,7 +46,7 @@ output "names" {
     cosmos1    = try(module.cosmos1[0].name, null)
 
     rsv1       = try(module.rsv1_hub[0].name, module.rsv1[0].name, null)
-    acr1       = try(module.acr1_hub[0].name, module.acr1[0].name, null)
+    # acr1       = try(module.acr1_hub[0].name, module.acr1[0].name, null)
 
     # AKS name from local or module variants
     aks1       = try(
@@ -75,7 +75,7 @@ output "names" {
 output "endpoints" {
   description = "non-secret endpoints or hostnames"
   value = {
-    acr_login_server   = try(module.acr1_hub[0].login_server, module.acr1[0].login_server, null)
+    # acr_login_server   = try(module.acr1_hub[0].login_server, module.acr1[0].login_server, null)
     sb_namespace_fqdn  = null  # populate if your servicebus module exposes it
     eventhub_namespace = try(module.eventhub[0].namespace_name, null)
     postgres_fqdn      = try(module.postgres[0].fqdn, null)
@@ -99,10 +99,10 @@ output "features" {
     )
 
     # ACR/RSV can be hub or env depending on your config
-    acr1_created = (
-      try(length(module.acr1_hub) > 0, false) ||
-      try(length(module.acr1) > 0, false)
-    )
+    # acr1_created = (
+    #   try(length(module.acr1_hub) > 0, false) ||
+    #   try(length(module.acr1) > 0, false)
+    # )
     rsv1_created = (
       try(length(module.rsv1_hub) > 0, false) ||
       try(length(module.rsv1) > 0, false)
