@@ -213,7 +213,7 @@ jobs:
     
       - name: Terraform Apply
         if: ${{ inputs.apply && !inputs.destroy }}
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -parallelism=6 -auto-approve tfplan
 
       - name: Terraform Destroy (danger)
         if: ${{ inputs.destroy }}
