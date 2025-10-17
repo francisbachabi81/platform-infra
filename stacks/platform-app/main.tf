@@ -154,7 +154,7 @@ locals {
 }
 
 module "kv1" {
-  count                = local.enable_both ? 1 : 0
+  count                = (local.enable_both && local.foundation_ready) ? 1 : 0
   source               = "../../modules/keyvault"
   name                 = local.kv1_base_name
   location             = var.location
@@ -176,7 +176,7 @@ module "kv1" {
 locals { sa1_name_cleaned = replace(lower(trimspace(local.sa1_name)), "-", "") }
 
 module "sa1" {
-  count                = local.enable_both ? 1 : 0
+  count               = (local.enable_both && local.foundation_ready) ? 1 : 0
   source               = "../../modules/storage-account"
   name                 = local.sa1_name
   location             = var.location
@@ -205,7 +205,7 @@ locals {
 }
 
 module "cosmos1" {
-  count                = local.cosmos_enabled ? 1 : 0
+  count                = (local.cosmos_enabled && local.foundation_ready) ? 1 : 0
   source               = "../../modules/cosmos-account"
   name                 = local.cosmos1_name
   location             = var.location
@@ -224,7 +224,7 @@ module "cosmos1" {
 }
 
 resource "azurerm_cosmosdb_sql_database" "app" {
-  count               = local.cosmos_enabled ? 1 : 0
+  count                = (local.cosmos_enabled && local.foundation_ready) ? 1 : 0
   name                = "cosnodb-${var.product}"
   resource_group_name = var.rg_name
   account_name        = local.cosmos1_name
@@ -233,7 +233,7 @@ resource "azurerm_cosmosdb_sql_database" "app" {
 }
 
 resource "azurerm_cosmosdb_sql_container" "items" {
-  count                 = local.cosmos_enabled ? 1 : 0
+  count                = (local.cosmos_enabled && local.foundation_ready) ? 1 : 0
   name                  = "notification_jobs"
   resource_group_name   = var.rg_name
   account_name          = local.cosmos1_name
@@ -244,7 +244,7 @@ resource "azurerm_cosmosdb_sql_container" "items" {
 }
 
 resource "azurerm_cosmosdb_sql_container" "events" {
-  count                 = local.cosmos_enabled ? 1 : 0
+  count                = (local.cosmos_enabled && local.foundation_ready) ? 1 : 0
   name                  = "notification_history"
   resource_group_name   = var.rg_name
   account_name          = local.cosmos1_name
@@ -438,26 +438,6 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
 }
 
 ############################################
-# ACR (SHARED → HUB)
-############################################
-module "acr1" {
-  count               = (local.enable_both && local.create_acr) ? 1 : 0
-  source              = "../../modules/acr"
-  providers           = { azurerm = azurerm.hub }
-  name                = local.acr_name
-  resource_group_name = local.rg_hub
-  location            = var.location
-  sku                           = var.acr_sku
-  admin_enabled                 = var.admin_enabled
-  public_network_access_enabled = local.acr_pna_effective
-  network_rule_bypass_option    = var.acr_network_rule_bypass_option
-  anonymous_pull_enabled        = var.acr_anonymous_pull_enabled
-  data_endpoint_enabled         = var.acr_data_endpoint_enabled
-  zone_redundancy_enabled       = var.acr_zone_redundancy_enabled
-  tags                          = merge(local.tags_common, local.tags_acr, var.tags, { layer = "plane-resources" })
-}
-
-############################################
 # Recovery Services Vault (SHARED → HUB)
 ############################################
 module "rsv1" {
@@ -525,7 +505,7 @@ locals {
 }
 
 module "funcapp1" {
-  count                      = local.enable_public_features ? 1 : 0
+  count                      = (local.enable_public_features && local.foundation_ready) ? 1 : 0
   source                     = "../../modules/function-app"
   name                       = local.funcapp1_name
   location                   = var.location
@@ -560,7 +540,7 @@ module "funcapp1" {
 }
 
 module "funcapp2" {
-  count                      = local.enable_public_features ? 1 : 0
+  count                      = (local.enable_public_features && local.foundation_ready) ? 1 : 0
   source                     = "../../modules/function-app"
   name                       = local.funcapp2_name
   location                   = var.location
@@ -608,7 +588,7 @@ locals {
 }
 
 module "eventhub" {
-  count                         = (local.enable_public_features && local.create_eventhub) ? 1 : 0
+  count                         = (local.enable_public_features && local.create_eventhub && local.foundation_ready) ? 1 : 0
   source                        = "../../modules/event-hub"
   namespace_name                = local.eh1_namespace
   eventhub_name                 = "locations-eh"
@@ -650,7 +630,7 @@ locals {
 }
 
 module "cdbpg1" {
-  count  = (local.enable_both && var.create_cdbpg) ? 1 : 0
+  count  = (local.enable_both && var.create_cdbpg && local.foundation_ready) ? 1 : 0
   source = "../../modules/cosmosdb-postgresql"
 
   name                = local.cdbpg_name
@@ -692,7 +672,7 @@ locals {
 }
 
 module "postgres" {
-  count               = local.enable_public_features ? 1 : 0
+  count               = (local.enable_public_features && local.foundation_ready) ? 1 : 0
   source              = "../../modules/postgres-flex"
   name                = local.pg_name1
   resource_group_name = var.rg_name
@@ -723,7 +703,7 @@ module "postgres" {
 }
 
 module "postgres_replica" {
-  count  = (local.enable_both && (var.pg_replica_enabled && !var.pg_ha_enabled)) ? 1 : 0
+  count  = (local.enable_both && (var.pg_replica_enabled && !var.pg_ha_enabled) && local.foundation_ready) ? 1 : 0
   source = "../../modules/postgres-flex"
 
   name                = local.pg_name1
@@ -755,7 +735,7 @@ locals {
 }
 
 module "redis1" {
-  count               = local.enable_both ? 1 : 0
+  count               = (local.enable_both && local.foundation_ready) ? 1 : 0
   source              = "../../modules/redis"
   name                = local.redis1_name
   location            = var.location
@@ -773,38 +753,6 @@ module "redis1" {
   zone_group_name = "pdns-${local.redis1_name_clean}-cache"
 
   tags = merge(local.tags_common, local.tags_redis, var.tags)
-}
-
-############################################
-# Env RBAC (dev/qa) (ENV)
-############################################
-locals {
-  is_dev_or_qa   = local.is_dev || local.is_qa
-  env_to_rg      = { dev = "rg-${var.product}-dev-cus-01", qa = "rg-${var.product}-qa-cus-01" }
-  target_rg_name = local.is_dev ? local.env_to_rg.dev : local.is_qa ? local.env_to_rg.qa : null
-
-  dev_team_principals = ["e7d56a14-7c2d-4802-827b-bc81db286bf0"]
-  qa_team_principals  = ["e7d56a14-7c2d-4802-827b-bc81db286bf0"]
-  team_principals     = local.is_dev ? local.dev_team_principals : local.is_qa ? local.qa_team_principals : []
-}
-
-data "azurerm_resource_group" "scope" {
-  count = local.is_dev_or_qa ? 1 : 0
-  name  = local.target_rg_name
-}
-
-module "rbac_team_env" {
-  count                = (local.enable_both && local.is_dev_or_qa) ? 1 : 0
-  source               = "../../modules/rbac"
-  scope_id             = data.azurerm_resource_group.scope[0].id
-  principal_object_ids = local.team_principals
-  role_definition_names = [
-    "Azure Kubernetes Service RBAC Cluster Admin",
-    "Key Vault Secrets User",
-    "Storage Blob Data Contributor",
-    "Azure Service Bus Data Owner"
-  ]
-  depends_on = [module.redis1]
 }
 
 ############################################
