@@ -8,15 +8,21 @@ output "ids" {
     sa1       = try(module.sa1[0].id, null)
     cosmos    = try(module.cosmos1[0].id, null)
 
-    rsv1      = try(module.rsv1[0].id, null)       # shared (hub) via provider alias
-    aks1      = try(module.aks1[0].id, null)       # hub in dev, env in uat/prod (same module name)
+    # RSV is a single module (deployed via the correct provider), no _hub/_env split
+    rsv1      = try(module.rsv1[0].id, null)
 
-    sbns1     = try(module.sbns1[0].id, null)      # Service Bus namespace (env)
-    eventhub  = try(module.eventhub[0].id, null)   # Event Hub (env)
+    # AKS is hub in dev, env in uat/prod
+    aks1      = try(module.aks1_hub[0].id, module.aks1_env[0].id, null)
 
+    # Messaging
+    sbns1     = try(module.sbns1[0].id, null)
+    eventhub  = try(module.eventhub[0].id, null)
+
+    # Observability
     law       = try(azurerm_log_analytics_workspace.obs[0].id, null)
     appi      = try(azurerm_application_insights.obs[0].id, null)
 
+    # Data plane
     postgres  = try(module.postgres[0].id, null)
     redis     = try(module.redis1[0].id, null)
     cdbpg1    = try(module.cdbpg1[0].id, null)
@@ -34,7 +40,9 @@ output "names" {
     cosmos1     = try(module.cosmos1[0].name, null)
 
     rsv1        = try(module.rsv1[0].name, null)
-    aks1        = try(module.aks1[0].name, null)
+
+    # Prefer hub name if present (dev), else env name (uat/prod)
+    aks1        = try(module.aks1_hub[0].name, module.aks1_env[0].name, null)
 
     sbns1       = try(module.sbns1[0].name, null)
     eventhub_ns = try(module.eventhub[0].namespace_name, null)
@@ -55,7 +63,7 @@ output "names" {
 output "endpoints" {
   description = "non-secret endpoints or hostnames"
   value = {
-    sb_namespace_fqdn  = null                                       # set if your servicebus module outputs it
+    sb_namespace_fqdn  = null  # populate if your servicebus module exposes it
     eventhub_namespace = try(module.eventhub[0].namespace_name, null)
     postgres_fqdn      = try(module.postgres[0].fqdn, null)
     redis_hostname     = try(module.redis1[0].hostname, null)
@@ -71,7 +79,12 @@ output "features" {
     create_servicebus = try(var.create_servicebus, false)
     servicebus_sku    = try(var.servicebus_sku, null)
 
-    aks1_created      = try(length(module.aks1) > 0, false)
+    # AKS could be hub or env
+    aks1_created      = (
+      try(length(module.aks1_hub) > 0, false) ||
+      try(length(module.aks1_env) > 0, false)
+    )
+
     rsv1_created      = try(length(module.rsv1) > 0, false)
     sbns1_created     = try(length(module.sbns1) > 0, false)
     eventhub_created  = try(length(module.eventhub) > 0, false)
@@ -88,8 +101,8 @@ output "features" {
 output "aks" {
   description = "AKS cluster (hub in dev; env in uat/prod; null in qa)"
   value = try({
-    id   = module.aks1[0].id
-    name = module.aks1[0].name
+    id   = try(module.aks1_hub[0].id,  module.aks1_env[0].id)
+    name = try(module.aks1_hub[0].name, module.aks1_env[0].name)
   }, null)
 }
 
