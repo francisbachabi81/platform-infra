@@ -266,26 +266,38 @@ locals {
   )
   aks_dns_service_ip = coalesce(var.aks_dns_service_ip, cidrhost(local.aks_service_cidr, 10))
 
-  # Where to place AKS + identity/role: dev→hub RG, others→env RG
-  aks_rg_name = local.is_dev ? local.rg_hub : var.rg_name
+  # Placement toggles (no conditionals in provider args)
+  deploy_aks_in_hub = local.is_dev  && local.enable_both && local.create_aks && local.foundation_ready
+  deploy_aks_in_env = (local.is_uat || local.is_prod) && local.enable_both && local.create_aks && local.foundation_ready
 }
 
-# Identity (provider switches to HUB for dev)
-resource "azurerm_user_assigned_identity" "aks" {
-  count               = (local.enable_both && local.create_aks && local.foundation_ready) ? 1 : 0
-  provider            = local.is_dev ? azurerm.hub : azurerm
+# ---------- Identity ----------
+resource "azurerm_user_assigned_identity" "aks_hub" {
+  count               = local.deploy_aks_in_hub ? 1 : 0
+  provider            = azurerm.hub
   name                = "uai-${var.product}-${local.plane_code}-aks-${var.region}-01"
   location            = var.location
-  resource_group_name = local.aks_rg_name
+  resource_group_name = local.rg_hub
+  tags                = merge(local.tags_common, { purpose = "aks-control-plane-identity", layer = "plane-resources" }, var.tags)
+}
+
+resource "azurerm_user_assigned_identity" "aks_env" {
+  count               = local.deploy_aks_in_env ? 1 : 0
+  provider            = azurerm
+  name                = "uai-${var.product}-${local.plane_code}-aks-${var.region}-01"
+  location            = var.location
+  resource_group_name = var.rg_name
   tags                = merge(local.tags_common, { purpose = "aks-control-plane-identity" }, var.tags)
 }
 
-resource "azurerm_role_assignment" "aks_pdz_contrib" {
-  count                = (local.enable_both && local.create_aks && local.foundation_ready) ? 1 : 0
-  provider             = local.is_dev ? azurerm.hub : azurerm
+# ---------- PDZ Role Assignment ----------
+resource "azurerm_role_assignment" "aks_pdz_contrib_hub" {
+  count                = local.deploy_aks_in_hub ? 1 : 0
+  provider             = azurerm.hub
   scope                = try(local.zone_ids[local.aks_pdns_name], null)
   role_definition_name = "Private DNS Zone Contributor"
-  principal_id         = try(azurerm_user_assigned_identity.aks[0].principal_id, null)
+  principal_id         = azurerm_user_assigned_identity.aks_hub[0].principal_id
+
   lifecycle {
     precondition {
       condition     = try(local.zone_ids[local.aks_pdns_name], null) != null
@@ -294,15 +306,30 @@ resource "azurerm_role_assignment" "aks_pdz_contrib" {
   }
 }
 
-module "aks1" {
-  count   = (local.enable_both && local.create_aks && local.foundation_ready && local.aks_nodepool_subnet_id != null) ? 1 : 0
-  source  = "../../modules/aks"
-  # Switch provider based on env: dev→hub, uat/prod→env
-  providers = { azurerm = local.is_dev ? azurerm.hub : azurerm }
+resource "azurerm_role_assignment" "aks_pdz_contrib_env" {
+  count                = local.deploy_aks_in_env ? 1 : 0
+  provider             = azurerm
+  scope                = try(local.zone_ids[local.aks_pdns_name], null)
+  role_definition_name = "Private DNS Zone Contributor"
+  principal_id         = azurerm_user_assigned_identity.aks_env[0].principal_id
+
+  lifecycle {
+    precondition {
+      condition     = try(local.zone_ids[local.aks_pdns_name], null) != null
+      error_message = "AKS PDZ '${local.aks_pdns_name}' not found in zone_ids."
+    }
+  }
+}
+
+# ---------- AKS Cluster ----------
+module "aks1_hub" {
+  count     = (local.deploy_aks_in_hub && local.aks_nodepool_subnet_id != null) ? 1 : 0
+  source    = "../../modules/aks"
+  providers = { azurerm = azurerm.hub }
 
   name                        = local.aks1_name
   location                    = var.location
-  resource_group_name         = local.aks_rg_name
+  resource_group_name         = local.rg_hub
   node_resource_group         = "${var.node_resource_group}-01"
   default_nodepool_subnet_id  = local.aks_nodepool_subnet_id
 
@@ -317,10 +344,43 @@ module "aks1" {
 
   private_dns_zone_id       = local.zone_ids[local.aks_pdns_name]
   identity_type             = "UserAssigned"
-  user_assigned_identity_id = try(azurerm_user_assigned_identity.aks[0].id, null)
+  user_assigned_identity_id = azurerm_user_assigned_identity.aks_hub[0].id
 
-  tags = merge(local.tags_common, local.tags_aks, var.tags)
-  depends_on = [azurerm_role_assignment.aks_pdz_contrib]
+  tags       = merge(local.tags_common, local.tags_aks, var.tags, { layer = "plane-resources" })
+  depends_on = [azurerm_role_assignment.aks_pdz_contrib_hub]
+}
+
+module "aks1_env" {
+  count    = (local.deploy_aks_in_env && local.aks_nodepool_subnet_id != null) ? 1 : 0
+  source   = "../../modules/aks"
+
+  name                        = local.aks1_name
+  location                    = var.location
+  resource_group_name         = var.rg_name
+  node_resource_group         = "${var.node_resource_group}-01"
+  default_nodepool_subnet_id  = local.aks_nodepool_subnet_id
+
+  kubernetes_version = var.kubernetes_version
+  node_vm_size       = var.aks_node_vm_size
+  node_count         = var.aks_node_count
+  sku_tier           = var.aks_sku_tier
+
+  pod_cidr       = var.aks_pod_cidr
+  service_cidr   = local.aks_service_cidr
+  dns_service_ip = local.aks_dns_service_ip
+
+  private_dns_zone_id       = local.zone_ids[local.aks_pdns_name]
+  identity_type             = "UserAssigned"
+  user_assigned_identity_id = azurerm_user_assigned_identity.aks_env[0].id
+
+  tags       = merge(local.tags_common, local.tags_aks, var.tags)
+  depends_on = [azurerm_role_assignment.aks_pdz_contrib_env]
+}
+
+# Unified AKS refs
+locals {
+  aks_id   = try(module.aks1_hub[0].id, module.aks1_env[0].id, null)
+  aks_name = try(module.aks1_hub[0].name, module.aks1_env[0].name, null)
 }
 
 ############################################
@@ -369,7 +429,7 @@ locals { manage_aks_diag = (local.enable_both && local.create_aks && local.deplo
 resource "azurerm_monitor_diagnostic_setting" "aks" {
   for_each = local.manage_aks_diag ? { "aks-diag" = true } : {}
   name                       = "aks-diag"
-  target_resource_id         = try(module.aks1[0].id, null)
+  target_resource_id         = local.aks_id
   log_analytics_workspace_id = try(azurerm_log_analytics_workspace.obs[0].id, null)
   enabled_log { category = "kube-audit" }
   enabled_log { category = "kube-audit-admin" }
