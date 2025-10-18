@@ -40,6 +40,10 @@ jobs:
     name: "Terraform (shared-network: ${{ inputs.plane }}.${{ inputs.product }})"
     runs-on: ubuntu-latest
     environment: ${{ inputs.plane }}
+    env:
+      TF_CLI_ARGS_apply: "-parallelism=6"
+      TF_CLI_ARGS_plan: "-parallelism=6"
+      TF_CLI_ARGS_destroy: "-parallelism=6"
     defaults:
       run:
         working-directory: stacks/shared-network
