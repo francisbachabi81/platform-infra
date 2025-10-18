@@ -154,22 +154,24 @@ locals {
   _loc_lower = lower(var.location)
   _reg_lower = lower(var.region)
 
-  # Map by short region code first, then fall back to location text contains
   aks_gov_region_by_code = {
     usaz = "usgovarizona"
     usva = "usgovvirginia"
   }
 
+  # string “contains” via regexall -> non-empty match list
+  _is_az = length(regexall("arizona",  local._loc_lower))  > 0
+  _is_va = length(regexall("virginia", local._loc_lower))  > 0
+
   aks_region_token = local.enable_hrz_features ? coalesce(
     lookup(local.aks_gov_region_by_code, local._reg_lower, null),
-    contains(local._loc_lower, "arizona")  ? "usgovarizona"  : null,
-    contains(local._loc_lower, "virginia") ? "usgovvirginia" : null
+    local._is_az ? "usgovarizona" : null,
+    local._is_va ? "usgovvirginia" : null
   ) : null
 
   region_nospace = replace(lower(var.location), " ", "")
 
-  # Correct AKS private DNS zone per cloud
-  aks_pdns_name = local.enable_hrz_features ? format("privatelink.%s.cx.aks.containerservice.azure.us", local.aks_region_token) : format("privatelink.%s.azmk8s.io", local.region_nospace)
+  aks_pdns_name = local.enable_hrz_features ? format("privatelink.%s.cx.aks.containerservice.azure.us", local.aks_region_token) : format("privatelink.%s.azmk8s.io",                       local.region_nospace)
   # aks_gov_region_map = {
   #   "US Arizona"  = "usgovarizona"
   #   "US Virginia" = "usgovvirginia"
