@@ -124,8 +124,19 @@ data "terraform_remote_state" "core" {
 # effective networking + observability inputs
 ############################################
 locals {
-  # from shared-network state
-  rs_outputs            = var.shared_state_enabled ? try(data.terraform_remote_state.shared[0].outputs, {}) : {}
+  # --- Shared state: stable shape + safe access
+  shared_defaults = {
+    # include only what you read later; keep shapes stable
+    vnets = {}                                # map<string, {subnets=map<string,string>}>
+    private_dns_zone_ids_by_name = {}         # map<string,string>
+  }
+
+  # Use try(...) to tolerate count=0 OR missing state; merge to stabilize keys
+  rs_outputs = merge(
+    local.shared_defaults,
+    try(data.terraform_remote_state.shared[0].outputs, {})
+  )
+
   subnet_ids_from_state = try(local.rs_outputs.vnets[local.vnet_key].subnets, {})
   zone_ids_from_state   = try(local.rs_outputs.private_dns_zone_ids_by_name, {})
 
@@ -136,15 +147,22 @@ locals {
   region_nospace = replace(lower(var.location), " ", "")
   aks_pdns_name  = "privatelink.${local.region_nospace}.azmk8s.io"
 
-  # observability from core (or explicit overrides)
-  law_workspace_id = coalesce(
-    var.law_workspace_id_override,
-    try(data.terraform_remote_state.core[0].outputs.observability.law_workspace_id, null)
+  # --- Core state: stable shape + safe access
+  core_defaults = {
+    observability = {
+      law_workspace_id       = null
+      appi_connection_string = null
+    }
+  }
+  core_outputs = merge(
+    local.core_defaults,
+    try(data.terraform_remote_state.core[0].outputs, {})
   )
-  appi_connection_string = coalesce(
-    var.appi_connection_string_override,
-    try(data.terraform_remote_state.core[0].outputs.observability.appi_connection_string, null)
-  )
+
+  # Prefer explicit overrides, else (possibly null) value from core_outputs
+  law_workspace_id = var.law_workspace_id_override != null ? var.law_workspace_id_override : try(local.core_outputs.observability.law_workspace_id, null)
+
+  appi_connection_string = var.appi_connection_string_override != null ? var.appi_connection_string_override : try(local.core_outputs.observability.appi_connection_string, null)
 
   # deployment placement (no provider conditionals)
   deploy_aks_in_hub = local.is_dev  && local.enable_both && local.create_aks
@@ -767,17 +785,17 @@ module "redis1" {
 #   is_dev_or_qa   = local.is_dev || local.is_qa
 #   env_to_rg      = { dev = "rg-${var.product}-dev-cus-01", qa = "rg-${var.product}-qa-cus-01" }
 #   target_rg_name = local.is_dev ? local.env_to_rg.dev : local.is_qa ? local.env_to_rg.qa : null
-
+#
 #   dev_team_principals = ["e7d56a14-7c2d-4802-827b-bc81db286bf0"]
 #   qa_team_principals  = ["e7d56a14-7c2d-4802-827b-bc81db286bf0"]
 #   team_principals     = local.is_dev ? local.dev_team_principals : local.is_qa ? local.qa_team_principals : []
 # }
-
+#
 # data "azurerm_resource_group" "scope" {
 #   count = local.is_dev_or_qa ? 1 : 0
 #   name  = local.target_rg_name
 # }
-
+#
 # module "rbac_team_env" {
 #   count                 = (local.enable_both && local.is_dev_or_qa) ? 1 : 0
 #   source                = "../../modules/rbac"

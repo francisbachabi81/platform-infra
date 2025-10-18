@@ -41,7 +41,7 @@ locals {
   appi_name = "appi-${var.product}-${local.plane_code}-${var.region}-01"
   rsv_name  = "rsv-${var.product}-${local.plane_code}-${var.region}-01"
 
-  rg_name_core = "rg-${var.product}-${local.plane_code}-${var.region}-02-platform"
+  rg_name_core = "rg-${var.product}-${local.plane_code}-${var.region}-02-core"
 }
 
 ############################################
