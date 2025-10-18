@@ -18,7 +18,7 @@ variable "tenant_id"       { type = string }
 # rg in hub subscription scoped to plane
 variable "rg_name_core" { 
   type = string 
-  default = "rg"
+  default = "rg-core-resources"
 }
 
 # tags

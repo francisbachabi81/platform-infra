@@ -63,7 +63,7 @@ data "terraform_remote_state" "shared" {
 
 module "rg_core_platform" {
   source    = "../../modules/resource-group"
-  name      = var.rg_name_core
+  name      = local.rg_name_core
   location  = var.location
   tags      = merge(local.tags_common, { purpose = "core-resources" })
 }
