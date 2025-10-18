@@ -5,7 +5,6 @@ location = "usgovarizona"           # canonical region name for azurerm provider
 region   = "usaz"                   # short code used in names
 seq      = "01"                     # sequence in names
 
-
 # Subscriptions / Tenants (cross-subscription support)
 # HUB (shared-network) subscription/tenant — REQUIRED
 hub_subscription_id = "641d3872-8322-4bdb-83ce-bfbc119fa3cd"
@@ -17,9 +16,6 @@ dev_tenant_id       = null  # e.g. "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
 qa_subscription_id  = null  # e.g. "66666666-7777-8888-9999-000000000000"
 qa_tenant_id        = null  # e.g. "ffffffff-1111-2222-3333-444444444444"
-
-# Shared Network RG for DNS
-shared_network_rg = "rg-hrz-np-usaz-01"
 
 # Private DNS zones (Azure Government)
 private_zones = [
@@ -56,7 +52,7 @@ public_dns_zones = [
 
 # VNets — NONPROD plane: hub + dev + qa
 nonprod_hub = {
-  rg    = "rg-hrz-np-usaz-01"
+  rg    = "rg-hrz-np-usaz-01-network"
   vnet  = "vnet-hrz-np-hub-usaz-01"
   cidrs = ["10.10.0.0/16"]
 

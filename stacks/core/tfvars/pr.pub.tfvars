@@ -1,16 +1,16 @@
 plane           = "pr"
-product         = "hrz"
+product         = "pub"
 location        = "USGov Arizona"
 region          = "usaz"
 
 subscription_id = "aab00dd1-a61d-4ecc-9010-e1b43ef16c9f" # prod sub
 tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
-rg_plane_name = "rg-hrz-pr-usaz-02-platform"
+rg_plane_name = "rg-pub-pr-usaz-02-platform"
 
 tags = {
   plane   = "pr"
-  product = "hrz"
+  product = "pub"
 }
 
 law_sku                 = "PerGB2018"

@@ -9,9 +9,6 @@ product = "pub"
 region  = "cus"                  # short region (e.g. cus, eus)
 seq     = "01"
 
-# shared network rg
-shared_network_rg = "rg-pub-pr-cus-01"
-
 # private dns zones (privatelink)
 private_zones = [
   # Storage (Blob/File/Queue/Table + Data Lake Gen2 + Static Website)
@@ -55,7 +52,7 @@ public_dns_zones = [
 
 # vnets
 prod_hub = {
-  rg    = "rg-pub-pr-cus-01"
+  rg    = "rg-pub-pr-cus-01-network"
   vnet  = "vnet-pub-pr-hub-cus-01"
   cidrs = ["10.13.0.0/16"]
 

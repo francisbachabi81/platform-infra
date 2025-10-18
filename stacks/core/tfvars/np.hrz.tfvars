@@ -6,7 +6,7 @@ region          = "usaz"
 subscription_id = "641d3872-8322-4bdb-83ce-bfbc119fa3cd"
 tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
-rg_plane_name = "rg-hrz-np-usaz-01"
+rg_plane_name = "rg-hrz-np-usaz-02-platform"
 
 tags = {
   plane   = "np"

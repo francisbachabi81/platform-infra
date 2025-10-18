@@ -7,7 +7,6 @@ location = "centralus"              # canonical azurerm region name
 region   = "cus"                    # short code used in names
 seq      = "01"                     # sequence in names
 
-
 # Subscriptions / Tenants (cross-subscription support)
 # HUB (shared-network) subscription/tenant — REQUIRED
 hub_subscription_id = "aab00dd1-a61d-4ecc-9010-e1b43ef16c9f"
@@ -19,9 +18,6 @@ dev_tenant_id       = null  # e.g. "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
 qa_subscription_id  = null  # e.g. "66666666-7777-8888-9999-000000000000"
 qa_tenant_id        = null  # e.g. "ffffffff-1111-2222-3333-444444444444"
-
-# Shared Network RG for DNS (Private + optional Public)
-shared_network_rg = "rg-pub-np-cus-01"
 
 # Private DNS zones (Azure Commercial)
 private_zones = [
@@ -58,7 +54,7 @@ public_dns_zones = [
 
 # VNets — NONPROD plane: hub + dev + qa
 nonprod_hub = {
-  rg    = "rg-pub-np-cus-01"
+  rg    = "rg-pub-np-cus-01-network"
   vnet  = "vnet-pub-np-hub-cus-01"
   cidrs = ["10.10.0.0/16"]
 

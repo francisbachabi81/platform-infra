@@ -1,12 +1,12 @@
 # plane/product/env
 variable "plane" {
-  description = "np | pr"
-  type        = string
+  type = string
   validation {
-    condition     = contains(["np","pr"], var.plane)
-    error_message = "plane must be np or pr."
+    condition     = contains(["np","pr","nonprod","prod"], lower(var.plane))
+    error_message = "plane must be one of: np, pr, nonprod, prod."
   }
 }
+
 variable "product" { type = string }  # hrz | pub
 variable "region"  { type = string }  # e.g., usaz, cus
 variable "location"{ type = string }

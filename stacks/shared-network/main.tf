@@ -19,31 +19,31 @@ provider "azurerm" {
 
 # Per-env aliases (fallback to hub if not provided)
 provider "azurerm" {
-  alias           = "dev"
+  alias     = "dev"
   features {}
-  subscription_id = coalesce(var.dev_subscription_id,  var.hub_subscription_id)
-  tenant_id       = coalesce(var.dev_tenant_id,        var.hub_tenant_id)
+  subscription_id = var.dev_subscription_id != "" ? var.dev_subscription_id : var.hub_subscription_id
+  tenant_id       = var.dev_tenant_id       != "" ? var.dev_tenant_id       : var.hub_tenant_id
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 provider "azurerm" {
-  alias           = "qa"
+  alias     = "qa"
   features {}
-  subscription_id = coalesce(var.qa_subscription_id,   var.hub_subscription_id)
-  tenant_id       = coalesce(var.qa_tenant_id,         var.hub_tenant_id)
+  subscription_id = var.qa_subscription_id != "" ? var.qa_subscription_id : var.hub_subscription_id
+  tenant_id       = var.qa_tenant_id       != "" ? var.qa_tenant_id       : var.hub_tenant_id
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 provider "azurerm" {
-  alias           = "prod"
+  alias     = "prod"
   features {}
-  subscription_id = coalesce(var.prod_subscription_id, var.hub_subscription_id)
-  tenant_id       = coalesce(var.prod_tenant_id,       var.hub_tenant_id)
+  subscription_id = var.prod_subscription_id != "" ? var.prod_subscription_id : var.hub_subscription_id
+  tenant_id       = var.prod_tenant_id       != "" ? var.prod_tenant_id       : var.hub_tenant_id
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 provider "azurerm" {
-  alias           = "uat"
+  alias     = "uat"
   features {}
-  subscription_id = coalesce(var.uat_subscription_id,  var.hub_subscription_id)
-  tenant_id       = coalesce(var.uat_tenant_id,        var.hub_tenant_id)
+  subscription_id = var.uat_subscription_id != "" ? var.uat_subscription_id : var.hub_subscription_id
+  tenant_id       = var.uat_tenant_id       != "" ? var.uat_tenant_id       : var.hub_tenant_id
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 

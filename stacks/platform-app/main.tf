@@ -61,7 +61,7 @@ locals {
   acr_name          = "acr${var.product}${local.plane_code}${var.region}01"
   acr_pna_effective = lower(var.acr_sku) == "premium" ? var.public_network_access_enabled : true
 
-  rg_hub = coalesce(var.rg_plane_name, "rg-${var.product}-${local.plane_code}-${var.region}-platform-01")
+  rg_hub = coalesce(var.rg_plane_name, "rg-${var.product}-${local.plane_code}-${var.region}-01")
 
   # tags
   org_base_tags = {

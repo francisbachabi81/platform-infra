@@ -253,10 +253,6 @@ variable "uat_spoke" {
 }
 
 # DNS
-variable "shared_network_rg" {
-  description = "Resource group for Private DNS zones (and optionally Public DNS zones)."
-  type        = string
-}
 
 variable "private_zones" {
   description = "Private DNS zone FQDNs to create and link (e.g., privatelink.blob.core.usgovcloudapi.net)."
