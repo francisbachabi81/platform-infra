@@ -42,8 +42,8 @@ private_zones = [
   "privatelink.azurewebsites.us",
   "privatelink.scm.azurewebsites.us",
   # AKS (region-specific)
-  "privatelink.usgovarizona.azmk8s.us",
-  "privatelink.usgovvirginia.cx.aks.containerservice.azure.us"
+  "privatelink.usgovvirginia.cx.aks.containerservice.azure.us",
+  "privatelink.usgovarizona.cx.aks.containerservice.azure.us"
 ]
 
 # Public DNS zones
