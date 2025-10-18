@@ -9,7 +9,7 @@ tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
 # Plane-scoped RG in hub subscription (AKS/ACR for dev live here)
 # If this RG doesn't exist, set to your actual hub/plane RG name.
-rg_plane_name = "rg-hrz-np-usaz-02-core"
+rg_plane_name = "rg-hrz-np-usaz-02-platform"
 
 # Hub overrides (only set if hub ≠ env subscription)
 hub_subscription_id = null
