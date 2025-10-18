@@ -420,7 +420,7 @@ locals {
 
 module "pdns" {
   source              = "../../modules/private-dns"
-  resource_group_name = var.shared_network_rg
+  resource_group_name = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
   zones               = var.private_zones
   vnet_links          = local.vnet_links
   tags                = merge(local.tag_base, { purpose = "private-dns" })
@@ -1006,7 +1006,7 @@ locals {
 resource "azurerm_dns_zone" "public" {
   for_each            = local.public_dns_zones_active
   name                = each.value
-  resource_group_name = var.shared_network_rg
+  resource_group_name = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
   tags = merge(local.tag_base, {
     purpose     = "public-dns-zone"
     environment = local.public_dns_env
@@ -1055,4 +1055,6 @@ module "fd" {
   endpoint_name       = local.fd_endpoint_name
   sku_name            = var.fd_sku_name
   tags                = local.fd_tags
+
+  depends_on = [module.rg_hub]
 }
