@@ -466,7 +466,7 @@ module "vpng" {
     service = "connectivity"
     lane    = local.lane
   })
-  depends_on = [module.vnet_hub] # ensure GatewaySubnet exists
+  depends_on = [module.vnet_hub, module.nsg] # ensure GatewaySubnet exists
 }
 
 # ── ingress: waf & appgw ──────────────────────────────────────────────────────
