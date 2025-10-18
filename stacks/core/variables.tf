@@ -16,7 +16,7 @@ variable "subscription_id" { type = string }
 variable "tenant_id"       { type = string }
 
 # rg in hub subscription scoped to plane
-variable "rg_plane_name" { type = string }
+variable "rg_name_core" { type = string }
 
 # tags
 variable "tags" {

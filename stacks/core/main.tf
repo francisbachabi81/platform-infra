@@ -40,6 +40,8 @@ locals {
   law_name  = "law-${var.product}-${local.plane_code}-${var.region}-01"
   appi_name = "appi-${var.product}-${local.plane_code}-${var.region}-01"
   rsv_name  = "rsv-${var.product}-${local.plane_code}-${var.region}-01"
+
+  rg_name_core = "rg-${var.product}-${local.plane_code}-${var.region}-02-platform"
 }
 
 ############################################
@@ -50,7 +52,7 @@ data "terraform_remote_state" "shared" {
   backend = "azurerm"
   config = {
     resource_group_name  = var.state_rg_name
-    storage_account_name = var.state_sa_name
+    storage_account_name = svar.state_sa_name
     container_name       = var.state_container_name
     key                  = "shared-network/${local.plane_full}/terraform.tfstate"
     use_azuread_auth     = true
@@ -61,7 +63,7 @@ data "terraform_remote_state" "shared" {
 
 module "rg_core_platform" {
   source    = "../../modules/resource-group"
-  name      = var.rg_plane_name
+  name      = var.rg_name_core
   location  = var.location
   tags      = merge(local.tags_common, { purpose = "core-resources" })
 }
@@ -72,7 +74,7 @@ module "rg_core_platform" {
 resource "azurerm_log_analytics_workspace" "plane" {
   name                = local.law_name
   location            = var.location
-  resource_group_name = var.rg_plane_name
+  resource_group_name = var.rg_name_core
   sku                 = var.law_sku
   retention_in_days   = var.law_retention_days
   tags                = merge(local.tags_common, { service = "log-analytics", plane = local.plane_code })
@@ -85,7 +87,7 @@ resource "azurerm_log_analytics_workspace" "plane" {
 resource "azurerm_application_insights" "plane" {
   name                       = local.appi_name
   location                   = var.location
-  resource_group_name        = var.rg_plane_name
+  resource_group_name        = var.rg_name_core
   application_type           = "web"
   workspace_id               = azurerm_log_analytics_workspace.plane.id
   internet_ingestion_enabled = var.appi_internet_ingestion_enabled
@@ -100,7 +102,7 @@ resource "azurerm_application_insights" "plane" {
 resource "azurerm_recovery_services_vault" "plane" {
   name                = local.rsv_name
   location            = var.location
-  resource_group_name = var.rg_plane_name
+  resource_group_name = var.rg_name_core
   sku                 = "Standard"
   soft_delete_enabled = true
   tags                = merge(local.tags_common, { service = "recovery-services-vault", plane = local.plane_code })
