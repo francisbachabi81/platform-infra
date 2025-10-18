@@ -654,7 +654,8 @@ locals {
 }
 
 module "cdbpg1" {
-  count  = (local.enable_both && var.create_cdbpg) ? 1 : 0
+  # count  = (local.enable_both && var.create_cdbpg) ? 1 : 0
+  count  = (var.product == "pub" && var.create_cdbpg) ? 1 : 0
   source = "../../modules/cosmosdb-postgresql"
 
   name                = local.cdbpg_name
