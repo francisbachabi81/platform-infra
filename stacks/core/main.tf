@@ -52,7 +52,7 @@ data "terraform_remote_state" "shared" {
   backend = "azurerm"
   config = {
     resource_group_name  = var.state_rg_name
-    storage_account_name = svar.state_sa_name
+    storage_account_name = var.state_sa_name
     container_name       = var.state_container_name
     key                  = "shared-network/${local.plane_full}/terraform.tfstate"
     use_azuread_auth     = true
