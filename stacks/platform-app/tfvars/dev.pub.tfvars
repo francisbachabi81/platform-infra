@@ -23,7 +23,6 @@ dev_tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 state_rg_name        = "rg-core-infra-state"
 state_sa_name        = "sacoretfstateinfra"
 state_container_name = "tfstate"
-shared_network_rg    = "rg-pub-np-cus-01"
 
 shared_state_enabled = true
 core_state_enabled   = true

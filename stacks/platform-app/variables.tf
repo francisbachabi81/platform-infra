@@ -297,10 +297,6 @@ variable "func_linux_plan_sku_name" {
   default = "S1"
 }
 
-variable "shared_network_rg" {
-  type = string
-}
-
 ########################################
 # cosmos (nosql)
 ########################################

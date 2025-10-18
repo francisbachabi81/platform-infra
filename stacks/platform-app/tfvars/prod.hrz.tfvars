@@ -18,7 +18,6 @@ hub_tenant_id       = null
 state_rg_name        = "rg-core-infra-state"
 state_sa_name        = "sacoretfstateinfra"
 state_container_name = "tfstate"
-shared_network_rg    = "rg-hrz-pr-usaz-01"
 
 shared_state_enabled = true
 core_state_enabled   = true

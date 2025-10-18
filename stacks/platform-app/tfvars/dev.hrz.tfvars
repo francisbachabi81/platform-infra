@@ -9,7 +9,7 @@ tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
 # Plane-scoped RG in hub subscription (AKS/ACR for dev live here)
 # If this RG doesn't exist, set to your actual hub/plane RG name.
-rg_plane_name = "rg-hrz-np-usaz-01"
+rg_plane_name = "rg-hrz-np-usaz-02-core"
 
 # Hub overrides (only set if hub ≠ env subscription)
 hub_subscription_id = null
@@ -19,7 +19,6 @@ hub_tenant_id       = null
 state_rg_name        = "rg-core-infra-state"
 state_sa_name        = "sacoretfstateinfra"
 state_container_name = "tfstate"
-shared_network_rg    = "rg-hrz-np-usaz-01"
 
 shared_state_enabled = true
 core_state_enabled   = true

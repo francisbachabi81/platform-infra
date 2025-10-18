@@ -58,10 +58,10 @@ locals {
   sa1_name  = substr("sa${var.product}${var.env}${var.region}01${local.uniq}", 0, 24)
   aks1_name = "aks-${var.product}-${local.plane_code}-${var.region}-01"
 
-  acr_name          = "acr${var.product}${local.plane_code}${var.region}01"
-  acr_pna_effective = lower(var.acr_sku) == "premium" ? var.public_network_access_enabled : true
+  # acr_name          = "acr${var.product}${local.plane_code}${var.region}01"
+  # acr_pna_effective = lower(var.acr_sku) == "premium" ? var.public_network_access_enabled : true
 
-  rg_hub = coalesce(var.rg_plane_name, "rg-${var.product}-${local.plane_code}-${var.region}-01")
+  rg_hub = coalesce(var.rg_plane_name, "rg-${var.product}-${local.plane_code}-${var.region}-02-core")
 
   # tags
   org_base_tags = {
@@ -80,13 +80,13 @@ locals {
   tags_sa       = { purpose = "storage",            service = "blob,file" }
   tags_cosmos   = { purpose = "database",           service = "cosmosdb" }
   tags_aks      = { purpose = "kubernetes",         service = "aks" }
-  tags_acr      = { purpose = "container-registry", service = "acr" }
+  # tags_acr      = { purpose = "container-registry", service = "acr" }
   tags_postgres = { purpose = "postgres-database",  service = "postgresql" }
   tags_redis    = { purpose = "redis-cache",        service = "redis" }
 
   # feature toggles (create_aks defaults to all except qa if null)
   create_aks = var.create_aks == null ? (var.env != "qa") : var.create_aks
-  create_acr = contains(["dev","prod"], var.env)
+  # create_acr = contains(["dev","prod"], var.env)
 }
 
 ############################################
@@ -379,7 +379,7 @@ module "aks1_hub" {
   name                        = local.aks1_name
   location                    = var.location
   resource_group_name         = local.rg_hub
-  node_resource_group         = "${var.node_resource_group}-01"
+  node_resource_group         = "rg-${var.product}-${local.plane_code}-aksnodes-${var.region}-01"
   default_nodepool_subnet_id  = local.aks_nodepool_subnet_effective
 
   kubernetes_version = var.kubernetes_version
@@ -406,7 +406,7 @@ module "aks1_env" {
   name                        = local.aks1_name
   location                    = var.location
   resource_group_name         = var.rg_name
-  node_resource_group         = "${var.node_resource_group}-01"
+  node_resource_group         = "rg-${var.product}-${var.env}-aksnodes-${var.region}-01"
   default_nodepool_subnet_id  = local.aks_nodepool_subnet_effective
 
   kubernetes_version = var.kubernetes_version
@@ -450,25 +450,25 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
 ############################################
 # acr (hub)
 ############################################
-module "acr1" {
-  count               = (local.enable_both && local.create_acr) ? 1 : 0
-  source              = "../../modules/acr"
-  providers           = { azurerm = azurerm.hub }
+# module "acr1" {
+#   count               = (local.enable_both && local.create_acr) ? 1 : 0
+#   source              = "../../modules/acr"
+#   providers           = { azurerm = azurerm.hub }
 
-  name                = local.acr_name
-  resource_group_name = local.rg_hub
-  location            = var.location
+#   name                = local.acr_name
+#   resource_group_name = local.rg_hub
+#   location            = var.location
 
-  sku                           = var.acr_sku
-  admin_enabled                 = var.admin_enabled
-  public_network_access_enabled = local.acr_pna_effective
-  network_rule_bypass_option    = var.acr_network_rule_bypass_option
-  anonymous_pull_enabled        = var.acr_anonymous_pull_enabled
-  data_endpoint_enabled         = var.acr_data_endpoint_enabled
-  zone_redundancy_enabled       = var.acr_zone_redundancy_enabled
+#   sku                           = var.acr_sku
+#   admin_enabled                 = var.admin_enabled
+#   public_network_access_enabled = local.acr_pna_effective
+#   network_rule_bypass_option    = var.acr_network_rule_bypass_option
+#   anonymous_pull_enabled        = var.acr_anonymous_pull_enabled
+#   data_endpoint_enabled         = var.acr_data_endpoint_enabled
+#   zone_redundancy_enabled       = var.acr_zone_redundancy_enabled
 
-  tags = merge(local.tags_common, local.tags_acr, var.tags, { layer = "plane-resources" })
-}
+#   tags = merge(local.tags_common, local.tags_acr, var.tags, { layer = "plane-resources" })
+# }
 
 ############################################
 # service bus (env) – premium uses PE
