@@ -144,8 +144,9 @@ locals {
   pe_subnet_id_effective        = coalesce(var.pe_subnet_id,           try(local.subnet_ids_from_state["privatelink"], null))
   aks_nodepool_subnet_effective = coalesce(var.aks_nodepool_subnet_id, try(local.subnet_ids_from_state["aks${var.product}"], null))
 
-  region_nospace = replace(lower(var.location), " ", "")
-  aks_pdns_name  = "privatelink.${local.region_nospace}.azmk8s.io"
+  region_nospace   = replace(lower(var.location), " ", "")
+  aks_pdz_suffix   = var.product == "hrz" ? "azmk8s.us" : "azmk8s.io"
+  aks_pdns_name    = "privatelink.${local.region_nospace}.${local.aks_pdz_suffix}"
 
   # --- Core state: stable shape + safe access
   core_defaults = {
