@@ -144,9 +144,21 @@ locals {
   pe_subnet_id_effective        = coalesce(var.pe_subnet_id,           try(local.subnet_ids_from_state["privatelink"], null))
   aks_nodepool_subnet_effective = coalesce(var.aks_nodepool_subnet_id, try(local.subnet_ids_from_state["aks${var.product}"], null))
 
+  # region_nospace   = replace(lower(var.location), " ", "")
+  # aks_pdz_suffix   = var.product == "hrz" ? "azmk8s.us" : "azmk8s.io"
+  # aks_pdns_name    = "privatelink.${local.region_nospace}.${local.aks_pdz_suffix}"
+
+  # Map the Azure Gov location to the AKS DNS region token
+  aks_gov_region_map = {
+    "US Arizona"  = "usgovarizona"
+    "US Virginia" = "usgovvirginia"
+  }
+
   region_nospace   = replace(lower(var.location), " ", "")
-  aks_pdz_suffix   = var.product == "hrz" ? "azmk8s.us" : "azmk8s.io"
-  aks_pdns_name    = "privatelink.${local.region_nospace}.${local.aks_pdz_suffix}"
+  aks_region_token = local.enable_hrz_features ? lookup(local.aks_gov_region_map, var.location, null) : local.region_nospace
+
+  # Correct AKS PDNS name per cloud
+  aks_pdns_name = local.enable_hrz_features ? "privatelink.${local.aks_region_token}.cx.aks.containerservice.azure.us" : "privatelink.${local.region_nospace}.azmk8s.io"
 
   # --- Core state: stable shape + safe access
   core_defaults = {

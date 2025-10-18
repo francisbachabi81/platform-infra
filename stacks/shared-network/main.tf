@@ -137,8 +137,8 @@ locals {
     "privatelink.servicebus.usgovcloudapi.net"        = "svb"
     "privatelink.azurewebsites.us"                    = "app"
     "privatelink.scm.azurewebsites.us"                = "scm"
-    "privatelink.usgovvirginia.azmk8s.us"             = "azmk8svag"
-    "privatelink.usgovarizona.azmk8s.us"              = "azmk8sazg"
+    "privatelink.usgovvirginia.cx.aks.containerservice.azure.us" = "azmk8svag"
+    "privatelink.usgovarizona.cx.aks.containerservice.azure.us"  = "azmk8sazg"
   }
 
   zone_token = {
