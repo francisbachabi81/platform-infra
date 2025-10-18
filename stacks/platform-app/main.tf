@@ -149,16 +149,37 @@ locals {
   # aks_pdns_name    = "privatelink.${local.region_nospace}.${local.aks_pdz_suffix}"
 
   # Map the Azure Gov location to the AKS DNS region token
-  aks_gov_region_map = {
-    "US Arizona"  = "usgovarizona"
-    "US Virginia" = "usgovvirginia"
+
+  # normalized helpers
+  _loc_lower = lower(var.location)
+  _reg_lower = lower(var.region)
+
+  # Map by short region code first, then fall back to location text contains
+  aks_gov_region_by_code = {
+    usaz = "usgovarizona"
+    usva = "usgovvirginia"
   }
 
-  region_nospace   = replace(lower(var.location), " ", "")
-  aks_region_token = local.enable_hrz_features ? lookup(local.aks_gov_region_map, var.location, null) : local.region_nospace
+  aks_region_token = local.enable_hrz_features ? coalesce(
+    lookup(local.aks_gov_region_by_code, local._reg_lower, null),
+    contains(local._loc_lower, "arizona")  ? "usgovarizona"  : null,
+    contains(local._loc_lower, "virginia") ? "usgovvirginia" : null
+  ) : null
 
-  # Correct AKS PDNS name per cloud
-  aks_pdns_name = local.enable_hrz_features ? "privatelink.${local.aks_region_token}.cx.aks.containerservice.azure.us" : "privatelink.${local.region_nospace}.azmk8s.io"
+  region_nospace = replace(lower(var.location), " ", "")
+
+  # Correct AKS private DNS zone per cloud
+  aks_pdns_name = local.enable_hrz_features ? format("privatelink.%s.cx.aks.containerservice.azure.us", local.aks_region_token) : format("privatelink.%s.azmk8s.io", local.region_nospace)
+  # aks_gov_region_map = {
+  #   "US Arizona"  = "usgovarizona"
+  #   "US Virginia" = "usgovvirginia"
+  # }
+
+  # region_nospace   = replace(lower(var.location), " ", "")
+  # aks_region_token = local.enable_hrz_features ? lookup(local.aks_gov_region_map, var.location, null) : local.region_nospace
+
+  # # Correct AKS PDNS name per cloud
+  # aks_pdns_name = local.enable_hrz_features ? "privatelink.${local.aks_region_token}.cx.aks.containerservice.azure.us" : "privatelink.${local.region_nospace}.azmk8s.io"
 
   # --- Core state: stable shape + safe access
   core_defaults = {
@@ -180,6 +201,14 @@ locals {
   # deployment placement (no provider conditionals)
   deploy_aks_in_hub = local.is_dev  && local.enable_both && local.create_aks
   deploy_aks_in_env = (local.is_uat || local.is_prod) && local.enable_both && local.create_aks
+}
+
+# Hard stop if we’re in Gov but couldn’t resolve the token
+check "gov_region_supported" {
+  assert {
+    condition     = !local.enable_hrz_features || local.aks_region_token != null
+    error_message = "Unsupported/unknown Azure Gov location/region. Set region to 'usaz'/'usva' or location containing 'Arizona'/'Virginia'."
+  }
 }
 
 ############################################
