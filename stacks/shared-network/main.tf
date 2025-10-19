@@ -497,30 +497,46 @@ resource "azurerm_network_security_group" "appgw_nsg" {
   depends_on          = [module.rg_hub]
 }
 
-resource "azurerm_network_security_rule" "appgw_allow_alb" {
+resource "azurerm_network_security_rule" "appgw_allow_gwmgr" {
   count                       = length(azurerm_network_security_group.appgw_nsg)
-  name                        = "allow-azurelb-probes"
+  name                        = "allow-gwmgr-65200-65535"
   priority                    = 110
-  direction                   = "Inbound"
-  access                      = "Allow"
-  protocol                    = "*"
-  source_port_range           = "*"
-  destination_port_range      = "*"
-  source_address_prefix       = "AzureLoadBalancer"
-  destination_address_prefix  = "*"
-  resource_group_name         = azurerm_network_security_group.appgw_nsg[0].resource_group_name
-  network_security_group_name = azurerm_network_security_group.appgw_nsg[0].name
-}
-
-resource "azurerm_network_security_rule" "appgw_allow_inbound_snat" {
-  count                       = length(azurerm_network_security_group.appgw_nsg)
-  name                        = "allow-appgw-inbound-snat"
-  priority                    = 3900
   direction                   = "Inbound"
   access                      = "Allow"
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "65200-65535"
+  source_address_prefix       = "GatewayManager"
+  destination_address_prefix  = "*"
+  resource_group_name         = azurerm_network_security_group.appgw_nsg[0].resource_group_name
+  network_security_group_name = azurerm_network_security_group.appgw_nsg[0].name
+}
+
+# Only if public listeners are enabled:
+resource "azurerm_network_security_rule" "appgw_allow_https_public" {
+  count                       = var.appgw_public_ip_enabled ? 1 : 0
+  name                        = "allow-https-from-internet"
+  priority                    = 120
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "Internet"
+  destination_address_prefix  = "*"
+  resource_group_name         = azurerm_network_security_group.appgw_nsg[0].resource_group_name
+  network_security_group_name = azurerm_network_security_group.appgw_nsg[0].name
+}
+
+resource "azurerm_network_security_rule" "appgw_allow_http_public" {
+  count                       = var.appgw_public_ip_enabled ? 1 : 0
+  name                        = "allow-http-from-internet"
+  priority                    = 125
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "80"
   source_address_prefix       = "Internet"
   destination_address_prefix  = "*"
   resource_group_name         = azurerm_network_security_group.appgw_nsg[0].resource_group_name
@@ -995,6 +1011,7 @@ module "dns_resolver" {
   vnet_links          = local.dnsr_ruleset_links
   tags                = local.dnsr_tags
   # implicit deps via VNet/Subnet IDs are sufficient
+  depends_on = [module.vnet_hub]
 }
 
 # ── dns: public zones ─────────────────────────────────────────────────────────

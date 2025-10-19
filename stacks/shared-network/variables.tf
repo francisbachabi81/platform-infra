@@ -1,109 +1,128 @@
-
-# Context
+# context
 variable "plane" {
-  description = "Deployment plane: nonprod | prod"
+  description = "deployment plane: nonprod or prod"
   type        = string
   validation {
-    condition     = contains(["nonprod", "prod"], var.plane)
+    condition     = contains(["nonprod","prod"], lower(var.plane))
     error_message = "plane must be one of: nonprod, prod."
   }
 }
 
 variable "product" {
-  description = "Product/system code used in naming (hrz | pub)."
+  description = "product code: hrz or pub"
   type        = string
   default     = "hrz"
   validation {
-    condition     = contains(["hrz", "pub"], var.product)
-    error_message = "product must be one of: hrz, pub."
+    condition     = contains(["hrz","pub"], lower(var.product))
+    error_message = "product must be hrz or pub."
   }
 }
 
 variable "location" {
-  description = "Azure region name (e.g., westus3, usgovvirginia)."
+  description = "azure location (e.g. westus3, usgovvirginia)"
   type        = string
+  validation {
+    condition     = length(trimspace(var.location)) > 0
+    error_message = "location cannot be empty."
+  }
 }
 
 variable "region" {
-  description = "Short region code used in naming (e.g., cus, usaz)."
+  description = "short region code used in naming (e.g. cus, usaz)"
   type        = string
   default     = "cus"
+  validation {
+    condition     = can(regex("^[a-z0-9]{2,12}$", var.region))
+    error_message = "region should be 2-12 lowercase letters/digits."
+  }
 }
 
 variable "seq" {
-  description = "Sequence string used in names (e.g., 01)."
+  description = "sequence used in names (e.g. 01)"
   type        = string
   default     = "01"
+  validation {
+    condition     = can(regex("^[0-9]{2}$", var.seq))
+    error_message = "seq must be two digits like 01."
+  }
 }
 
 variable "tags" {
-  description = "Base tags to merge onto resources (layer- and plane-specific tags are added automatically)."
+  description = "base tags merged onto resources"
   type        = map(string)
   default     = {}
 }
 
-# Subscriptions
+# subscriptions
 variable "hub_subscription_id" {
-  description = "Subscription ID for the HUB (shared-network) resources."
+  description = "hub subscription id"
   type        = string
+  validation {
+    condition     = can(regex("^[0-9a-fA-F-]{36}$", var.hub_subscription_id))
+    error_message = "hub_subscription_id must be a guid."
+  }
 }
 
 variable "hub_tenant_id" {
-  description = "Tenant (Entra ID) ID for the HUB subscription."
+  description = "hub tenant id"
   type        = string
+  validation {
+    condition     = can(regex("^[0-9a-fA-F-]{36}$", var.hub_tenant_id))
+    error_message = "hub_tenant_id must be a guid."
+  }
 }
 
 variable "dev_subscription_id" {
-  description = "Optional override subscription ID for DEV spoke resources."
+  description = "optional dev subscription override"
   type        = string
   default     = null
 }
 
 variable "dev_tenant_id" {
-  description = "Optional override tenant ID for DEV spoke resources."
+  description = "optional dev tenant override"
   type        = string
   default     = null
 }
 
 variable "qa_subscription_id" {
-  description = "Optional override subscription ID for QA spoke resources."
+  description = "optional qa subscription override"
   type        = string
   default     = null
 }
 
 variable "qa_tenant_id" {
-  description = "Optional override tenant ID for QA spoke resources."
+  description = "optional qa tenant override"
   type        = string
   default     = null
 }
 
 variable "prod_subscription_id" {
-  description = "Optional override subscription ID for PROD spoke resources."
+  description = "optional prod subscription override"
   type        = string
   default     = null
 }
 
 variable "prod_tenant_id" {
-  description = "Optional override tenant ID for PROD spoke resources."
+  description = "optional prod tenant override"
   type        = string
   default     = null
 }
 
 variable "uat_subscription_id" {
-  description = "Optional override subscription ID for UAT spoke resources."
+  description = "optional uat subscription override"
   type        = string
   default     = null
 }
 
 variable "uat_tenant_id" {
-  description = "Optional override tenant ID for UAT spoke resources."
+  description = "optional uat tenant override"
   type        = string
   default     = null
 }
 
-# Hub & Spokes (VNets)
+# hub & spokes (vnets)
 variable "nonprod_hub" {
-  description = "Nonprod hub VNet definition."
+  description = "nonprod hub vnet definition"
   type = object({
     rg    = string
     vnet  = string
@@ -128,7 +147,7 @@ variable "nonprod_hub" {
 }
 
 variable "dev_spoke" {
-  description = "DEV spoke VNet definition."
+  description = "dev spoke vnet definition"
   type = object({
     rg    = string
     vnet  = string
@@ -153,7 +172,7 @@ variable "dev_spoke" {
 }
 
 variable "qa_spoke" {
-  description = "QA spoke VNet definition."
+  description = "qa spoke vnet definition"
   type = object({
     rg    = string
     vnet  = string
@@ -178,7 +197,7 @@ variable "qa_spoke" {
 }
 
 variable "prod_hub" {
-  description = "Prod hub VNet definition."
+  description = "prod hub vnet definition"
   type = object({
     rg    = string
     vnet  = string
@@ -203,7 +222,7 @@ variable "prod_hub" {
 }
 
 variable "prod_spoke" {
-  description = "PROD spoke VNet definition."
+  description = "prod spoke vnet definition"
   type = object({
     rg    = string
     vnet  = string
@@ -228,7 +247,7 @@ variable "prod_spoke" {
 }
 
 variable "uat_spoke" {
-  description = "UAT spoke VNet definition."
+  description = "uat spoke vnet definition"
   type = object({
     rg    = string
     vnet  = string
@@ -252,97 +271,102 @@ variable "uat_spoke" {
   nullable = true
 }
 
-# DNS
-
+# dns
 variable "private_zones" {
-  description = "Private DNS zone FQDNs to create and link (e.g., privatelink.blob.core.usgovcloudapi.net)."
+  description = "private dns zone fqdns to create and link"
   type        = list(string)
 }
 
 variable "public_dns_zones" {
-  description = "Public DNS zones to create in the shared network RG."
+  description = "public dns zones to create in the shared rg"
   type        = list(string)
   default     = ["dev.horizon.intterra.io"]
 }
 
-
-# Connectivity & Ingress
-
+# connectivity & ingress
 variable "create_vpn_gateway" {
-  description = "Create P2S VPN gateway in the hub?"
+  description = "create p2s vpn gateway in the hub"
   type        = bool
   default     = true
 }
 
 variable "vpn_sku" {
-  description = "VPN Gateway SKU."
+  description = "vpn gateway sku"
   type        = string
   default     = "VpnGw1"
 }
 
 variable "public_ip_sku" {
-  description = "Public IP SKU for gateways / Application Gateway."
+  description = "public ip sku for gateways/app gateway"
   type        = string
   default     = "Standard"
 }
 
 variable "public_ip_allocation_method" {
-  description = "Public IP allocation method."
+  description = "public ip allocation method"
   type        = string
   default     = "Static"
 }
 
 variable "create_vpng_public_ip" {
-  description = "If true, let the VPN Gateway module create its own Public IP; otherwise pass an external PIP."
+  description = "if true, vpn module creates its own pip; otherwise pass an external pip"
   type        = bool
   default     = false
 }
 
 variable "create_app_gateway" {
-  description = "Create Application Gateway (and WAF policy)."
+  description = "create application gateway and waf policy"
   type        = bool
   default     = true
 }
 
 variable "waf_mode" {
-  description = "WAF policy mode (Detection | Prevention)."
+  description = "waf policy mode: detection or prevention"
   type        = string
   default     = "Detection"
+  validation {
+    condition     = contains(["Detection","Prevention"], var.waf_mode)
+    error_message = "waf_mode must be Detection or Prevention."
+  }
 }
 
 variable "appgw_public_ip_enabled" {
-  description = "Toggle public IP for Application Gateway."
+  description = "enable public ip for application gateway"
   type        = bool
   default     = true
 }
 
 variable "appgw_sku_name" {
-  description = "Application Gateway SKU name."
+  description = "application gateway sku name"
   type        = string
   default     = "WAF_v2"
 }
 
 variable "appgw_sku_tier" {
-  description = "Application Gateway SKU tier."
+  description = "application gateway sku tier"
   type        = string
   default     = "WAF_v2"
 }
 
 variable "appgw_capacity" {
-  description = "Application Gateway capacity (instance count)."
+  description = "application gateway capacity"
   type        = number
   default     = 1
 }
 
 variable "appgw_cookie_based_affinity" {
-  description = "Cookie based affinity for Application Gateway (Enabled | Disabled)."
+  description = "cookie-based affinity: enabled or disabled"
   type        = string
   default     = "Disabled"
+  validation {
+    condition     = contains(["Enabled","Disabled"], var.appgw_cookie_based_affinity)
+    error_message = "appgw_cookie_based_affinity must be Enabled or Disabled."
+  }
 }
 
-# NSGs & DNS Resolver
+# nsgs & dns resolver
 variable "nsg_exclude_subnets" {
-  description = "Subnet names where generic NSGs should NOT be attached."
+  description = "subnets where generic nsgs should not be attached"
   type        = list(string)
   default = [
     "GatewaySubnet",
@@ -355,13 +379,13 @@ variable "nsg_exclude_subnets" {
 }
 
 variable "create_dns_resolver" {
-  description = "Create Azure DNS Private Resolver in the hub VNet."
+  description = "create azure dns private resolver in the hub"
   type        = bool
   default     = true
 }
 
 variable "dns_forwarding_rules" {
-  description = "Forwarding rules for DNS Private Resolver."
+  description = "forwarding rules for dns private resolver"
   type = list(object({
     domain_name = string
     target_ips  = list(string)
@@ -370,21 +394,23 @@ variable "dns_forwarding_rules" {
 }
 
 variable "dnsr_inbound_static_ip" {
-  description = "Optional static IP for the DNS Private Resolver inbound endpoint."
+  description = "optional static ip for dns private resolver inbound endpoint"
   type        = string
   default     = null
 }
 
 variable "fd_create_frontdoor" {
-  type    = bool
-  default = false
+  description = "create azure front door profile"
+  type        = bool
+  default     = false
 }
 
 variable "fd_sku_name" {
-  type    = string
-  default = "Premium_AzureFrontDoor"
+  description = "front door sku name"
+  type        = string
+  default     = "Premium_AzureFrontDoor"
   validation {
-    condition     = contains(["Standard_AzureFrontDoor", "Premium_AzureFrontDoor"], var.fd_sku_name)
-    error_message = "fd_sku_name invalid"
+    condition     = contains(["Standard_AzureFrontDoor","Premium_AzureFrontDoor"], var.fd_sku_name)
+    error_message = "fd_sku_name must be Standard_AzureFrontDoor or Premium_AzureFrontDoor."
   }
 }

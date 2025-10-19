@@ -10,7 +10,7 @@ seq      = "01"                     # sequence in names
 hub_subscription_id = "641d3872-8322-4bdb-83ce-bfbc119fa3cd"
 hub_tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
-# If DEV/QA VNets live in *different* subscriptions, set these:
+# If DEV/QA VNets live in different subscriptions, set these
 dev_subscription_id = null  # e.g. "11111111-2222-3333-4444-555555555555"
 dev_tenant_id       = null  # e.g. "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
@@ -53,7 +53,7 @@ public_dns_zones = [
 
 # VNets — NONPROD plane: hub + dev + qa
 nonprod_hub = {
-  rg    = "rg-hrz-np-usaz-01-network"
+  rg    = "rg-hrz-np-usaz-net-01"
   vnet  = "vnet-hrz-np-hub-usaz-01"
   cidrs = ["10.10.0.0/16"]
 

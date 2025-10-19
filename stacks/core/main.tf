@@ -1,6 +1,4 @@
-############################################
 # terraform & providers
-############################################
 terraform {
   required_version = ">= 1.6.5"
   required_providers {
@@ -15,9 +13,7 @@ provider "azurerm" {
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
-############################################
 # locals (plane-scoped)
-############################################
 locals {
   # plane_code = var.plane
   plane_norm = contains(["np","nonprod"], lower(var.plane)) ? "nonprod" : contains(["pr","prod"],     lower(var.plane)) ? "prod"    : var.plane
@@ -41,12 +37,10 @@ locals {
   appi_name = "appi-${var.product}-${local.plane_code}-${var.region}-01"
   rsv_name  = "rsv-${var.product}-${local.plane_code}-${var.region}-01"
 
-  rg_name_core = "rg-${var.product}-${local.plane_code}-${var.region}-02-core"
+  rg_name_core = "rg-${var.product}-${local.plane_code}-${var.region}-core-01"
 }
 
-############################################
 # shared-network state (for consistency, not strictly required here)
-############################################
 data "terraform_remote_state" "shared" {
   count   = var.shared_state_enabled ? 1 : 0
   backend = "azurerm"
@@ -68,9 +62,7 @@ module "rg_core_platform" {
   tags      = merge(local.tags_common, { purpose = "core-resources" })
 }
 
-############################################
 # log analytics workspace (plane)
-############################################
 resource "azurerm_log_analytics_workspace" "plane" {
   name                = local.law_name
   location            = var.location
@@ -81,9 +73,7 @@ resource "azurerm_log_analytics_workspace" "plane" {
   depends_on = [ module.rg_core_platform ]
 }
 
-############################################
 # application insights (workspace-based)
-############################################
 resource "azurerm_application_insights" "plane" {
   name                       = local.appi_name
   location                   = var.location
@@ -96,9 +86,7 @@ resource "azurerm_application_insights" "plane" {
   depends_on = [ module.rg_core_platform,azurerm_log_analytics_workspace.plane ]
 }
 
-############################################
 # recovery services vault (plane)
-############################################
 resource "azurerm_recovery_services_vault" "plane" {
   name                = local.rsv_name
   location            = var.location

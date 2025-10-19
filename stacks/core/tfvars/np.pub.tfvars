@@ -1,10 +1,10 @@
 plane           = "np"
 product         = "pub"
-location        = "USGov Arizona"
-region          = "usaz"
+location        = "Central US"
+region          = "cus"
 
-subscription_id = "641d3872-8322-4bdb-83ce-bfbc119fa3cd"
-tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
+subscription_id = "aab00dd1-a61d-4ecc-9010-e1b43ef16c9f" # prod sub
+tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
 tags = {
   plane   = "np"

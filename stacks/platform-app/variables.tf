@@ -1,360 +1,397 @@
-########################################
 # core env/provider
-########################################
 variable "subscription_id" {
-  type = string
+  description = "target subscription id"
+  type        = string
 }
 
 variable "tenant_id" {
-  type = string
+  description = "entra tenant id"
+  type        = string
 }
 
 variable "location" {
-  type = string
+  description = "azure region display name"
+  type        = string
 }
 
 variable "product" {
-  type = string # hrz | pub
+  description = "product code: hrz or pub"
+  type        = string
+  validation {
+    condition     = contains(["hrz","pub"], lower(var.product))
+    error_message = "product must be hrz or pub."
+  }
 }
 
 variable "region" {
-  type = string
+  description = "short region code, e.g. usaz or cus"
+  type        = string
 }
 
 variable "env" {
-  type = string
+  description = "environment: dev, qa, uat, prod, np, or pr"
+  type        = string
   validation {
-    condition     = contains(["dev", "qa", "uat", "prod", "np", "pr"], var.env)
+    condition     = contains(["dev","qa","uat","prod","np","pr"], lower(var.env))
     error_message = "env must be dev, qa, uat, prod, np, or pr."
   }
 }
 
 variable "rg_name" {
-  type = string
+  description = "resource group name"
+  type        = string
 }
 
 variable "node_resource_group" {
-  type    = string
-  default = ""
+  description = "aks managed resource group"
+  type        = string
+  default     = ""
 }
 
 variable "kubernetes_version" {
-  type    = string
-  default = "1.33.3"
+  description = "aks kubernetes version"
+  type        = string
+  default     = "1.33.3"
 }
 
-########################################
 # remote states
-########################################
 variable "state_rg_name" {
-  type = string
+  description = "remote state resource group"
+  type        = string
 }
 
 variable "state_sa_name" {
-  type = string
+  description = "remote state storage account"
+  type        = string
 }
 
 variable "state_container_name" {
-  type = string
+  description = "remote state container"
+  type        = string
 }
 
 variable "shared_state_enabled" {
-  type    = bool
-  default = true
+  description = "enable reading shared remote state"
+  type        = bool
+  default     = true
 }
 
-########################################
 # core state for observability
-########################################
 variable "core_state_enabled" {
-  type    = bool
-  default = true
+  description = "enable reading core state for observability"
+  type        = bool
+  default     = true
 }
 
 variable "core_state_key" {
-  type    = string
-  default = null # overrides default "core/<plane>/terraform.tfstate"
+  description = "override for core state key"
+  type        = string
+  default     = null
 }
 
-########################################
 # tags & naming
-########################################
 variable "tags" {
-  type    = map(string)
-  default = {}
+  description = "base tags applied to all resources"
+  type        = map(string)
+  default     = {}
 }
 
 variable "name_suffix" {
-  type    = string
-  default = ""
+  description = "optional alphanumeric suffix"
+  type        = string
+  default     = ""
   validation {
     condition     = var.name_suffix == "" || can(regex("^[A-Za-z0-9]+$", var.name_suffix))
-    error_message = "name_suffix must be empty or alphanumeric"
+    error_message = "name_suffix must be empty or alphanumeric."
   }
 }
 
-########################################
 # private networking overrides + strictness
-########################################
 variable "pe_subnet_id" {
-  type    = string
-  default = null
+  description = "private endpoint subnet id"
+  type        = string
+  default     = null
 }
 
 variable "aks_nodepool_subnet_id" {
-  type    = string
-  default = null
+  description = "aks nodepool subnet id"
+  type        = string
+  default     = null
 }
 
 variable "private_dns_zone_ids" {
-  type    = map(string)
-  default = {}
+  description = "map of privatelink zone ids"
+  type        = map(string)
+  default     = {}
 }
 
 variable "require_private_networking" {
-  type    = bool
-  default = true
+  description = "enforce private networking"
+  type        = bool
+  default     = true
 }
 
-########################################
 # key vault
-########################################
 variable "purge_protection_enabled" {
-  type    = bool
-  default = false
+  description = "enable purge protection"
+  type        = bool
+  default     = false
 }
 
 variable "soft_delete_retention_days" {
-  type    = number
-  default = 7
+  description = "soft delete retention in days"
+  type        = number
+  default     = 7
   validation {
     condition     = var.soft_delete_retention_days >= 7 && var.soft_delete_retention_days <= 90
-    error_message = "soft_delete_retention_days must be 7..90"
+    error_message = "soft_delete_retention_days must be 7..90."
   }
 }
 
-########################################
 # storage
-########################################
 variable "sa_replication_type" {
-  type    = string
-  default = "LRS"
+  description = "storage account replication"
+  type        = string
+  default     = "LRS"
   validation {
-    condition     = contains(["LRS", "ZRS", "RAGRS", "GZRS", "RAGZRS"], var.sa_replication_type)
-    error_message = "sa_replication_type invalid"
+    condition     = contains(["LRS","ZRS","RAGRS","GZRS","RAGZRS"], var.sa_replication_type)
+    error_message = "sa_replication_type invalid."
   }
 }
 
-########################################
 # acr
-########################################
 variable "acr_sku" {
-  type    = string
-  default = "Basic"
+  description = "azure container registry sku"
+  type        = string
+  default     = "Basic"
   validation {
-    condition     = contains(["Basic", "Standard", "Premium"], var.acr_sku)
-    error_message = "acr_sku invalid"
+    condition     = contains(["Basic","Standard","Premium"], var.acr_sku)
+    error_message = "acr_sku invalid."
   }
 }
 
 variable "admin_enabled" {
-  type    = bool
-  default = false
+  description = "enable acr admin user"
+  type        = bool
+  default     = false
 }
 
 variable "public_network_access_enabled" {
-  type    = bool
-  default = true
+  description = "enable public network access"
+  type        = bool
+  default     = true
 }
 
 variable "acr_network_rule_bypass_option" {
-  type    = string
-  default = "AzureServices"
+  description = "acr bypass option"
+  type        = string
+  default     = "AzureServices"
   validation {
-    condition     = contains(["None", "AzureServices"], var.acr_network_rule_bypass_option)
-    error_message = "acr bypass invalid"
+    condition     = contains(["None","AzureServices"], var.acr_network_rule_bypass_option)
+    error_message = "acr bypass invalid."
   }
 }
 
 variable "acr_anonymous_pull_enabled" {
-  type    = bool
-  default = false
+  description = "enable anonymous pull"
+  type        = bool
+  default     = false
 }
 
 variable "acr_data_endpoint_enabled" {
-  type    = bool
-  default = false
+  description = "enable data endpoint"
+  type        = bool
+  default     = false
 }
 
 variable "acr_zone_redundancy_enabled" {
-  type    = bool
-  default = false
+  description = "enable zone redundancy"
+  type        = bool
+  default     = false
 }
 
-########################################
 # service bus
-########################################
 variable "create_servicebus" {
-  type    = bool
-  default = true
+  description = "create service bus resources"
+  type        = bool
+  default     = true
 }
 
 variable "servicebus_sku" {
-  type    = string
-  default = "Basic"
+  description = "service bus sku"
+  type        = string
+  default     = "Basic"
   validation {
-    condition     = contains(["Basic", "Standard", "Premium"], var.servicebus_sku)
-    error_message = "servicebus_sku invalid"
+    condition     = contains(["Basic","Standard","Premium"], var.servicebus_sku)
+    error_message = "servicebus_sku invalid."
   }
 }
 
 variable "servicebus_capacity" {
-  type    = number
-  default = 1
+  description = "premium messaging units or 0/1 for lower skus"
+  type        = number
+  default     = 1
 }
 
 variable "servicebus_local_auth_enabled" {
-  type    = bool
-  default = false
+  description = "enable local auth"
+  type        = bool
+  default     = false
 }
 
 variable "servicebus_queues" {
-  type    = list(string)
-  default = []
+  description = "queue names"
+  type        = list(string)
+  default     = []
 }
 
 variable "servicebus_topics" {
-  type    = list(string)
-  default = []
+  description = "topic names"
+  type        = list(string)
+  default     = []
 }
 
 variable "servicebus_manage_policy_name" {
-  type    = string
-  default = null
+  description = "management policy name"
+  type        = string
+  default     = null
 }
 
 variable "servicebus_min_tls_version" {
-  type    = string
-  default = "1.2"
+  description = "minimum tls version"
+  type        = string
+  default     = "1.2"
 }
 
-########################################
 # aks sizing & networking
-########################################
 variable "aks_node_vm_size" {
-  type    = string
-  default = "Standard_B2s"
+  description = "default node vm size"
+  type        = string
+  default     = "Standard_B2s"
 }
 
 variable "aks_sku_tier" {
-  type    = string
-  default = "Free"
+  description = "aks sku tier"
+  type        = string
+  default     = "Free"
   validation {
-    condition     = contains(["Free", "Standard", "Premium"], var.aks_sku_tier)
-    error_message = "aks_sku_tier invalid"
+    condition     = contains(["Free","Standard","Premium"], var.aks_sku_tier)
+    error_message = "aks_sku_tier invalid."
   }
 }
 
 variable "aks_node_count" {
-  type    = number
-  default = 2
+  description = "default node count"
+  type        = number
+  default     = 2
 }
 
 variable "aks_service_cidr" {
-  type    = string
-  default = null
+  description = "service cidr"
+  type        = string
+  default     = null
 }
 
 variable "aks_dns_service_ip" {
-  type    = string
-  default = null
+  description = "dns service ip"
+  type        = string
+  default     = null
 }
 
 variable "aks_pod_cidr" {
-  type    = string
-  default = "10.244.0.0/16"
+  description = "pod cidr"
+  type        = string
+  default     = "10.244.0.0/16"
 }
 
 variable "create_aks" {
-  type    = bool
-  default = null
+  description = "force create aks or skip"
+  type        = bool
+  default     = null
 }
 
-########################################
 # app service plan + dns rg
-########################################
 variable "asp_os_type" {
-  type    = string
-  default = "Linux"
+  description = "app service plan os"
+  type        = string
+  default     = "Linux"
   validation {
-    condition     = contains(["Linux", "Windows"], var.asp_os_type)
-    error_message = "asp_os_type invalid"
+    condition     = contains(["Linux","Windows"], var.asp_os_type)
+    error_message = "asp_os_type invalid."
   }
 }
 
 variable "func_linux_plan_sku_name" {
-  type    = string
-  default = "S1"
+  description = "function app plan sku"
+  type        = string
+  default     = "S1"
 }
 
-########################################
 # cosmos (nosql)
-########################################
 variable "cosno_total_throughput_limit" {
-  type    = number
-  default = null
+  description = "cosmos nosql total throughput limit"
+  type        = number
+  default     = null
 }
 
-########################################
 # postgres flex
-########################################
 variable "pg_sku_name" {
-  type    = string
-  default = "B_Standard_B1ms"
+  description = "postgres flexible server sku"
+  type        = string
+  default     = "B_Standard_B1ms"
 }
 
 variable "pg_storage_mb" {
-  type    = number
-  default = 32768
+  description = "postgres storage in mb"
+  type        = number
+  default     = 32768
 }
 
 variable "pg_version" {
-  type    = string
-  default = "16"
+  description = "postgres version"
+  type        = string
+  default     = "16"
 }
 
 variable "pg_admin_password" {
-  type      = string
-  sensitive = true
-  default   = null
+  description = "postgres admin password"
+  type        = string
+  sensitive   = true
+  default     = null
 }
 
 variable "pg_geo_redundant_backup" {
-  type    = bool
-  default = false
+  description = "enable geo-redundant backup"
+  type        = bool
+  default     = false
 }
 
 variable "pg_ha_enabled" {
-  type    = bool
-  default = false
+  description = "enable ha"
+  type        = bool
+  default     = false
 }
 
 variable "pg_ha_zone" {
-  type    = string
-  default = "1"
+  description = "ha zone"
+  type        = string
+  default     = "1"
 }
 
 variable "pg_delegated_subnet_name" {
-  type    = string
-  default = "pgflex"
+  description = "delegated subnet name"
+  type        = string
+  default     = "pgflex"
 }
 
 variable "pg_delegated_subnet_id" {
-  type    = string
-  default = null
+  description = "delegated subnet id"
+  type        = string
+  default     = null
 }
 
 variable "pg_firewall_rules" {
+  description = "postgres firewall rules"
   type = list(object({
     name     = string
     start_ip = string
@@ -364,203 +401,221 @@ variable "pg_firewall_rules" {
 }
 
 variable "pg_databases" {
-  type    = list(string)
-  default = ["appdb"]
+  description = "postgres databases to create"
+  type        = list(string)
+  default     = ["appdb"]
 }
 
 variable "pg_aad_auth_enabled" {
-  type    = bool
-  default = false
+  description = "enable aad authentication"
+  type        = bool
+  default     = false
 }
 
 variable "pg_zone" {
-  type    = string
-  default = "1"
+  description = "primary zone"
+  type        = string
+  default     = "1"
 }
 
 variable "pg_replica_enabled" {
-  type    = bool
-  default = false
+  description = "create read replica"
+  type        = bool
+  default     = false
 }
 
 variable "pg_enable_postgis" {
-  type    = bool
-  default = false
+  description = "enable postgis extension"
+  type        = bool
+  default     = false
 }
 
-########################################
 # redis
-########################################
 variable "redis_sku_name" {
-  type    = string
-  default = "Basic"
+  description = "redis sku name"
+  type        = string
+  default     = "Basic"
   validation {
-    condition     = contains(["Basic", "Standard", "Premium"], var.redis_sku_name)
-    error_message = "redis_sku_name invalid"
+    condition     = contains(["Basic","Standard","Premium"], var.redis_sku_name)
+    error_message = "redis_sku_name invalid."
   }
 }
 
 variable "redis_sku_family" {
-  type    = string
-  default = "C"
+  description = "redis sku family"
+  type        = string
+  default     = "C"
   validation {
-    condition     = contains(["C", "P"], var.redis_sku_family)
-    error_message = "redis_sku_family invalid"
+    condition     = contains(["C","P"], var.redis_sku_family)
+    error_message = "redis_sku_family invalid."
   }
 }
 
 variable "redis_capacity" {
-  type    = number
-  default = 1
+  description = "redis capacity"
+  type        = number
+  default     = 1
   validation {
-    condition     = contains([0, 1, 2, 3, 4, 5, 6], var.redis_capacity)
-    error_message = "redis_capacity invalid"
+    condition     = contains([0,1,2,3,4,5,6], var.redis_capacity)
+    error_message = "redis_capacity invalid."
   }
 }
 
-########################################
 # plane-scoped hub rg
-########################################
 variable "rg_plane_name" {
-  type    = string
-  default = null
+  description = "plane-scoped hub resource group name"
+  type        = string
+  default     = null
 }
 
-########################################
 # optional hub overrides
-########################################
 variable "hub_subscription_id" {
-  type    = string
-  default = null
+  description = "override hub subscription id"
+  type        = string
+  default     = null
 }
 
 variable "hub_tenant_id" {
-  type    = string
-  default = null
+  description = "override hub tenant id"
+  type        = string
+  default     = null
 }
 
-########################################
-# optional per-env overrides (compat)
-########################################
+# optional per-env overrides
 variable "dev_subscription_id" {
-  type    = string
-  default = null
+  description = "dev subscription override"
+  type        = string
+  default     = null
 }
 
 variable "dev_tenant_id" {
-  type    = string
-  default = null
+  description = "dev tenant override"
+  type        = string
+  default     = null
 }
 
 variable "qa_subscription_id" {
-  type    = string
-  default = null
+  description = "qa subscription override"
+  type        = string
+  default     = null
 }
 
 variable "qa_tenant_id" {
-  type    = string
-  default = null
+  description = "qa tenant override"
+  type        = string
+  default     = null
 }
 
 variable "uat_subscription_id" {
-  type    = string
-  default = null
+  description = "uat subscription override"
+  type        = string
+  default     = null
 }
 
 variable "uat_tenant_id" {
-  type    = string
-  default = null
+  description = "uat tenant override"
+  type        = string
+  default     = null
 }
 
 variable "prod_subscription_id" {
-  type    = string
-  default = null
+  description = "prod subscription override"
+  type        = string
+  default     = null
 }
 
 variable "prod_tenant_id" {
-  type    = string
-  default = null
+  description = "prod tenant override"
+  type        = string
+  default     = null
 }
 
-########################################
 # overrides to bypass core state for observability
-########################################
 variable "law_workspace_id_override" {
-  type    = string
-  default = null
+  description = "override law workspace id"
+  type        = string
+  default     = null
 }
 
 variable "appi_connection_string_override" {
-  type    = string
-  default = null
+  description = "override app insights connection string"
+  type        = string
+  default     = null
 }
 
-########################################
 # cosmos db for postgresql (citus)
-########################################
 variable "create_cdbpg" {
-  type    = bool
-  default = false
+  description = "create cosmos db for postgresql"
+  type        = bool
+  default     = false
 }
 
 variable "cdbpg_node_count" {
-  type    = number
-  default = 0
+  description = "worker node count"
+  type        = number
+  default     = 0
 }
 
 variable "cdbpg_coordinator_vcore_count" {
-  type    = number
-  default = 4
+  description = "coordinator vcores"
+  type        = number
+  default     = 4
 }
 
 variable "cdbpg_coordinator_storage_quota_in_mb" {
-  type    = number
-  default = 32768
+  description = "coordinator storage in mb"
+  type        = number
+  default     = 32768
 }
 
 variable "cdbpg_coordinator_server_edition" {
-  type    = string
-  default = "BurstableGeneralPurpose" # BurstableGeneralPurpose | GeneralPurpose | MemoryOptimized
+  description = "coordinator edition"
+  type        = string
+  default     = "BurstableGeneralPurpose"
 }
 
 variable "cdbpg_node_vcore_count" {
-  type    = number
-  default = 2
+  description = "worker vcores"
+  type        = number
+  default     = 2
 }
 
 variable "cdbpg_node_storage_quota_in_mb" {
-  type    = number
-  default = 32768
+  description = "worker storage in mb"
+  type        = number
+  default     = 32768
 }
 
 variable "cdbpg_node_server_edition" {
-  type    = string
-  default = "GeneralPurpose" # GeneralPurpose | MemoryOptimized
+  description = "worker edition"
+  type        = string
+  default     = "GeneralPurpose"
 }
 
 variable "cdbpg_citus_version" {
-  type    = string
-  default = null             # e.g., "12.1"
+  description = "citus version"
+  type        = string
+  default     = null
 }
 
 variable "cdbpg_enable_private_endpoint" {
-  type    = bool
-  default = true
+  description = "enable private endpoint"
+  type        = bool
+  default     = true
 }
 
 variable "cdbpg_admin_password" {
-  type      = string
-  sensitive = true
-  # no default on purpose: must be provided via tfvars or pipeline secret
+  description = "cluster admin password"
+  type        = string
+  sensitive   = true
 }
 
 variable "cdbpg_preferred_primary_zone" {
-  type    = string
-  default = null
+  description = "preferred primary zone"
+  type        = string
+  default     = null
   validation {
-    condition     = var.cdbpg_preferred_primary_zone == null || contains(["1", "2", "3"], var.cdbpg_preferred_primary_zone)
-    error_message = "cdbpg_preferred_primary_zone must be \"1\", \"2\", or \"3\" (or null)."
+    condition     = var.cdbpg_preferred_primary_zone == null || contains(["1","2","3"], var.cdbpg_preferred_primary_zone)
+    error_message = "cdbpg_preferred_primary_zone must be 1, 2, or 3 (or null)."
   }
 }
-
-

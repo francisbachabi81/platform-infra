@@ -54,7 +54,7 @@ public_dns_zones = [
 
 # VNets — NONPROD plane: hub + dev + qa
 nonprod_hub = {
-  rg    = "rg-pub-np-cus-01-network"
+  rg    = "rg-pub-np-cus-net-01"
   vnet  = "vnet-pub-np-hub-cus-01"
   cidrs = ["10.10.0.0/16"]
 

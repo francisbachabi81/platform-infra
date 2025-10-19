@@ -11,38 +11,30 @@ seq     = "01"
 
 # private dns zones (privatelink)
 private_zones = [
-  # Storage (Blob/File/Queue/Table + Data Lake Gen2 + Static Website)
+  # Storage
   "privatelink.blob.core.windows.net",
   "privatelink.file.core.windows.net",
   "privatelink.queue.core.windows.net",
   "privatelink.table.core.windows.net",
-  "privatelink.dfs.core.windows.net",          # Data Lake Gen2 (dfs)
-  "privatelink.web.core.windows.net",          # Static website
-
+  "privatelink.dfs.core.windows.net",   # Data Lake Gen2
+  "privatelink.web.core.windows.net",   # Static website
   # Key Vault
   "privatelink.vaultcore.azure.net",
-
   # Redis
   "privatelink.redis.cache.windows.net",
-
-  # Cosmos DB (NoSQL / "documents")
+  # Cosmos DB (NoSQL)
   "privatelink.documents.azure.com",
-
-  # Azure Database for PostgreSQL (Flexible Server)
+  # Azure Database for PostgreSQL (Flexible)
   "privatelink.postgres.database.azure.com",
-
   # Cosmos DB for PostgreSQL (Citus)
   "privatelink.postgres.cosmos.azure.com",
-
   # Service Bus / Event Hubs
   "privatelink.servicebus.windows.net",
-
   # App Service (Web Apps + SCM/Kudu)
   "privatelink.azurewebsites.net",
   "privatelink.scm.azurewebsites.net",
-
-  # AKS (replace <region> with e.g., centralus, eastus2)
-  "privatelink.centralus.azmk8s.io"             # e.g., privatelink.centralus.azmk8s.io
+  # AKS (region-specific)
+  "privatelink.centralus.azmk8s.io"
 ]
 
 # public dns zones
@@ -52,7 +44,7 @@ public_dns_zones = [
 
 # vnets
 prod_hub = {
-  rg    = "rg-pub-pr-cus-01-network"
+  rg    = "rg-pub-pr-cus-net-01"
   vnet  = "vnet-pub-pr-hub-cus-01"
   cidrs = ["10.13.0.0/16"]
 

@@ -422,7 +422,7 @@ module "aks1_hub" {
   name                        = local.aks1_name
   location                    = var.location
   resource_group_name         = local.rg_hub
-  node_resource_group         = "rg-${var.product}-${local.plane_code}-aksnodes-${var.region}-01"
+  node_resource_group         = "rg-${var.product}-${local.plane_code}-${var.region}-aksn-01"
   default_nodepool_subnet_id  = local.aks_nodepool_subnet_effective
 
   kubernetes_version = var.kubernetes_version

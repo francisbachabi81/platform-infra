@@ -1,55 +1,143 @@
-# plane/product/env
+# plane / product / env
 variable "plane" {
-  type = string
+  description = "deployment plane: np/pr or nonprod/prod"
+  type        = string
   validation {
     condition     = contains(["np","pr","nonprod","prod"], lower(var.plane))
     error_message = "plane must be one of: np, pr, nonprod, prod."
   }
 }
 
-variable "product" { type = string }  # hrz | pub
-variable "region"  { type = string }  # e.g., usaz, cus
-variable "location"{ type = string }
+variable "product" {
+  description = "product code: hrz or pub"
+  type        = string
+  validation {
+    condition     = contains(["hrz","pub"], lower(var.product))
+    error_message = "product must be either 'hrz' or 'pub'."
+  }
+}
 
-# provider
-variable "subscription_id" { type = string }
-variable "tenant_id"       { type = string }
+variable "region" {
+  description = "short region code, e.g. usaz or cus"
+  type        = string
+  validation {
+    condition     = can(regex("^[a-z]{2,8}$", var.region))
+    error_message = "region should be a short lowercase code like 'cus' or 'usaz'."
+  }
+}
 
-# rg in hub subscription scoped to plane
-variable "rg_name_core" { 
-  type = string 
-  default = "rg-core-resources"
+variable "location" {
+  description = "azure location display name, e.g. 'usgov arizona' or 'central us'"
+  type        = string
+  validation {
+    condition     = length(trimspace(var.location)) > 0
+    error_message = "location cannot be empty."
+  }
+}
+
+# provider identity
+variable "subscription_id" {
+  description = "target subscription id"
+  type        = string
+  validation {
+    condition     = can(regex("^[0-9a-fA-F-]{36}$", var.subscription_id))
+    error_message = "subscription_id must be a guid."
+  }
+}
+
+variable "tenant_id" {
+  description = "entra tenant id"
+  type        = string
+  validation {
+    condition     = can(regex("^[0-9a-fA-F-]{36}$", var.tenant_id))
+    error_message = "tenant_id must be a guid."
+  }
+}
+
+# hub resource group
+variable "rg_name_core" {
+  description = "resource group for core/shared resources"
+  type        = string
+  default     = "rg-core-resources"
+  validation {
+    condition     = length(var.rg_name_core) <= 90
+    error_message = "rg_name_core must be 90 characters or fewer."
+  }
 }
 
 # tags
 variable "tags" {
-  type    = map(string)
-  default = {}
+  description = "base tags applied to all resources"
+  type        = map(string)
+  default     = {}
 }
 
-# observability knobs
+# observability
 variable "law_sku" {
-  type    = string
-  default = "PerGB2018"
-}
-variable "law_retention_days" {
-  type    = number
-  default = 30
-}
-variable "appi_internet_ingestion_enabled" {
-  type    = bool
-  default = true
-}
-variable "appi_internet_query_enabled" {
-  type    = bool
-  default = true
+  description = "log analytics sku"
+  type        = string
+  default     = "PerGB2018"
+  validation {
+    condition = contains(["PerGB2018","CapacityReservation","PerNode","Free","Standalone"], var.law_sku)
+    error_message = "law_sku must be one of: PerGB2018, CapacityReservation, PerNode, Free, Standalone."
+  }
 }
 
-# shared-network remote state read (optional)
-variable "shared_state_enabled" {
-  type    = bool
-  default = true
+variable "law_retention_days" {
+  description = "log analytics retention in days"
+  type        = number
+  default     = 30
+  validation {
+    condition     = var.law_retention_days >= 7 && var.law_retention_days <= 730
+    error_message = "law_retention_days must be between 7 and 730."
+  }
 }
-variable "state_rg_name"        { type = string }
-variable "state_sa_name"        { type = string }
-variable "state_container_name" { type = string }
+
+variable "appi_internet_ingestion_enabled" {
+  description = "app insights ingestion over internet"
+  type        = bool
+  default     = true
+}
+
+variable "appi_internet_query_enabled" {
+  description = "app insights queries over internet"
+  type        = bool
+  default     = true
+}
+
+# remote state (optional)
+variable "shared_state_enabled" {
+  description = "read remote state for cross-stack wiring"
+  type        = bool
+  default     = true
+}
+
+variable "state_rg_name" {
+  description = "remote state resource group"
+  type        = string
+  default     = null
+  validation {
+    condition     = var.shared_state_enabled ? length(trimspace(coalesce(var.state_rg_name, ""))) > 0 : true
+    error_message = "state_rg_name is required when shared_state_enabled is true."
+  }
+}
+
+variable "state_sa_name" {
+  description = "remote state storage account"
+  type        = string
+  default     = null
+  validation {
+    condition     = var.shared_state_enabled ? length(trimspace(coalesce(var.state_sa_name, ""))) > 0 : true
+    error_message = "state_sa_name is required when shared_state_enabled is true."
+  }
+}
+
+variable "state_container_name" {
+  description = "remote state blob container"
+  type        = string
+  default     = null
+  validation {
+    condition     = var.shared_state_enabled ? length(trimspace(coalesce(var.state_container_name, ""))) > 0 : true
+    error_message = "state_container_name is required when shared_state_enabled is true."
+  }
+}
