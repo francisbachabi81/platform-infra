@@ -197,38 +197,34 @@ jobs:
           environment:     AzureUSGovernment
           audience:        api://AzureADTokenExchangeUSGov
 
-      # Enable public endpoint + allow this runner IP (Gov SA)
       - name: Enable public access + allow runner IP (Gov state)
         shell: bash
         run: |
           set -euo pipefail
+          RG="${{ steps.paths.outputs.STATE_RG }}"
+          SA="${{ steps.paths.outputs.STATE_SA }}"
+          : "${RG:?STATE_RG missing}"
+          : "${SA:?STATE_SA missing}"
       
-          # Inputs
-          RG="${{ secrets.RESOURCE_GROUP }}"
-          SA="${{ secrets.STORAGE_ACCOUNT_NAME }}"
-          API="2025-03-01"  # Supported by Microsoft.Storage in AzureUSGovernment
+          API="2025-03-01"
           BASE="https://management.usgovcloudapi.net"
-      
-          # Ensure we're logged into the Gov subscription already (your prior step does this)
-          az account show 1>/dev/null
-      
-          # 1) Turn ON public network access (does NOT allow anonymous blobs; just opens the public endpoint)
           SUB_ID="$(az account show --query id -o tsv)"
+          : "${SUB_ID:?No subscription context}"
           ID="/subscriptions/${SUB_ID}/resourceGroups/${RG}/providers/Microsoft.Storage/storageAccounts/${SA}"
+          echo "Target: ${ID}"
+      
+          # Enable public endpoint
           az rest --method PATCH \
             --url "${BASE}${ID}?api-version=${API}" \
             --body '{"properties":{"publicNetworkAccess":"Enabled"}}' \
             --headers "Content-Type=application/json"
       
-          # 2) Add runner public IP to the firewall via REST (pin API version)
+          # Add IP
           agentIP="$(curl -s https://api.ipify.org/)"
           echo "Runner public IP: ${agentIP}"
       
-          # Get current networkAcls
           current="$(az rest --method GET --url "${BASE}${ID}?api-version=${API}")"
           nACLs="$(echo "${current}" | jq -r '.properties.networkAcls // {}')"
-      
-          # Ensure defaultAction/bypass and append IP if missing
           updated="$(jq --arg ip "${agentIP}" '
             .defaultAction = (.defaultAction // "Deny") |
             .bypass = (.bypass // "AzureServices") |
@@ -242,15 +238,13 @@ jobs:
               end
             )
           ' <<< "${nACLs}")"
-      
-          # Patch back only the networkAcls section
           body="$(jq -n --argjson acls "${updated}" '{properties:{networkAcls:$acls}}')"
           az rest --method PATCH \
             --url "${BASE}${ID}?api-version=${API}" \
             --body "${body}" \
             --headers "Content-Type=application/json"
       
-          echo "Public access enabled and IP ${agentIP} allowed for state account."
+          echo "Public access enabled and IP ${agentIP} allowed."
 
       - name: Terraform Init (backend in Azure Gov)
         run: |
@@ -327,35 +321,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          RG="${{ steps.paths.outputs.STATE_RG }}"
+          SA="${{ steps.paths.outputs.STATE_SA }}"
+          : "${RG:?STATE_RG missing}"
+          : "${SA:?STATE_SA missing}"
       
-          RG="${{ secrets.RESOURCE_GROUP }}"
-          SA="${{ secrets.STORAGE_ACCOUNT_NAME }}"
           API="2025-03-01"
           BASE="https://management.usgovcloudapi.net"
-      
-          az account show 1>/dev/null
           SUB_ID="$(az account show --query id -o tsv)"
           ID="/subscriptions/${SUB_ID}/resourceGroups/${RG}/providers/Microsoft.Storage/storageAccounts/${SA}"
-      
-          # Remove the runner IP from ipRules (no-op if missing)
           agentIP="$(curl -s https://api.ipify.org/)"
+      
           current="$(az rest --method GET --url "${BASE}${ID}?api-version=${API}")"
           nACLs="$(echo "${current}" | jq -r '.properties.networkAcls // {}')"
-      
-          updated="$(jq --arg ip "${agentIP}" '
-            .ipRules = ((.ipRules // []) | map(select(.value != $ip)))
-          ' <<< "${nACLs}")"
-      
+          updated="$(jq --arg ip "${agentIP}" '.ipRules = ((.ipRules // []) | map(select(.value != $ip)))' <<< "${nACLs}")"
           body="$(jq -n --argjson acls "${updated}" '{properties:{networkAcls:$acls}}')"
-          az rest --method PATCH \
-            --url "${BASE}${ID}?api-version=${API}" \
-            --body "${body}" \
-            --headers "Content-Type=application/json" || true
-      
-          # Turn public network access back OFF
-          az rest --method PATCH \
-            --url "${BASE}${ID}?api-version=${API}" \
-            --body '{"properties":{"publicNetworkAccess":"Disabled"}}' \
-            --headers "Content-Type=application/json" || true
+          az rest --method PATCH --url "${BASE}${ID}?api-version=${API}" --body "${body}" --headers "Content-Type=application/json" || true
+          az rest --method PATCH --url "${BASE}${ID}?api-version=${API}" --body '{"properties":{"publicNetworkAccess":"Disabled"}}' --headers "Content-Type=application/json" || true
       
           echo "Cleaned up runner IP and disabled public access."
