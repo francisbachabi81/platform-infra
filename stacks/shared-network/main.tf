@@ -548,8 +548,9 @@ resource "azurerm_subnet_network_security_group_association" "appgw_assoc" {
   subnet_id                 = local.appgw_subnet_id
   network_security_group_id = azurerm_network_security_group.appgw_nsg[0].id
   depends_on = [
-    azurerm_network_security_rule.appgw_allow_alb,
-    azurerm_network_security_rule.appgw_allow_inbound_snat
+    azurerm_network_security_rule.appgw_allow_gwmgr,
+    azurerm_network_security_rule.appgw_allow_http_public,
+    azurerm_network_security_rule.appgw_allow_https_public
   ]
 }
 
