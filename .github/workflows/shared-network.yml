@@ -234,24 +234,6 @@ jobs:
             ${{ github.workspace }}/stacks/shared-network/tfplan
             ${{ github.workspace }}/stacks/shared-network/plan.txt
 
-      - name: Strip accidental empty TF_VAR_* before apply
-        if: ${{ inputs.apply && !inputs.destroy }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          # rewrite GITHUB_ENV entries by setting a name to nothing removes ambiguity
-          for v in dev_subscription_id dev_tenant_id qa_subscription_id qa_tenant_id uat_subscription_id uat_tenant_id prod_subscription_id prod_tenant_id; do
-            name="TF_VAR_${v}"
-            if [ -n "${!name-}" ] && [ "${!name}" = "" ]; then
-              {
-                echo "${name}<<EOF"
-                echo
-                echo "EOF"
-              } >> "$GITHUB_ENV"
-              echo "Cleared ${name}"
-            fi
-          done
-
       - name: Terraform Apply
         if: ${{ inputs.apply && !inputs.destroy }}
         run: terraform apply -parallelism=6 -auto-approve tfplan
