@@ -514,7 +514,7 @@ resource "azurerm_network_security_rule" "appgw_allow_gwmgr" {
 
 # Only if public listeners are enabled:
 resource "azurerm_network_security_rule" "appgw_allow_https_public" {
-  count                       = var.appgw_public_ip_enabled ? 1 : 0
+  count                       = local.appgw_enabled && var.appgw_public_ip_enabled ? 1 : 0
   name                        = "allow-https-from-internet"
   priority                    = 120
   direction                   = "Inbound"
@@ -529,7 +529,7 @@ resource "azurerm_network_security_rule" "appgw_allow_https_public" {
 }
 
 resource "azurerm_network_security_rule" "appgw_allow_http_public" {
-  count                       = var.appgw_public_ip_enabled ? 1 : 0
+  count                       = local.appgw_enabled && var.appgw_public_ip_enabled ? 1 : 0
   name                        = "allow-http-from-internet"
   priority                    = 125
   direction                   = "Inbound"
