@@ -197,33 +197,60 @@ jobs:
           environment:     AzureUSGovernment
           audience:        api://AzureADTokenExchangeUSGov
 
-      - name: Allow runner IP on state account (temp)
+      # Enable public endpoint + allow this runner IP (Gov SA)
+      - name: Enable public access + allow runner IP (Gov state)
         shell: bash
         run: |
           set -euo pipefail
+      
+          # Inputs
+          RG="${{ secrets.RESOURCE_GROUP }}"
+          SA="${{ secrets.STORAGE_ACCOUNT_NAME }}"
+          API="2025-03-01"  # Supported by Microsoft.Storage in AzureUSGovernment
+          BASE="https://management.usgovcloudapi.net"
+      
+          # Ensure we're logged into the Gov subscription already (your prior step does this)
+          az account show 1>/dev/null
+      
+          # 1) Turn ON public network access (does NOT allow anonymous blobs; just opens the public endpoint)
+          SUB_ID="$(az account show --query id -o tsv)"
+          ID="/subscriptions/${SUB_ID}/resourceGroups/${RG}/providers/Microsoft.Storage/storageAccounts/${SA}"
+          az rest --method PATCH \
+            --url "${BASE}${ID}?api-version=${API}" \
+            --body '{"properties":{"publicNetworkAccess":"Enabled"}}' \
+            --headers "Content-Type=application/json"
+      
+          # 2) Add runner public IP to the firewall via REST (pin API version)
           agentIP="$(curl -s https://api.ipify.org/)"
           echo "Runner public IP: ${agentIP}"
       
-          # Pin a Storage RP api-version that Azure Gov supports (per error list)
-          AZ_API_VERSION=2025-03-01
+          # Get current networkAcls
+          current="$(az rest --method GET --url "${BASE}${ID}?api-version=${API}")"
+          nACLs="$(echo "${current}" | jq -r '.properties.networkAcls // {}')"
       
-          # Optional: ensure we’re operating against the correct subscription/cloud
-          az account show 1>/dev/null
-
-          az storage account update \
-            --resource-group "${{ secrets.RESOURCE_GROUP }}" \
-            --name "${{ secrets.STORAGE_ACCOUNT_NAME }}" \
-            --public-network-access Enabled
-  
-          # Add the IP rule (idempotent-ish; ignore 'already exists' error)
-          az storage account network-rule add \
-            --resource-group "${{ secrets.RESOURCE_GROUP }}" \
-            --account-name "${{ secrets.STORAGE_ACCOUNT_NAME }}" \
-            --ip-address "${agentIP}" \
-            --only-show-errors \
-            --api-version "${AZ_API_VERSION}" || {
-              echo "Warning: add may have failed due to an existing identical rule; continuing."
-            }
+          # Ensure defaultAction/bypass and append IP if missing
+          updated="$(jq --arg ip "${agentIP}" '
+            .defaultAction = (.defaultAction // "Deny") |
+            .bypass = (.bypass // "AzureServices") |
+            .ipRules = (
+              (.ipRules // []) as $rules |
+              ([$rules[]?.value] | index($ip)) as $exists |
+              if $exists == null then
+                ($rules + [{action:"Allow", value:$ip}])
+              else
+                $rules
+              end
+            )
+          ' <<< "${nACLs}")"
+      
+          # Patch back only the networkAcls section
+          body="$(jq -n --argjson acls "${updated}" '{properties:{networkAcls:$acls}}')"
+          az rest --method PATCH \
+            --url "${BASE}${ID}?api-version=${API}" \
+            --body "${body}" \
+            --headers "Content-Type=application/json"
+      
+          echo "Public access enabled and IP ${agentIP} allowed for state account."
 
       - name: Terraform Init (backend in Azure Gov)
         run: |
@@ -295,21 +322,40 @@ jobs:
             -var "product=${{ inputs.product }}" \
             -var "plane=${{ inputs.plane }}"
             
-      - name: Remove runner IP rule (cleanup)
+      - name: Cleanup SA firewall + disable public access
         if: always()
         shell: bash
         run: |
           set -euo pipefail
+      
+          RG="${{ secrets.RESOURCE_GROUP }}"
+          SA="${{ secrets.STORAGE_ACCOUNT_NAME }}"
+          API="2025-03-01"
+          BASE="https://management.usgovcloudapi.net"
+      
+          az account show 1>/dev/null
+          SUB_ID="$(az account show --query id -o tsv)"
+          ID="/subscriptions/${SUB_ID}/resourceGroups/${RG}/providers/Microsoft.Storage/storageAccounts/${SA}"
+      
+          # Remove the runner IP from ipRules (no-op if missing)
           agentIP="$(curl -s https://api.ipify.org/)"
-          AZ_API_VERSION=2025-03-01
-          az storage account network-rule remove \
-            --resource-group "${{ secrets.RESOURCE_GROUP }}" \
-            --account-name "${{ secrets.STORAGE_ACCOUNT_NAME }}" \
-            --ip-address "${agentIP}" \
-            --only-show-errors \
-            --api-version "${AZ_API_VERSION}" || true
-
-          az storage account update \
-            --resource-group "${{ secrets.RESOURCE_GROUP }}" \
-            --name "${{ secrets.STORAGE_ACCOUNT_NAME }}" \
-            --public-network-access Disabled
+          current="$(az rest --method GET --url "${BASE}${ID}?api-version=${API}")"
+          nACLs="$(echo "${current}" | jq -r '.properties.networkAcls // {}')"
+      
+          updated="$(jq --arg ip "${agentIP}" '
+            .ipRules = ((.ipRules // []) | map(select(.value != $ip)))
+          ' <<< "${nACLs}")"
+      
+          body="$(jq -n --argjson acls "${updated}" '{properties:{networkAcls:$acls}}')"
+          az rest --method PATCH \
+            --url "${BASE}${ID}?api-version=${API}" \
+            --body "${body}" \
+            --headers "Content-Type=application/json" || true
+      
+          # Turn public network access back OFF
+          az rest --method PATCH \
+            --url "${BASE}${ID}?api-version=${API}" \
+            --body '{"properties":{"publicNetworkAccess":"Disabled"}}' \
+            --headers "Content-Type=application/json" || true
+      
+          echo "Cleaned up runner IP and disabled public access."
