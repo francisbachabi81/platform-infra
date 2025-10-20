@@ -7,9 +7,6 @@ rg_name         = "rg-hrz-prod-usaz-01"
 subscription_id = "641d3872-8322-4bdb-83ce-bfbc119fa3cd"
 tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
-# Plane-scoped RG in hub subscription (pr = uat/prod plane; ACR/RSV live here)
-rg_plane_name = "rg-hrz-pr-usaz-01"
-
 # Hub overrides (only set if hub ≠ env subscription)
 hub_subscription_id = null
 hub_tenant_id       = null

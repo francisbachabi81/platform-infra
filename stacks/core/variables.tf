@@ -141,3 +141,24 @@ variable "state_container_name" {
     error_message = "state_container_name is required when shared_state_enabled is true."
   }
 }
+
+# create toggles
+variable "create_rg_core_platform" {
+  type    = bool
+  default = true
+}
+
+variable "create_log_analytics" {
+  type    = bool
+  default = true
+}
+
+variable "create_application_insights" {
+  type    = bool
+  default = true
+}
+
+variable "create_recovery_vault" {
+  type    = bool
+  default = true
+}

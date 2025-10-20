@@ -11,18 +11,10 @@ It provides a unified approach for managing environments, stacks, modules, and s
 README.md
 .github/
   workflows/
-    env-deploy.yaml
+    platform-app.yaml
     shared-network.yaml
+    plane-core.yaml
     provision-secrets.yaml
-envvars/
-  dev.hrz.tfvars
-  dev.pub.tfvars
-  qa.hrz.tfvars
-  qa.pub.tfvars
-  uat.hrz.tfvars
-  uat.pub.tfvars
-  prod.hrz.tfvars
-  prod.pub.tfvars
 modules/
 stacks/
 ```
@@ -68,28 +60,6 @@ Each subdirectory represents a standalone Terraform module that can be reused ac
 
 ---
 
-## Environment Variables (envvars/)
-
-Contains environment-specific `.tfvars` files for both **Horizon (hrz)** and **Public (pub)** deployments.
-
-```
-envvars/
-  dev.hrz.tfvars
-  dev.pub.tfvars
-  qa.hrz.tfvars
-  qa.pub.tfvars
-  uat.hrz.tfvars
-  uat.pub.tfvars
-  prod.hrz.tfvars
-  prod.pub.tfvars
-```
-
-### Purpose
-- Centralizes key environment-level variables (region, subscription, naming prefix, etc.).
-- Used by GitHub Actions workflows to dynamically configure the Terraform backend and providers.
-
----
-
 ## Stacks
 
 Primary Terraform stacks that organize major resource groups by function.
@@ -101,7 +71,6 @@ stacks/platform-app/
   main.tf
   variables.tf
   outputs.tf
-  frontdoor_module.tf
   tfvars/
     dev.hrz.tfvars
     dev.pub.tfvars
@@ -115,9 +84,9 @@ stacks/platform-app/
 
 #### Key Points
 - Hosts application infrastructure (AKS, Key Vault, Storage, Service Bus, Front Door, etc.).
-- The Front Door stack is merged into this layer for simplicity.
 - Uses product-specific tfvars for environment separation and backend configuration.
 
+---
 
 ### Shared-Network Stack
 ```
@@ -131,14 +100,33 @@ stacks/shared-network/
     nonprod.pub.tfvars
     prod.hrz.tfvars
     prod.pub.tfvars
-  hrz.secrets.schema.json
-  pub.secrets.schema.json
 ```
 
 #### Key Points
 - Contains shared resources like VNets, Subnets, NSGs, Route Tables, VPN Gateway, and App Gateway.
 - Supports both **nonprod** and **prod** planes for simplified management.
 - Secrets schema files define the default hydration sets for each product Key Vault.
+
+---
+
+### Core Stack
+```
+stacks/core/
+  main.tf
+  variables.tf
+  outputs.tf
+  tfvars/
+    np.hrz.tfvars
+    np.pub.tfvars
+    pr.hrz.tfvars
+    pr.pub.tfvars
+```
+
+#### Key Points
+- Provides shared observability and protection per plane.
+- Deploys **Log Analytics Workspace**, **Application Insights**, and **Recovery Services Vault**.
+- Acts as a dependency layer for diagnostics integration (used by AKS, App Service, Function Apps, etc.).
+- Managed per-lane (nonprod or prod) to serve all underlying environments (dev/qa and uat/prod).
 
 ---
 
@@ -176,30 +164,8 @@ Selects correct Azure environment, tenant, and subscription dynamically.
 ### shared-network.yaml
 Provisions shared infrastructure components across multiple environments (`nonprod` or `prod`).
 
+### core.yaml
+Deploys shared monitoring and recovery resources (Log Analytics, App Insights, Recovery Vault) for each lane (`nonprod`, `prod`).
+
 ### provision-secrets.yaml
-Hydrates Azure Key Vaults using JSON schema files in `/stacks/shared-network/`.
-
----
-
-## Summary
-
-This structure ensures:
-- **Modularity**: Modules are reusable and environment-agnostic.
-- **Scalability**: Easy to extend for future products or additional clouds.
-- **Governance**: Clear separation of environments, stacks, and configurations.
-- **Automation-ready**: Fully compatible with the unified GitHub Actions workflows.
-
----
-
-### Example Workflow Invocation
-
-To deploy the dev Horizon stack:
-```bash
-gh workflow run env-deploy.yaml -f env=dev -f product=hrz -f apply=true
-```
-
-To hydrate secrets for Public QA:
-```bash
-gh workflow run provision-secrets.yaml -f product=pub -f env=qa
-```
-
+Hydrates Azure Key Vaults using JSON schema files in `/stacks/provision-secrets/`.

@@ -1,6 +1,4 @@
-############################################
-# terraform & providers
-############################################
+# Providers
 terraform {
   required_version = ">= 1.6.5"
   required_providers {
@@ -9,7 +7,6 @@ terraform {
   }
 }
 
-# env subscription (dev/qa/uat/prod)
 provider "azurerm" {
   features {}
   subscription_id = var.subscription_id
@@ -17,7 +14,6 @@ provider "azurerm" {
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
-# hub subscription (plane-shared: dev AKS, ACR, etc.)
 provider "azurerm" {
   alias           = "hub"
   features {}
@@ -26,9 +22,7 @@ provider "azurerm" {
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
-############################################
-# env flags, naming, tags
-############################################
+# Env flags, naming, tags
 locals {
   enable_public_features = var.product == "pub"
   enable_hrz_features    = var.product == "hrz"
@@ -43,14 +37,12 @@ locals {
   plane      = contains(["dev","qa"], var.env) ? "nonprod" : "prod"
   plane_code = local.plane == "nonprod" ? "np" : "pr"
 
-  # vnet key used by shared-network remote-state
   vnet_key = (
     var.env == "dev"  ? "dev_spoke"  :
     var.env == "qa"   ? "qa_spoke"   :
     var.env == "uat"  ? "uat_spoke"  : "prod_spoke"
   )
 
-  # names
   sa_suffix_raw   = lower(var.name_suffix)
   sa_suffix_clean = replace(local.sa_suffix_raw, "-", "")
   sa_suffix_short = substr(local.sa_suffix_clean, 0, 6)
@@ -58,12 +50,8 @@ locals {
   sa1_name  = substr("sa${var.product}${var.env}${var.region}01${local.uniq}", 0, 24)
   aks1_name = "aks-${var.product}-${local.plane_code}-${var.region}-01"
 
-  # acr_name          = "acr${var.product}${local.plane_code}${var.region}01"
-  # acr_pna_effective = lower(var.acr_sku) == "premium" ? var.public_network_access_enabled : true
+  rg_hub = coalesce(var.rg_plane_name, "rg-${var.product}-${local.plane_code}-${var.region}-core-01")
 
-  rg_hub = coalesce(var.rg_plane_name, "rg-${var.product}-${local.plane_code}-${var.region}-02-core")
-
-  # tags
   org_base_tags = {
     product      = var.product
     owner        = "itops-team"
@@ -80,18 +68,13 @@ locals {
   tags_sa       = { purpose = "storage",            service = "blob,file" }
   tags_cosmos   = { purpose = "database",           service = "cosmosdb" }
   tags_aks      = { purpose = "kubernetes",         service = "aks" }
-  # tags_acr      = { purpose = "container-registry", service = "acr" }
   tags_postgres = { purpose = "postgres-database",  service = "postgresql" }
   tags_redis    = { purpose = "redis-cache",        service = "redis" }
 
-  # feature toggles (create_aks defaults to all except qa if null)
   create_aks = var.create_aks == null ? (var.env != "qa") : var.create_aks
-  # create_acr = contains(["dev","prod"], var.env)
 }
 
-############################################
-# remote state: shared-network + core (optional)
-############################################
+# Remote state: shared-network + core
 data "terraform_remote_state" "shared" {
   count   = var.shared_state_enabled ? 1 : 0
   backend = "azurerm"
@@ -120,18 +103,10 @@ data "terraform_remote_state" "core" {
   }
 }
 
-############################################
-# effective networking + observability inputs
-############################################
+# Effective networking + observability inputs
 locals {
-  # --- Shared state: stable shape + safe access
-  shared_defaults = {
-    # include only what you read later; keep shapes stable
-    vnets = {}                                # map<string, {subnets=map<string,string>}>
-    private_dns_zone_ids_by_name = {}         # map<string,string>
-  }
+  shared_defaults = { vnets = {}, private_dns_zone_ids_by_name = {} }
 
-  # Use try(...) to tolerate count=0 OR missing state; merge to stabilize keys
   rs_outputs = merge(
     local.shared_defaults,
     try(data.terraform_remote_state.shared[0].outputs, {})
@@ -144,22 +119,10 @@ locals {
   pe_subnet_id_effective        = coalesce(var.pe_subnet_id,           try(local.subnet_ids_from_state["privatelink"], null))
   aks_nodepool_subnet_effective = coalesce(var.aks_nodepool_subnet_id, try(local.subnet_ids_from_state["aks${var.product}"], null))
 
-  # region_nospace   = replace(lower(var.location), " ", "")
-  # aks_pdz_suffix   = var.product == "hrz" ? "azmk8s.us" : "azmk8s.io"
-  # aks_pdns_name    = "privatelink.${local.region_nospace}.${local.aks_pdz_suffix}"
-
-  # Map the Azure Gov location to the AKS DNS region token
-
-  # normalized helpers
   _loc_lower = lower(var.location)
   _reg_lower = lower(var.region)
 
-  aks_gov_region_by_code = {
-    usaz = "usgovarizona"
-    usva = "usgovvirginia"
-  }
-
-  # string “contains” via regexall -> non-empty match list
+  aks_gov_region_by_code = { usaz = "usgovarizona", usva = "usgovvirginia" }
   _is_az = length(regexall("arizona",  local._loc_lower))  > 0
   _is_va = length(regexall("virginia", local._loc_lower))  > 0
 
@@ -171,77 +134,48 @@ locals {
 
   region_nospace = replace(lower(var.location), " ", "")
 
-  aks_pdns_name = local.enable_hrz_features ? format("privatelink.%s.cx.aks.containerservice.azure.us", local.aks_region_token) : format("privatelink.%s.azmk8s.io",                       local.region_nospace)
-  # aks_gov_region_map = {
-  #   "US Arizona"  = "usgovarizona"
-  #   "US Virginia" = "usgovvirginia"
-  # }
+  aks_pdns_name = local.enable_hrz_features ? format("privatelink.%s.cx.aks.containerservice.azure.us", local.aks_region_token) : format("privatelink.%s.azmk8s.io", local.region_nospace)
 
-  # region_nospace   = replace(lower(var.location), " ", "")
-  # aks_region_token = local.enable_hrz_features ? lookup(local.aks_gov_region_map, var.location, null) : local.region_nospace
+  core_defaults = { observability = { law_workspace_id = null, appi_connection_string = null } }
+  core_outputs  = merge(local.core_defaults, try(data.terraform_remote_state.core[0].outputs, {}))
 
-  # # Correct AKS PDNS name per cloud
-  # aks_pdns_name = local.enable_hrz_features ? "privatelink.${local.aks_region_token}.cx.aks.containerservice.azure.us" : "privatelink.${local.region_nospace}.azmk8s.io"
+  law_workspace_id        = var.law_workspace_id_override        != null ? var.law_workspace_id_override        : try(local.core_outputs.observability.law_workspace_id, null)
+  appi_connection_string  = var.appi_connection_string_override  != null ? var.appi_connection_string_override  : try(local.core_outputs.observability.appi_connection_string, null)
 
-  # --- Core state: stable shape + safe access
-  core_defaults = {
-    observability = {
-      law_workspace_id       = null
-      appi_connection_string = null
-    }
-  }
-  core_outputs = merge(
-    local.core_defaults,
-    try(data.terraform_remote_state.core[0].outputs, {})
-  )
-
-  # Prefer explicit overrides, else (possibly null) value from core_outputs
-  law_workspace_id = var.law_workspace_id_override != null ? var.law_workspace_id_override : try(local.core_outputs.observability.law_workspace_id, null)
-
-  appi_connection_string = var.appi_connection_string_override != null ? var.appi_connection_string_override : try(local.core_outputs.observability.appi_connection_string, null)
-
-  # deployment placement (no provider conditionals)
-  deploy_aks_in_hub = local.is_dev  && local.enable_both && local.create_aks
+  deploy_aks_in_hub = local.is_dev && local.enable_both && local.create_aks
   deploy_aks_in_env = (local.is_uat || local.is_prod) && local.enable_both && local.create_aks
 }
 
-# Hard stop if we’re in Gov but couldn’t resolve the token
 check "gov_region_supported" {
   assert {
     condition     = !local.enable_hrz_features || local.aks_region_token != null
-    error_message = "Unsupported/unknown Azure Gov location/region. Set region to 'usaz'/'usva' or location containing 'Arizona'/'Virginia'."
+    error_message = "Unsupported Azure Gov location/region. Use region 'usaz'/'usva' or location including 'Arizona'/'Virginia'."
   }
 }
 
-############################################
-# fail-fast checks
-############################################
+# Fail-fast checks
 check "private_net_basics_present" {
   assert {
-    condition = !var.require_private_networking || (
-      local.pe_subnet_id_effective != null && length(local.zone_ids_effective) > 0
-    )
-    error_message = "Private networking required, but pe_subnet_id and/or private_dns_zone_ids are missing. Provide overrides or ensure shared-network is applied."
+    condition     = !var.require_private_networking || (local.pe_subnet_id_effective != null && length(local.zone_ids_effective) > 0)
+    error_message = "Private networking required, but pe_subnet_id and/or private_dns_zone_ids are missing."
   }
 }
 
 check "aks_requires_subnet" {
   assert {
     condition     = !local.create_aks || local.aks_nodepool_subnet_effective != null
-    error_message = "AKS requested but no nodepool subnet found (set var.aks_nodepool_subnet_id or apply shared-network)."
+    error_message = "AKS requested but no nodepool subnet found."
   }
 }
 
 check "aks_pdz_exists" {
   assert {
     condition     = !local.create_aks || try(local.zone_ids_effective[local.aks_pdns_name], null) != null
-    error_message = "AKS PDZ '${local.aks_pdns_name}' not found (supply via var.private_dns_zone_ids or shared-network)."
+    error_message = "AKS PDZ '${local.aks_pdns_name}' not found."
   }
 }
 
-############################################
-# key vault (env)
-############################################
+# Key Vault (env)
 locals {
   kv1_base_name    = "kvt-${var.product}-${var.env}-${var.region}-01"
   kv1_name_cleaned = replace(lower(trimspace(local.kv1_base_name)), "-", "")
@@ -263,13 +197,10 @@ module "kv1" {
 
   purge_protection_enabled   = var.purge_protection_enabled
   soft_delete_retention_days = var.soft_delete_retention_days
-
   tags = merge(local.tags_common, local.tags_kv, var.tags)
 }
 
-############################################
-# storage account (env)
-############################################
+# Storage Account (env)
 locals { sa1_name_cleaned = replace(lower(trimspace(local.sa1_name)), "-", "") }
 
 module "sa1" {
@@ -294,9 +225,7 @@ module "sa1" {
   depends_on = [module.kv1]
 }
 
-############################################
-# cosmos (nosql) (env)
-############################################
+# Cosmos (NoSQL) (env)
 locals {
   cosmos1_name         = "cosno-${var.product}-${var.env}-${var.region}-01"
   cosmos1_name_cleaned = replace(lower(trimspace(local.cosmos1_name)), "-", "")
@@ -304,7 +233,7 @@ locals {
 }
 
 module "cosmos1" {
-  count                  = local.cosmos_enabled ? 1 : 0
+  count                  = local.enable_public_features ? 1 : 0
   source                 = "../../modules/cosmos-account"
   name                   = local.cosmos1_name
   location               = var.location
@@ -312,9 +241,11 @@ module "cosmos1" {
   pe_subnet_id           = local.pe_subnet_id_effective
   private_dns_zone_ids   = local.zone_ids_effective
   total_throughput_limit = var.cosno_total_throughput_limit
-  pe_sql_name            = "pep-${local.cosmos1_name_cleaned}-sql"
-  psc_sql_name           = "psc-${local.cosmos1_name_cleaned}-sql"
-  sql_zone_group_name    = "pdns-${local.cosmos1_name_cleaned}-sql"
+
+  pe_sql_name         = "pep-${local.cosmos1_name_cleaned}-sql"
+  psc_sql_name        = "psc-${local.cosmos1_name_cleaned}-sql"
+  sql_zone_group_name = "pdns-${local.cosmos1_name_cleaned}-sql"
+
   tags = merge(local.tags_common, local.tags_cosmos, var.tags, {
     workload_purpose     = "Stores notification_jobs and notification_history"
     workload_description = "Scalable fan-out with dedup via partitioned containers"
@@ -323,7 +254,7 @@ module "cosmos1" {
 }
 
 resource "azurerm_cosmosdb_sql_database" "app" {
-  count               = local.cosmos_enabled ? 1 : 0
+  count               = local.enable_public_features ? 1 : 0
   name                = "cosnodb-${var.product}"
   resource_group_name = var.rg_name
   account_name        = local.cosmos1_name
@@ -332,7 +263,7 @@ resource "azurerm_cosmosdb_sql_database" "app" {
 }
 
 resource "azurerm_cosmosdb_sql_container" "items" {
-  count                 = local.cosmos_enabled ? 1 : 0
+  count                 = local.enable_public_features ? 1 : 0
   name                  = "notification_jobs"
   resource_group_name   = var.rg_name
   account_name          = local.cosmos1_name
@@ -343,7 +274,7 @@ resource "azurerm_cosmosdb_sql_container" "items" {
 }
 
 resource "azurerm_cosmosdb_sql_container" "events" {
-  count                 = local.cosmos_enabled ? 1 : 0
+  count                 = local.enable_public_features ? 1 : 0
   name                  = "notification_history"
   resource_group_name   = var.rg_name
   account_name          = local.cosmos1_name
@@ -353,9 +284,7 @@ resource "azurerm_cosmosdb_sql_container" "events" {
   depends_on            = [module.cosmos1]
 }
 
-############################################
-# aks (dev in hub; uat/prod in env)
-############################################
+# AKS (dev in hub; uat/prod in env)
 locals {
   aks_service_cidr = coalesce(
     var.aks_service_cidr,
@@ -365,7 +294,6 @@ locals {
   aks_dns_service_ip = coalesce(var.aks_dns_service_ip, cidrhost(local.aks_service_cidr, 10))
 }
 
-# identities for control plane
 resource "azurerm_user_assigned_identity" "aks_hub" {
   count               = local.deploy_aks_in_hub ? 1 : 0
   provider            = azurerm.hub
@@ -384,7 +312,6 @@ resource "azurerm_user_assigned_identity" "aks_env" {
   tags                = merge(local.tags_common, { purpose = "aks-control-plane-identity" }, var.tags)
 }
 
-# pdz contributor for AKS-managed private DNS zone
 resource "azurerm_role_assignment" "aks_pdz_contrib_hub" {
   count                = local.deploy_aks_in_hub ? 1 : 0
   provider             = azurerm.hub
@@ -413,7 +340,6 @@ resource "azurerm_role_assignment" "aks_pdz_contrib_env" {
   }
 }
 
-# clusters
 module "aks1_hub" {
   count     = local.deploy_aks_in_hub ? 1 : 0
   source    = "../../modules/aks"
@@ -469,15 +395,12 @@ module "aks1_env" {
   depends_on = [azurerm_role_assignment.aks_pdz_contrib_env]
 }
 
-# unified aks refs
 locals {
   aks_id   = try(module.aks1_hub[0].id, module.aks1_env[0].id, null)
   aks_name = try(module.aks1_hub[0].name, module.aks1_env[0].name, null)
 }
 
-############################################
-# diagnostics (aks → core LA)
-############################################
+# Diagnostics (AKS → LA)
 locals { manage_aks_diag = local.enable_both && local.create_aks && local.aks_id != null && local.law_workspace_id != null }
 
 resource "azurerm_monitor_diagnostic_setting" "aks" {
@@ -490,32 +413,7 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
   enabled_log { category = "guard" }
 }
 
-############################################
-# acr (hub)
-############################################
-# module "acr1" {
-#   count               = (local.enable_both && local.create_acr) ? 1 : 0
-#   source              = "../../modules/acr"
-#   providers           = { azurerm = azurerm.hub }
-
-#   name                = local.acr_name
-#   resource_group_name = local.rg_hub
-#   location            = var.location
-
-#   sku                           = var.acr_sku
-#   admin_enabled                 = var.admin_enabled
-#   public_network_access_enabled = local.acr_pna_effective
-#   network_rule_bypass_option    = var.acr_network_rule_bypass_option
-#   anonymous_pull_enabled        = var.acr_anonymous_pull_enabled
-#   data_endpoint_enabled         = var.acr_data_endpoint_enabled
-#   zone_redundancy_enabled       = var.acr_zone_redundancy_enabled
-
-#   tags = merge(local.tags_common, local.tags_acr, var.tags, { layer = "plane-resources" })
-# }
-
-############################################
-# service bus (env) – premium uses PE
-############################################
+# Service Bus (env)
 locals { sb_is_premium = lower(var.servicebus_sku) == "premium" }
 
 module "sbns1" {
@@ -547,9 +445,7 @@ module "sbns1" {
   })
 }
 
-############################################
-# app service plan + function apps (env)
-############################################
+# App Service Plan + Function Apps (env)
 module "plan1_func" {
   count               = local.enable_public_features ? 1 : 0
   source              = "../../modules/app-service-plan"
@@ -599,9 +495,7 @@ module "funcapp1" {
     WEBSITE_RUN_FROM_PACKAGE = "1"
   }
 
-  # consume app insights from core
   application_insights_connection_string = local.appi_connection_string
-
   tags = merge(local.tags_common, { component = "function-app", os = "linux" }, var.tags)
 }
 
@@ -637,13 +531,10 @@ module "funcapp2" {
   }
 
   application_insights_connection_string = local.appi_connection_string
-
   tags = merge(local.tags_common, { component = "function-app", os = "linux" }, var.tags)
 }
 
-############################################
-# event hubs (env)
-############################################
+# Event Hubs (env)
 locals {
   create_eventhub      = var.env == "dev" || var.env == "prod"
   eh1_namespace        = "evhns-${var.product}-${local.plane_code}-${var.region}-01"
@@ -688,16 +579,13 @@ module "eventhub_cgs" {
   depends_on              = [module.eventhub]
 }
 
-############################################
-# cosmos db for postgresql (citus) (env)
-############################################
+# Cosmos DB for PostgreSQL (Citus) (env)
 locals {
   cdbpg_name         = "cdbpg-${var.product}-${var.env}-${var.region}-01"
   cdbpg_name_cleaned = replace(lower(trimspace(local.cdbpg_name)), "-", "")
 }
 
 module "cdbpg1" {
-  # count  = (local.enable_both && var.create_cdbpg) ? 1 : 0
   count  = (var.product == "pub" && var.create_cdbpg) ? 1 : 0
   source = "../../modules/cosmosdb-postgresql"
 
@@ -729,9 +617,7 @@ module "cdbpg1" {
   tags = merge(local.tags_common, { component = "cosmosdb-postgresql" }, var.tags)
 }
 
-############################################
-# postgres flexible (env)
-############################################
+# PostgreSQL Flexible (env)
 locals {
   pgflex_subnet_id        = try(local.subnet_ids_from_state[var.pg_delegated_subnet_name], null)
   pg_private_zone_id      = try(local.zone_ids_effective["privatelink.postgres.database.azure.com"], null)
@@ -794,9 +680,7 @@ module "postgres_replica" {
   depends_on = [module.postgres]
 }
 
-############################################
-# redis (env)
-############################################
+# Redis (env)
 locals {
   redis1_name       = "redis-${var.product}-${var.env}-${var.region}-01-${local.uniq}"
   redis1_name_clean = replace(lower(trimspace(local.redis1_name)), "-", "")

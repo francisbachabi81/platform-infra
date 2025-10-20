@@ -19,12 +19,63 @@ This workflow deploys the **platform application stack** to Azure using Terrafor
 - Uploads plan and apply logs as workflow artifacts.
 
 ### Required Secrets
-| Secret | Description |
-|---------|--------------|
-| `AZURE_CLIENT_ID_HRZ`, `AZURE_CLIENT_ID_PUB` | Client IDs for Azure app registrations used with OIDC authentication. |
-| `AZ_TENANT_HRZ`, `AZ_TENANT_PUB` | Tenant IDs for Azure Government and Commercial environments. |
-| `AZ_SUB_HRZ_DEV`, `AZ_SUB_HRZ_QA`, `AZ_SUB_HRZ_UAT`, `AZ_SUB_HRZ_PROD` | Subscription IDs for Azure Gov environments. |
-| `AZ_SUB_PUB_DEV`, `AZ_SUB_PUB_QA`, `AZ_SUB_PUB_UAT`, `AZ_SUB_PUB_PROD` | Subscription IDs for Azure Commercial environments. |
+#### Baseline (common to all envs/lane)
+These do **not** change per environment; they select the cloud at runtime based on `product`.
+| Secret | Purpose |
+|---|---|
+| `AZURE_CLIENT_ID_HRZ` | GitHub OIDC app registration (Gov) |
+| `AZURE_CLIENT_ID_PUB` | GitHub OIDC app registration (Commercial) |
+| `AZ_TENANT_HRZ` | Azure AD tenant (Gov) |
+| `AZ_TENANT_PUB` | Azure AD tenant (Commercial) |
+
+---
+
+#### Per-Environment Secrets (dev, qa, uat, prod)
+Used primarily by **shared-network** and **core** when targeting a specific app environment subscription.
+
+> Define these in the corresponding GitHub **Environment** (`dev`, `qa`, `uat`, `prod`). Provide **both** Gov and Commercial IDs so workflows can choose via `var.product`.
+
+| Environment | Horizon (Gov) | Public (Commercial) |
+|---|---|---|
+| `dev`  | `AZ_SUB_HRZ_DEV`  | `AZ_SUB_PUB_DEV`  |
+| `qa`   | `AZ_SUB_HRZ_QA`   | `AZ_SUB_PUB_QA`   |
+| `uat`  | `AZ_SUB_HRZ_UAT`  | `AZ_SUB_PUB_UAT`  |
+| `prod` | `AZ_SUB_HRZ_PROD` | `AZ_SUB_PUB_PROD` |
+
+---
+
+#### Lane-Level Secrets
+The **shared-network** and **core** stacks also deploy **plane/lane** resources that span multiple envs:
+- **nonprod lane** → covers `dev` and `qa` (hub/shared resources)
+- **prod lane** → covers `uat` and `prod` (hub/shared resources)
+
+#### Nonprod Lane (shared-network, core)
+| Secret | Purpose |
+|---|---|
+| `AZ_SUB_HRZ_NONPROD` | Hub/plane subscription for **hrz** nonprod (Gov) |
+| `AZ_SUB_PUB_NONPROD` | Hub/plane subscription for **pub** nonprod (Commercial) |
+
+#### Prod Lane (shared-network, core)
+| Secret | Purpose |
+|---|---|
+| `AZ_SUB_HRZ_PROD` | Hub/plane subscription for **hrz** prod (Gov) |
+| `AZ_SUB_PUB_PROD` | Hub/plane subscription for **pub** prod (Commercial) |
+
+---
+
+#### Example Mapping (who needs what)
+- **shared-network (nonprod run)**: `AZURE_CLIENT_ID_*`, `AZ_TENANT_*`, `AZ_SUB_*_NONPROD` (lane level)
+- **shared-network (prod run)**: `AZURE_CLIENT_ID_*`, `AZ_TENANT_*`, `AZ_SUB_*_PROD` (lane level)
+- **core (nonprod run)**: `AZURE_CLIENT_ID_*`, `AZ_TENANT_*`, `AZ_SUB_*_NONPROD`
+- **core (prod run)**: `AZURE_CLIENT_ID_*`, `AZ_TENANT_*`, `AZ_SUB_*_PROD`
+- **env-targeted tasks (e.g., per-env overrides)**: add the per-env secret from section 2 (e.g., `AZ_SUB_PUB_QA`).
+
+---
+
+#### Quick Checklist
+- [ ] Set **baseline** OIDC + tenant secrets as repo secrets.
+- [ ] For each environment (`dev`, `qa`, `uat`, `prod`), add the **per-env** subscription IDs.
+- [ ] For **lane** runs, add `AZ_SUB_*_NONPROD` and `AZ_SUB_*_PROD` to **`nonprod`** and **`prod-lane`** environments.
 
 ### How to Run
 1. Navigate to **Actions → platform-app** in GitHub.

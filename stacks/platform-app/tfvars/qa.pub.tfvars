@@ -7,10 +7,6 @@ rg_name         = "rg-pub-qa-cus-01"
 subscription_id = "b055ea98-fdc4-4ec8-a599-67b1b6f88fe2"
 tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
-# Plane-scoped RG in hub subscription (np = dev/qa plane)
-# Set to your actual hub/plane RG name if different.
-rg_plane_name = "rg-pub-np-cus-01"
-
 # Hub overrides (only set if hub ≠ env subscription)
 hub_subscription_id = null
 hub_tenant_id       = null
