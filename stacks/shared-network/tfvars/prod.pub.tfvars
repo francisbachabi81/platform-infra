@@ -46,22 +46,22 @@ public_dns_zones = [
 prod_hub = {
   rg    = "rg-pub-pr-cus-net-01"
   vnet  = "vnet-pub-pr-hub-cus-01"
-  cidrs = ["10.13.0.0/16"]
+  cidrs = ["172.13.0.0/16"]
 
   subnets = {
-    GatewaySubnet                 = { address_prefixes = ["10.13.0.0/24"] }   # vpn gateway
-    AzureFirewallSubnet           = { address_prefixes = ["10.13.1.0/26"] }
-    AzureFirewallManagementSubnet = { address_prefixes = ["10.13.1.64/26"] }
-    RouteServerSubnet             = { address_prefixes = ["10.13.1.128/27"] }
-    AzureBastionSubnet            = { address_prefixes = ["10.13.3.0/26"] }
-    akspub                        = { address_prefixes = ["10.13.2.0/24"] }
-    internal                      = { address_prefixes = ["10.13.13.0/24"] }
-    external                      = { address_prefixes = ["10.13.14.0/24"] }
-    "shared-svc"                  = { address_prefixes = ["10.13.20.0/24"] }
-    appgw                         = { address_prefixes = ["10.13.40.0/27"] }  # app gateway
+    GatewaySubnet                 = { address_prefixes = ["172.13.0.0/24"] }   # vpn gateway
+    AzureFirewallSubnet           = { address_prefixes = ["172.13.1.0/26"] }
+    AzureFirewallManagementSubnet = { address_prefixes = ["172.13.1.64/26"] }
+    RouteServerSubnet             = { address_prefixes = ["172.13.1.128/27"] }
+    AzureBastionSubnet            = { address_prefixes = ["172.13.3.0/26"] }
+    akspub                        = { address_prefixes = ["172.13.2.0/24"] }
+    internal                      = { address_prefixes = ["172.13.13.0/24"] }
+    external                      = { address_prefixes = ["172.13.14.0/24"] }
+    "shared-svc"                  = { address_prefixes = ["172.13.20.0/24"] }
+    appgw                         = { address_prefixes = ["172.13.40.0/27"] }  # app gateway
 
     "dns-inbound" = {
-      address_prefixes = ["10.13.50.0/27"]
+      address_prefixes = ["172.13.50.0/27"]
       delegations = [{
         name    = "Microsoft.Network.dnsResolvers"
         service = "Microsoft.Network/dnsResolvers"
@@ -70,7 +70,7 @@ prod_hub = {
     }
 
     "dns-outbound" = {
-      address_prefixes = ["10.13.50.32/27"]
+      address_prefixes = ["172.13.50.32/27"]
       delegations = [{
         name    = "Microsoft.Network.dnsResolvers"
         service = "Microsoft.Network/dnsResolvers"
@@ -78,11 +78,11 @@ prod_hub = {
       }]
     }
 
-    identity = { address_prefixes = ["10.13.60.0/26"] }
-    monitor  = { address_prefixes = ["10.13.61.0/26"] }
+    identity = { address_prefixes = ["172.13.60.0/26"] }
+    monitor  = { address_prefixes = ["172.13.61.0/26"] }
 
     "privatelink-hub" = {
-      address_prefixes                  = ["10.13.30.0/27"]
+      address_prefixes                  = ["172.13.30.0/27"]
       private_endpoint_network_policies = "Disabled"        # required for private endpoints
     }
   }
@@ -91,11 +91,11 @@ prod_hub = {
 prod_spoke = {
   rg    = "rg-pub-prod-cus-01"
   vnet  = "vnet-pub-prod-cus-01"
-  cidrs = ["10.14.0.0/16"]
+  cidrs = ["172.14.0.0/16"]
 
   subnets = {
     "appsvc-int-linux-01" = {
-      address_prefixes = ["10.14.11.0/27"]
+      address_prefixes = ["172.14.11.0/27"]
       delegations = [{
         name    = "appsvc-linux-01"
         service = "Microsoft.Web/serverFarms"
@@ -103,7 +103,7 @@ prod_spoke = {
       }]
     }
     "appsvc-int-linux-02" = {
-      address_prefixes = ["10.14.11.32/27"]
+      address_prefixes = ["172.14.11.32/27"]
       delegations = [{
         name    = "appsvc-linux-02"
         service = "Microsoft.Web/serverFarms"
@@ -111,7 +111,7 @@ prod_spoke = {
       }]
     }
     "appsvc-int-linux-03" = {
-      address_prefixes = ["10.14.11.64/27"]
+      address_prefixes = ["172.14.11.64/27"]
       delegations = [{
         name    = "appsvc-linux-03"
         service = "Microsoft.Web/serverFarms"
@@ -119,7 +119,7 @@ prod_spoke = {
       }]
     }
     "appsvc-int-linux-04" = {
-      address_prefixes = ["10.14.11.96/27"]
+      address_prefixes = ["172.14.11.96/27"]
       delegations = [{
         name    = "appsvc-linux-04"
         service = "Microsoft.Web/serverFarms"
@@ -127,7 +127,7 @@ prod_spoke = {
       }]
     }
     "appsvc-int-windows-01" = {
-      address_prefixes = ["10.14.12.0/27"]
+      address_prefixes = ["172.14.12.0/27"]
       delegations = [{
         name    = "appsvc-windows-01"
         service = "Microsoft.Web/serverFarms"
@@ -135,7 +135,7 @@ prod_spoke = {
       }]
     }
     "appsvc-int-windows-02" = {
-      address_prefixes = ["10.14.12.32/27"]
+      address_prefixes = ["172.14.12.32/27"]
       delegations = [{
         name    = "appsvc-windows-02"
         service = "Microsoft.Web/serverFarms"
@@ -143,7 +143,7 @@ prod_spoke = {
       }]
     }
     "appsvc-int-windows-03" = {
-      address_prefixes = ["10.14.12.64/27"]
+      address_prefixes = ["172.14.12.64/27"]
       delegations = [{
         name    = "appsvc-windows-03"
         service = "Microsoft.Web/serverFarms"
@@ -151,7 +151,7 @@ prod_spoke = {
       }]
     }
     "appsvc-int-windows-04" = {
-      address_prefixes = ["10.14.12.96/27"]
+      address_prefixes = ["172.14.12.96/27"]
       delegations = [{
         name    = "appsvc-windows-04"
         service = "Microsoft.Web/serverFarms"
@@ -159,12 +159,12 @@ prod_spoke = {
       }]
     }
 
-    internal = { address_prefixes = ["10.14.13.0/24"] }
-    external = { address_prefixes = ["10.14.14.0/24"] }
-    akspub   = { address_prefixes = ["10.14.2.0/24"] }
+    internal = { address_prefixes = ["172.14.13.0/24"] }
+    external = { address_prefixes = ["172.14.14.0/24"] }
+    akspub   = { address_prefixes = ["172.14.2.0/24"] }
 
     pgflex = {
-      address_prefixes = ["10.14.3.0/24"]
+      address_prefixes = ["172.14.3.0/24"]
       delegations = [{
         name    = "pgflex"
         service = "Microsoft.DBforPostgreSQL/flexibleServers"
@@ -173,12 +173,12 @@ prod_spoke = {
     }
 
     privatelink = {
-      address_prefixes                  = ["10.14.30.0/24"]
+      address_prefixes                  = ["172.14.30.0/24"]
       private_endpoint_network_policies = "Disabled"
     }
 
     "privatelink-cdbpg" = {
-      address_prefixes                  = ["10.14.31.0/27"]
+      address_prefixes                  = ["172.14.31.0/27"]
       private_endpoint_network_policies = "Disabled"
     }
   }
@@ -187,11 +187,11 @@ prod_spoke = {
 uat_spoke = {
   rg    = "rg-pub-uat-cus-01"
   vnet  = "vnet-pub-uat-cus-01"
-  cidrs = ["10.15.0.0/16"]
+  cidrs = ["172.15.0.0/16"]
 
   subnets = {
     "appsvc-int-linux-01" = {
-      address_prefixes = ["10.15.11.0/27"]
+      address_prefixes = ["172.15.11.0/27"]
       delegations = [{
         name    = "appsvc-linux-01"
         service = "Microsoft.Web/serverFarms"
@@ -199,7 +199,7 @@ uat_spoke = {
       }]
     }
     "appsvc-int-linux-02" = {
-      address_prefixes = ["10.15.11.32/27"]
+      address_prefixes = ["172.15.11.32/27"]
       delegations = [{
         name    = "appsvc-linux-02"
         service = "Microsoft.Web/serverFarms"
@@ -207,7 +207,7 @@ uat_spoke = {
       }]
     }
     "appsvc-int-linux-03" = {
-      address_prefixes = ["10.15.11.64/27"]
+      address_prefixes = ["172.15.11.64/27"]
       delegations = [{
         name    = "appsvc-linux-03"
         service = "Microsoft.Web/serverFarms"
@@ -215,7 +215,7 @@ uat_spoke = {
       }]
     }
     "appsvc-int-linux-04" = {
-      address_prefixes = ["10.15.11.96/27"]
+      address_prefixes = ["172.15.11.96/27"]
       delegations = [{
         name    = "appsvc-linux-04"
         service = "Microsoft.Web/serverFarms"
@@ -223,7 +223,7 @@ uat_spoke = {
       }]
     }
     "appsvc-int-windows-01" = {
-      address_prefixes = ["10.15.12.0/27"]
+      address_prefixes = ["172.15.12.0/27"]
       delegations = [{
         name    = "appsvc-windows-01"
         service = "Microsoft.Web/serverFarms"
@@ -231,7 +231,7 @@ uat_spoke = {
       }]
     }
     "appsvc-int-windows-02" = {
-      address_prefixes = ["10.15.12.32/27"]
+      address_prefixes = ["172.15.12.32/27"]
       delegations = [{
         name    = "appsvc-windows-02"
         service = "Microsoft.Web/serverFarms"
@@ -239,7 +239,7 @@ uat_spoke = {
       }]
     }
     "appsvc-int-windows-03" = {
-      address_prefixes = ["10.15.12.64/27"]
+      address_prefixes = ["172.15.12.64/27"]
       delegations = [{
         name    = "appsvc-windows-03"
         service = "Microsoft.Web/serverFarms"
@@ -247,7 +247,7 @@ uat_spoke = {
       }]
     }
     "appsvc-int-windows-04" = {
-      address_prefixes = ["10.15.12.96/27"]
+      address_prefixes = ["172.15.12.96/27"]
       delegations = [{
         name    = "appsvc-windows-04"
         service = "Microsoft.Web/serverFarms"
@@ -255,12 +255,12 @@ uat_spoke = {
       }]
     }
 
-    internal = { address_prefixes = ["10.15.13.0/24"] }
-    external = { address_prefixes = ["10.15.14.0/24"] }
-    akspub   = { address_prefixes = ["10.15.2.0/24"] }
+    internal = { address_prefixes = ["172.15.13.0/24"] }
+    external = { address_prefixes = ["172.15.14.0/24"] }
+    akspub   = { address_prefixes = ["172.15.2.0/24"] }
 
     pgflex = {
-      address_prefixes = ["10.15.3.0/24"]
+      address_prefixes = ["172.15.3.0/24"]
       delegations = [{
         name    = "pgflex"
         service = "Microsoft.DBforPostgreSQL/flexibleServers"
@@ -269,12 +269,12 @@ uat_spoke = {
     }
 
     privatelink = {
-      address_prefixes                  = ["10.15.30.0/24"]
+      address_prefixes                  = ["172.15.30.0/24"]
       private_endpoint_network_policies = "Disabled"
     }
 
     "privatelink-cdbpg" = {
-      address_prefixes                  = ["10.15.31.0/27"]
+      address_prefixes                  = ["172.15.31.0/27"]
       private_endpoint_network_policies = "Disabled"
     }
   }
@@ -301,7 +301,7 @@ tags = {
 }
 
 # dns resolver inbound static ip
-dnsr_inbound_static_ip = "10.13.50.4"   # points to dns-inbound endpoint ip
+dnsr_inbound_static_ip = "172.13.50.4"   # points to dns-inbound endpoint ip
 
 # ── Front Door ────────────────────────────────────
 fd_create_frontdoor = true
