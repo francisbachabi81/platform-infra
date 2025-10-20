@@ -54,7 +54,7 @@ data "terraform_remote_state" "shared" {
     resource_group_name  = var.state_rg_name
     storage_account_name = var.state_sa_name
     container_name       = var.state_container_name
-    key                  = "shared-network/${local.plane_full}/terraform.tfstate"
+    key                  = "shared-network/${var.product}/${local.plane_full}/terraform.tfstate"
     use_azuread_auth     = true
     tenant_id            = var.tenant_id
     subscription_id      = var.subscription_id

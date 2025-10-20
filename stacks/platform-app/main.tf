@@ -82,7 +82,7 @@ data "terraform_remote_state" "shared" {
     resource_group_name  = var.state_rg_name
     storage_account_name = var.state_sa_name
     container_name       = var.state_container_name
-    key                  = "shared-network/${local.plane}/terraform.tfstate"
+    key                  = "shared-network/${var.product}/${local.plane}/terraform.tfstate"
     use_azuread_auth     = true
     tenant_id            = var.tenant_id
     subscription_id      = var.subscription_id
@@ -96,7 +96,7 @@ data "terraform_remote_state" "core" {
     resource_group_name  = var.state_rg_name
     storage_account_name = var.state_sa_name
     container_name       = var.state_container_name
-    key                  = coalesce(var.core_state_key, "core/${local.plane_code}/terraform.tfstate")
+    key                  = coalesce(var.core_state_key, "core/${var.product}/${local.plane_code}/terraform.tfstate")
     use_azuread_auth     = true
     tenant_id            = var.tenant_id
     subscription_id      = var.subscription_id
@@ -116,8 +116,13 @@ locals {
   zone_ids_from_state   = try(local.rs_outputs.private_dns_zone_ids_by_name, {})
 
   zone_ids_effective            = length(var.private_dns_zone_ids) > 0 ? var.private_dns_zone_ids : local.zone_ids_from_state
-  pe_subnet_id_effective        = coalesce(var.pe_subnet_id,           try(local.subnet_ids_from_state["privatelink"], null))
-  aks_nodepool_subnet_effective = coalesce(var.aks_nodepool_subnet_id, try(local.subnet_ids_from_state["aks${var.product}"], null))
+  pe_subnet_id_effective = (
+    var.pe_subnet_id != null && trimspace(var.pe_subnet_id) != ""
+  ) ? var.pe_subnet_id : try(local.subnet_ids_from_state["privatelink"], null)
+
+  aks_nodepool_subnet_effective = (
+    var.aks_nodepool_subnet_id != null && trimspace(var.aks_nodepool_subnet_id) != ""
+  ) ? var.aks_nodepool_subnet_id : try(local.subnet_ids_from_state["aks${var.product}"], null)
 
   _loc_lower = lower(var.location)
   _reg_lower = lower(var.region)
