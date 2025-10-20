@@ -162,6 +162,70 @@ jobs:
           echo "Selected tfvars: $TFVARS_PATH"
           echo "Backend: $STATE_RG / $STATE_SA ($STATE_KEY)"
 
+      - name: Export optional per-env / hub overrides to TF_VAR_*
+        shell: bash
+        run: |
+          set -e -o pipefail
+
+          echo "[export] begin"
+
+          write_env () {
+            local name="$1"
+            local value="$2"
+            if [ -n "$value" ]; then
+              {
+                echo "${name}<<EOF"
+                printf '%s\n' "$value"
+                echo "EOF"
+              } >> "$GITHUB_ENV"
+              echo "[export] set ${name}"
+            else
+              echo "[export] skip ${name} (empty)"
+            fi
+          }
+
+          PRODUCT="${{ inputs.product }}"
+          ENV_INPUT="${{ inputs.env }}"
+          echo "[export] PRODUCT=${PRODUCT} ENV=${ENV_INPUT}"
+
+          # Hub (plane-shared np/pr) subscription/tenant overrides (optional)
+          if [ "$PRODUCT" = "hrz" ]; then
+            write_env TF_VAR_hub_subscription_id "${{ secrets.HUB_SUB_ID_HRZ }}"
+            write_env TF_VAR_hub_tenant_id       "${{ secrets.HUB_TENANT_ID_HRZ }}"
+          else
+            write_env TF_VAR_hub_subscription_id "${{ secrets.HUB_SUB_ID_PUB }}"
+            write_env TF_VAR_hub_tenant_id       "${{ secrets.HUB_TENANT_ID_PUB }}"
+          fi
+
+          # Per-environment subscription/tenant overrides (optional)
+          if [ "$PRODUCT" = "hrz" ]; then
+            write_env TF_VAR_dev_subscription_id   "${{ secrets.AZ_SUB_HRZ_DEV }}"
+            write_env TF_VAR_qa_subscription_id    "${{ secrets.AZ_SUB_HRZ_QA }}"
+            write_env TF_VAR_uat_subscription_id   "${{ secrets.AZ_SUB_HRZ_UAT }}"
+            write_env TF_VAR_prod_subscription_id  "${{ secrets.AZ_SUB_HRZ_PROD }}"
+            write_env TF_VAR_dev_tenant_id         "${{ secrets.AZ_TENANT_HRZ }}"
+            write_env TF_VAR_qa_tenant_id          "${{ secrets.AZ_TENANT_HRZ }}"
+            write_env TF_VAR_uat_tenant_id         "${{ secrets.AZ_TENANT_HRZ }}"
+            write_env TF_VAR_prod_tenant_id        "${{ secrets.AZ_TENANT_HRZ }}"
+          else
+            write_env TF_VAR_dev_subscription_id   "${{ secrets.AZ_SUB_PUB_DEV }}"
+            write_env TF_VAR_qa_subscription_id    "${{ secrets.AZ_SUB_PUB_QA }}"
+            write_env TF_VAR_uat_subscription_id   "${{ secrets.AZ_SUB_PUB_UAT }}"
+            write_env TF_VAR_prod_subscription_id  "${{ secrets.AZ_SUB_PUB_PROD }}"
+            write_env TF_VAR_dev_tenant_id         "${{ secrets.AZ_TENANT_PUB }}"
+            write_env TF_VAR_qa_tenant_id          "${{ secrets.AZ_TENANT_PUB }}"
+            write_env TF_VAR_uat_tenant_id         "${{ secrets.AZ_TENANT_PUB }}"
+            write_env TF_VAR_prod_tenant_id        "${{ secrets.AZ_TENANT_PUB }}"
+          fi
+
+          # Optional DB secrets (mask them first if you want)
+          [ -n "${{ secrets.PG_ADMIN_PASSWORD }}" ] && echo "::add-mask::${{ secrets.PG_ADMIN_PASSWORD }}"
+          [ -n "${{ secrets.CDBPG_ADMIN_PASSWORD }}" ] && echo "::add-mask::${{ secrets.CDBPG_ADMIN_PASSWORD }}"
+          write_env TF_VAR_pg_admin_password       "${{ secrets.PG_ADMIN_PASSWORD }}"
+          write_env TF_VAR_cdbpg_admin_password    "${{ secrets.CDBPG_ADMIN_PASSWORD }}"
+
+          echo "[export] end"
+          
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
