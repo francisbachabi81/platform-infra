@@ -38,7 +38,6 @@ jobs:
   terraform:
     name: "Terraform (platform-app: ${{ inputs.env }}.${{ inputs.product }})"
     runs-on: ubuntu-latest
-    # If env is np/pr, map to environment names; otherwise use env as-is
     environment: ${{ inputs.env == 'np' && 'nonprod' || inputs.env == 'pr' && 'prod' || inputs.env }}
     defaults:
       run:
@@ -119,16 +118,19 @@ jobs:
           : "${AUDIENCE:?Missing AUDIENCE}"
           echo "Auth inputs validated."
 
-      - name: Azure Login
+      # ── GOV login ONLY for backend state ops ─────────────────────────────────
+      - name: Azure Login (Gov for backend state)
+        id: login_state
         uses: azure/login@v2
         with:
-          client-id:       ${{ steps.subsel.outputs.CLIENT_ID }}
-          tenant-id:       ${{ steps.subsel.outputs.TENANT }}
-          subscription-id: ${{ steps.subsel.outputs.SUB }}
-          environment:     ${{ steps.subsel.outputs.CLOUD_ENV }}
-          audience:        ${{ steps.subsel.outputs.AUDIENCE }}
+          client-id:       ${{ secrets.AZURE_CLIENT_ID_HRZ }}
+          tenant-id:       ${{ secrets.AZ_TENANT_HRZ }}
+          # Use a dedicated state subscription if you have one; else fall back to HRZ PROD
+          subscription-id: ${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}
+          environment:     AzureUSGovernment
+          audience:        api://AzureADTokenExchangeUSGov
 
-      - name: Resolve tfvars & backend
+      - name: Resolve tfvars & backend (always Gov for state)
         id: paths
         shell: bash
         run: |
@@ -148,102 +150,46 @@ jobs:
           fi
           echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
 
-          # State storage by product
-          if [ "$PRODUCT" = "pub" ]; then
-            STATE_RG="rg-core-infra-state"
-            STATE_SA="sacoretfstateinfra"
-          else
-            STATE_RG="rg-core-infra-state"
-            STATE_SA="sacoretfstateinfra"
-          fi
+          # Fixed Gov state backend (RG/SA/container)
+          STATE_RG="rg-core-infra-state"
+          STATE_SA="sacoretfstateinfra"
+          STATE_CONTAINER="tfstate"
 
-          # Per-stack key: product/env (env may be np/pr)
+          # Key format: platform-app/<product>/<env>/terraform.tfstate
           STATE_KEY="platform-app/${PRODUCT}/${ENV}/terraform.tfstate"
 
-          echo "STATE_RG=$STATE_RG"   >> "$GITHUB_OUTPUT"
-          echo "STATE_SA=$STATE_SA"   >> "$GITHUB_OUTPUT"
-          echo "STATE_KEY=$STATE_KEY" >> "$GITHUB_OUTPUT"
+          echo "STATE_RG=$STATE_RG"           >> "$GITHUB_OUTPUT"
+          echo "STATE_SA=$STATE_SA"           >> "$GITHUB_OUTPUT"
+          echo "STATE_CONTAINER=$STATE_CONTAINER" >> "$GITHUB_OUTPUT"
+          echo "STATE_KEY=$STATE_KEY"         >> "$GITHUB_OUTPUT"
 
           echo "Selected tfvars: $TFVARS_PATH"
           echo "Backend: $STATE_RG / $STATE_SA ($STATE_KEY)"
 
-      - name: Export optional per-env / hub overrides to TF_VAR_*
-        shell: bash
-        run: |
-          set -e -o pipefail
-
-          echo "[export] begin"
-
-          write_env () {
-            local name="$1"
-            local value="$2"
-            if [ -n "$value" ]; then
-              {
-                echo "${name}<<EOF"
-                printf '%s\n' "$value"
-                echo "EOF"
-              } >> "$GITHUB_ENV"
-              echo "[export] set ${name}"
-            else
-              echo "[export] skip ${name} (empty)"
-            fi
-          }
-
-          PRODUCT="${{ inputs.product }}"
-          ENV_INPUT="${{ inputs.env }}"
-          echo "[export] PRODUCT=${PRODUCT} ENV=${ENV_INPUT}"
-
-          # Hub (plane-shared np/pr) subscription/tenant overrides (optional)
-          if [ "$PRODUCT" = "hrz" ]; then
-            write_env TF_VAR_hub_subscription_id "${{ secrets.HUB_SUB_ID_HRZ }}"
-            write_env TF_VAR_hub_tenant_id       "${{ secrets.HUB_TENANT_ID_HRZ }}"
-          else
-            write_env TF_VAR_hub_subscription_id "${{ secrets.HUB_SUB_ID_PUB }}"
-            write_env TF_VAR_hub_tenant_id       "${{ secrets.HUB_TENANT_ID_PUB }}"
-          fi
-
-          # Per-environment subscription/tenant overrides (optional)
-          if [ "$PRODUCT" = "hrz" ]; then
-            write_env TF_VAR_dev_subscription_id   "${{ secrets.AZ_SUB_HRZ_DEV }}"
-            write_env TF_VAR_qa_subscription_id    "${{ secrets.AZ_SUB_HRZ_QA }}"
-            write_env TF_VAR_uat_subscription_id   "${{ secrets.AZ_SUB_HRZ_UAT }}"
-            write_env TF_VAR_prod_subscription_id  "${{ secrets.AZ_SUB_HRZ_PROD }}"
-            write_env TF_VAR_dev_tenant_id         "${{ secrets.AZ_TENANT_HRZ }}"
-            write_env TF_VAR_qa_tenant_id          "${{ secrets.AZ_TENANT_HRZ }}"
-            write_env TF_VAR_uat_tenant_id         "${{ secrets.AZ_TENANT_HRZ }}"
-            write_env TF_VAR_prod_tenant_id        "${{ secrets.AZ_TENANT_HRZ }}"
-          else
-            write_env TF_VAR_dev_subscription_id   "${{ secrets.AZ_SUB_PUB_DEV }}"
-            write_env TF_VAR_qa_subscription_id    "${{ secrets.AZ_SUB_PUB_QA }}"
-            write_env TF_VAR_uat_subscription_id   "${{ secrets.AZ_SUB_PUB_UAT }}"
-            write_env TF_VAR_prod_subscription_id  "${{ secrets.AZ_SUB_PUB_PROD }}"
-            write_env TF_VAR_dev_tenant_id         "${{ secrets.AZ_TENANT_PUB }}"
-            write_env TF_VAR_qa_tenant_id          "${{ secrets.AZ_TENANT_PUB }}"
-            write_env TF_VAR_uat_tenant_id         "${{ secrets.AZ_TENANT_PUB }}"
-            write_env TF_VAR_prod_tenant_id        "${{ secrets.AZ_TENANT_PUB }}"
-          fi
-
-          # Optional DB secrets (mask them first if you want)
-          [ -n "${{ secrets.PG_ADMIN_PASSWORD }}" ] && echo "::add-mask::${{ secrets.PG_ADMIN_PASSWORD }}"
-          [ -n "${{ secrets.CDBPG_ADMIN_PASSWORD }}" ] && echo "::add-mask::${{ secrets.CDBPG_ADMIN_PASSWORD }}"
-          write_env TF_VAR_pg_admin_password       "${{ secrets.PG_ADMIN_PASSWORD }}"
-          write_env TF_VAR_cdbpg_admin_password    "${{ secrets.CDBPG_ADMIN_PASSWORD }}"
-
-          echo "[export] end"
-          
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform_version }}
 
-      - name: Terraform Init
+      - name: Terraform Init (backend in Azure Gov)
         run: |
           terraform init -input=false -reconfigure \
+            -backend-config="environment=usgovernment" \
             -backend-config="resource_group_name=${{ steps.paths.outputs.STATE_RG }}" \
             -backend-config="storage_account_name=${{ steps.paths.outputs.STATE_SA }}" \
-            -backend-config="container_name=tfstate" \
+            -backend-config="container_name=${{ steps.paths.outputs.STATE_CONTAINER }}" \
             -backend-config="key=${{ steps.paths.outputs.STATE_KEY }}" \
             -backend-config="use_azuread_auth=true"
+
+      # ── Switch login to target cloud for plan/apply ─────────────────────────
+      - name: Azure Login (target cloud for deploy)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ steps.subsel.outputs.CLIENT_ID }}
+          tenant-id:       ${{ steps.subsel.outputs.TENANT }}
+          subscription-id: ${{ steps.subsel.outputs.SUB }}
+          environment:     ${{ steps.subsel.outputs.CLOUD_ENV }}
+          audience:        ${{ steps.subsel.outputs.AUDIENCE }}
 
       - name: Terraform Fmt
         run: terraform fmt -recursive
