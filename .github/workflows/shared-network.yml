@@ -100,15 +100,6 @@ jobs:
             # Always set hub_* to selected account for the plane (caller can override later)
             echo "TF_VAR_hub_tenant_id=$TENANT"
             echo "TF_VAR_hub_subscription_id=$SUB"
-            # Clear per-env overrides unless set later
-            echo "TF_VAR_dev_subscription_id="
-            echo "TF_VAR_dev_tenant_id="
-            echo "TF_VAR_qa_subscription_id="
-            echo "TF_VAR_qa_tenant_id="
-            echo "TF_VAR_uat_subscription_id="
-            echo "TF_VAR_uat_tenant_id="
-            echo "TF_VAR_prod_subscription_id="
-            echo "TF_VAR_prod_tenant_id="
           } >> $GITHUB_ENV
 
       # Resolve tfvars and build a GOV backend path that includes product + plane
