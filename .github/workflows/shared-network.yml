@@ -51,17 +51,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Get GitHub Runner IP and Whitelist
-        uses: azure/CLI@v1
-        with:
-          inlineScript: |
-            agentIP=$(curl -s https://api.ipify.org/)
-            az storage account network-rule add \
-              --resource-group "${{ secrets.RESOURCE_GROUP }}" \
-              --account-name "${{ secrets.STORAGE_ACCOUNT_NAME }}" \
-              --ip-address $agentIP
-            sleep 120
-
       # Decide target cloud (for providers) based on product
       - name: Select cloud/tenant/subscription (target deployment)
         id: subsel
@@ -208,6 +197,18 @@ jobs:
           environment:     AzureUSGovernment
           audience:        api://AzureADTokenExchangeUSGov
 
+      - name: Allow runner IP on state account (temp)
+        shell: bash
+        run: |
+          set -euo pipefail
+          agentIP="$(curl -s https://api.ipify.org/)"
+          echo "Runner public IP: ${agentIP}"
+          az storage account network-rule add \
+            --resource-group "${{ secrets.RESOURCE_GROUP }}" \
+            --account-name "${{ secrets.STORAGE_ACCOUNT_NAME }}" \
+            --ip-address "${agentIP}"
+          echo "Added temporary network rule for ${agentIP}"
+
       - name: Terraform Init (backend in Azure Gov)
         run: |
           terraform init -input=false -reconfigure \
@@ -278,12 +279,13 @@ jobs:
             -var "product=${{ inputs.product }}" \
             -var "plane=${{ inputs.plane }}"
             
-      - name: Remove GitHub Runner IP from Whitelist
-        uses: azure/CLI@v1
-        with:
-          inlineScript: |
-            az storage account network-rule add \
-              --resource-group "${{ secrets.RESOURCE_GROUP }}" \
-              --account-name "${{ secrets.STORAGE_ACCOUNT_NAME }}" \
-              --ip-address $agentIP
-            sleep 120
+      - name: Remove runner IP rule (cleanup)
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          agentIP="$(curl -s https://api.ipify.org/)"
+          az storage account network-rule remove \
+            --resource-group "${{ secrets.RESOURCE_GROUP }}" \
+            --account-name "${{ secrets.STORAGE_ACCOUNT_NAME }}" \
+            --ip-address "${agentIP}" || true
