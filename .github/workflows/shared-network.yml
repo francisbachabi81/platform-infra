@@ -1,5 +1,5 @@
 name: shared-network-deploy
-run-name: ${{ format('{0}-{1}-{2} {3}', github.workflow, inputs.product, inputs.plane, (inputs.destroy ? 'destroy' : (inputs.apply ? 'apply' : 'plan'))) }}
+run-name: ${{ format('{0}-{1}-{2} {3}', github.workflow, inputs.product, inputs.plane, inputs.destroy && 'destroy' || (inputs.apply && 'apply' || 'plan')) }}
 
 on:
   workflow_dispatch:
