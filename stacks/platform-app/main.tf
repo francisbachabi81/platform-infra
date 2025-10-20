@@ -406,10 +406,14 @@ locals {
 }
 
 # Diagnostics (AKS → LA)
-locals { manage_aks_diag = local.enable_both && local.create_aks && local.aks_id != null && local.law_workspace_id != null }
+# locals { manage_aks_diag = local.enable_both && local.create_aks && local.aks_id != null && local.law_workspace_id != null }
+
+locals {
+  want_aks_diag = local.create_aks  # plan-known flag
+}
 
 resource "azurerm_monitor_diagnostic_setting" "aks" {
-  for_each                   = local.manage_aks_diag ? { "aks-diag" = true } : {}
+  for_each = local.want_aks_diag ? toset(["aks-diag"]) : toset([])
   name                       = "aks-diag"
   target_resource_id         = local.aks_id
   log_analytics_workspace_id = local.law_workspace_id
@@ -418,6 +422,13 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
   enabled_log { category = "guard" }
 
   depends_on = [module.aks1_hub, module.aks1_env]
+
+  lifecycle {
+    precondition {
+      condition     = local.aks_id != null && local.law_workspace_id != null
+      error_message = "AKS diagnostics requires AKS id and Log Analytics workspace id."
+    }
+  }
 }
 
 # Service Bus (env)
