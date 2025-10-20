@@ -1,5 +1,5 @@
 name: shared-network-deploy
-run-name: ${{ format('{0}-{1}-{2} {3}', github.workflow, inputs.product, inputs.plane, (inputs.destroy && 'destroy' || (inputs.apply && 'apply' || 'plan'))) }}
+run-name: ${{ format('{0}-{1}-{2} {3}', github.workflow, inputs.product, inputs.plane, inputs.destroy && 'destroy' || (inputs.apply && 'apply' || 'plan')) }}
 
 on:
   workflow_dispatch:
@@ -51,7 +51,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Select cloud/tenant/subscription/client-id by product × plane (Option A)
       - name: Select cloud/tenant/subscription
         id: subsel
         shell: bash
@@ -59,7 +58,6 @@ jobs:
           set -euo pipefail
           PLANE="${{ inputs.plane }}"
           PRODUCT="${{ inputs.product }}"
-    
           if [ "$PRODUCT" = "hrz" ]; then
             CLOUD_ENV="AzureUSGovernment"
             ARM_ENV="usgovernment"
@@ -83,14 +81,12 @@ jobs:
               *) echo "Unknown plane: $PLANE"; exit 1;;
             esac
           fi
-    
           echo "CLOUD_ENV=$CLOUD_ENV" >> $GITHUB_OUTPUT
           echo "ARM_ENV=$ARM_ENV"     >> $GITHUB_OUTPUT
           echo "TENANT=$TENANT"       >> $GITHUB_OUTPUT
           echo "SUB=$SUB"             >> $GITHUB_OUTPUT
           echo "CLIENT_ID=$CLIENT_ID" >> $GITHUB_OUTPUT
           echo "AUDIENCE=$AUDIENCE"   >> $GITHUB_OUTPUT
-    
           {
             echo "ARM_ENVIRONMENT=$ARM_ENV"
             echo "ARM_TENANT_ID=$TENANT"
@@ -98,12 +94,10 @@ jobs:
             echo "TF_VAR_tenant_id=$TENANT"
             echo "TF_VAR_subscription_id=$SUB"
             echo "TF_VAR_product=${{ inputs.product }}"
-
-            # NEW: always set hub_* to selected account for the plane
+            # Always set hub_* to selected account for the plane
             echo "TF_VAR_hub_tenant_id=$TENANT"
             echo "TF_VAR_hub_subscription_id=$SUB"
-
-            # Optional convenience: explicitly null per-env overrides unless provided via tfvars
+            # Clear per-env overrides unless set later
             echo "TF_VAR_dev_subscription_id="
             echo "TF_VAR_dev_tenant_id="
             echo "TF_VAR_qa_subscription_id="
@@ -113,7 +107,7 @@ jobs:
             echo "TF_VAR_prod_subscription_id="
             echo "TF_VAR_prod_tenant_id="
           } >> $GITHUB_ENV
-    
+
       - name: Azure Login
         uses: azure/login@v2
         with:
@@ -123,7 +117,6 @@ jobs:
           environment:     ${{ steps.subsel.outputs.CLOUD_ENV }}
           audience:        ${{ steps.subsel.outputs.AUDIENCE }}
 
-      # Resolve tfvars & backend (state split by product, key by plane)
       - name: Resolve tfvars & backend
         id: paths
         shell: bash
@@ -131,36 +124,60 @@ jobs:
           set -euo pipefail
           PLANE="${{ inputs.plane }}"
           PRODUCT="${{ inputs.product }}"
-
-          # Prefer plane.product.tfvars; fallback to plane.tfvars
           TV1="${GITHUB_WORKSPACE}/stacks/shared-network/tfvars/${PLANE}.${PRODUCT}.tfvars"
           TVFALLBACK="${GITHUB_WORKSPACE}/stacks/shared-network/tfvars/${PLANE}.tfvars"
-          if [ -f "$TV1" ]; then
-            TFVARS_PATH="$TV1"
-          elif [ -f "$TVFALLBACK" ]; then
-            TFVARS_PATH="$TVFALLBACK"
-          else
-            echo "❌ Missing tfvars: $TV1 (or fallback $TVFALLBACK)"; exit 1
-          fi
+          if [ -f "$TV1" ]; then TFVARS_PATH="$TV1";
+          elif [ -f "$TVFALLBACK" ]; then TFVARS_PATH="$TVFALLBACK";
+          else echo "❌ Missing tfvars: $TV1 (or $TVFALLBACK)"; exit 1; fi
           echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
-
-          # Backend SA/RG per product (customize if you keep separate gov/com state stores)
           STATE_RG="rg-core-infra-state"
           STATE_SA="sacoretfstateinfra"
-          if [ "$PRODUCT" != "pub" ]; then
-            STATE_RG="rg-core-infra-state"
-            STATE_SA="sacoretfstateinfra"
-          fi
-
-          # Key pattern by plane — matches platform-app's remote_state lookup
           STATE_KEY="shared-network/${PLANE}/terraform.tfstate"
-
           echo "STATE_RG=$STATE_RG"   >> "$GITHUB_OUTPUT"
           echo "STATE_SA=$STATE_SA"   >> "$GITHUB_OUTPUT"
           echo "STATE_KEY=$STATE_KEY" >> "$GITHUB_OUTPUT"
 
-          echo "Selected tfvars: $TFVARS_PATH"
-          echo "Backend: $STATE_RG / $STATE_SA ($STATE_KEY)"
+      - name: Export optional per-env / hub overrides to TF_VAR_*
+        shell: bash
+        run: |
+          set -euo pipefail
+          write_env () {
+            local name="$1"; local value="$2"
+            if [ -n "$value" ]; then
+              {
+                echo "${name}<<EOF"
+                printf '%s\n' "$value"
+                echo "EOF"
+              } >> "$GITHUB_ENV"
+              echo "[export] set ${name}"
+            fi
+          }
+          PRODUCT="${{ inputs.product }}"
+          # Optional alternate hub account (ONLY if you keep a separate hub)
+          if [ "$PRODUCT" = "hrz" ]; then
+            write_env TF_VAR_hub_subscription_id "${{ secrets.HUB_SUB_ID_HRZ }}"
+            write_env TF_VAR_hub_tenant_id       "${{ secrets.HUB_TENANT_ID_HRZ }}"
+          else
+            write_env TF_VAR_hub_subscription_id "${{ secrets.HUB_SUB_ID_PUB }}"
+            write_env TF_VAR_hub_tenant_id       "${{ secrets.HUB_TENANT_ID_PUB }}"
+          fi
+          # Optional per-env overrides
+          if [ "$PRODUCT" = "hrz" ]; then
+            write_env TF_VAR_dev_subscription_id  "${{ secrets.AZ_SUB_HRZ_DEV }}"
+            write_env TF_VAR_qa_subscription_id   "${{ secrets.AZ_SUB_HRZ_QA }}"
+            write_env TF_VAR_uat_subscription_id  "${{ secrets.AZ_SUB_HRZ_UAT }}"
+            write_env TF_VAR_prod_subscription_id "${{ secrets.AZ_SUB_HRZ_PROD }}"
+          else
+            write_env TF_VAR_dev_subscription_id  "${{ secrets.AZ_SUB_PUB_DEV }}"
+            write_env TF_VAR_qa_subscription_id   "${{ secrets.AZ_SUB_PUB_QA }}"
+            write_env TF_VAR_uat_subscription_id  "${{ secrets.AZ_SUB_PUB_UAT }}"
+            write_env TF_VAR_prod_subscription_id "${{ secrets.AZ_SUB_PUB_PROD }}"
+          fi
+          # Optional DB passwords (mask first if set)
+          [ -n "${{ secrets.PG_ADMIN_PASSWORD }}" ] && echo "::add-mask::${{ secrets.PG_ADMIN_PASSWORD }}"
+          [ -n "${{ secrets.CDBPG_ADMIN_PASSWORD }}" ] && echo "::add-mask::${{ secrets.CDBPG_ADMIN_PASSWORD }}"
+          write_env TF_VAR_pg_admin_password    "${{ secrets.PG_ADMIN_PASSWORD }}"
+          write_env TF_VAR_cdbpg_admin_password "${{ secrets.CDBPG_ADMIN_PASSWORD }}"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -206,22 +223,14 @@ jobs:
         if: ${{ !inputs.destroy }}
         shell: bash
         run: |
-          # list every per-env/hub override you export anywhere
-          OVARS=(
-            hub_subscription_id hub_tenant_id
-            dev_subscription_id dev_tenant_id
-            qa_subscription_id  qa_tenant_id
-            uat_subscription_id uat_tenant_id
-            prod_subscription_id prod_tenant_id
-          )
+          OVARS=(hub_subscription_id hub_tenant_id dev_subscription_id dev_tenant_id qa_subscription_id qa_tenant_id uat_subscription_id uat_tenant_id prod_subscription_id prod_tenant_id)
           for v in "${OVARS[@]}"; do
             name="TF_VAR_${v}"
             if [ "${!name-__UNSET__}" != "__UNSET__" ] && [ -z "${!name}" ]; then
-              echo "Unsetting $name (empty string)"
-              unset "$name"
+              echo "Unsetting $name (empty string)"; unset "$name"
             fi
           done
-    
+
       - name: Terraform Apply
         if: ${{ inputs.apply && !inputs.destroy }}
         run: terraform apply -parallelism=6 -auto-approve tfplan
