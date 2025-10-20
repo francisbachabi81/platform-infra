@@ -22,15 +22,13 @@ locals {
 
   _issuer_host_default = "sts.windows.net"
 
-  p2s_aad_tenant_uri = coalesce(
-    var.p2s_aad_tenant_uri_override,
-    "https://${lookup(local._login_host_by_env, var.azure_environment)}/${local._p2s_tenant_id}"
-  )
+  p2s_aad_tenant_uri = (
+    var.p2s_aad_tenant_uri_override != null && trimspace(var.p2s_aad_tenant_uri_override) != ""
+  ) ? var.p2s_aad_tenant_uri_override : "https://${lookup(local._login_host_by_env, var.azure_environment)}/${local._p2s_tenant_id}"
 
-  p2s_aad_issuer_uri = coalesce(
-    var.p2s_aad_issuer_uri_override,
-    "https://${local._issuer_host_default}/${local._p2s_tenant_id}/"  # keep trailing slash
-  )
+  p2s_aad_issuer_uri = (
+    var.p2s_aad_issuer_uri_override != null && trimspace(var.p2s_aad_issuer_uri_override) != ""
+  ) ? "${trimsuffix(trimspace(var.p2s_aad_issuer_uri_override), "/")}/" : "https://sts.windows.net/${local._p2s_tenant_id}/"
 
   p2s_aad_audience = coalesce(
     var.p2s_aad_audience_override,
