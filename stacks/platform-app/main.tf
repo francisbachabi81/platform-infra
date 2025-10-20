@@ -416,6 +416,8 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
   enabled_log { category = "kube-audit" }
   enabled_log { category = "kube-audit-admin" }
   enabled_log { category = "guard" }
+
+  depends_on = [module.aks1_hub, module.aks1_env]
 }
 
 # Service Bus (env)
