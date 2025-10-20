@@ -31,7 +31,7 @@ These do **not** change per environment; they select the cloud at runtime based 
 ---
 
 #### Per-Environment Secrets (dev, qa, uat, prod)
-Used primarily by **shared-network** and **core** when targeting a specific app environment subscription.
+Used primarily by **shared-network** when targeting a specific app environment subscription.
 
 > Define these in the corresponding GitHub **Environment** (`dev`, `qa`, `uat`, `prod`). Provide **both** Gov and Commercial IDs so workflows can choose via `var.product`.
 
@@ -53,7 +53,11 @@ The **shared-network** and **core** stacks also deploy **plane/lane** resources 
 | Secret | Purpose |
 |---|---|
 | `AZ_SUB_HRZ_NONPROD` | Hub/plane subscription for **hrz** nonprod (Gov) |
+| `HUB_SUB_ID_HRZ` | Hub/plane subscription if your hub lives in a different tenant/sub than the plane’s default |
+| `HUB_TENANT_ID_HRZ` | Hub/plane tenant if your hub lives in a different tenant/sub than the plane’s default |
 | `AZ_SUB_PUB_NONPROD` | Hub/plane subscription for **pub** nonprod (Commercial) |
+| `HUB_SUB_ID_PUB` | Hub/plane subscription if your hub lives in a different tenant/sub than the plane’s default |
+| `HUB_TENANT_ID_PUB` | Hub/plane tenant if your hub lives in a different tenant/sub than the plane’s default |
 
 #### Prod Lane (shared-network, core)
 | Secret | Purpose |
