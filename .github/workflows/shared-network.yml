@@ -209,7 +209,12 @@ jobs:
       
           # Optional: ensure we’re operating against the correct subscription/cloud
           az account show 1>/dev/null
-      
+
+          az storage account update \
+            --resource-group "${{ secrets.RESOURCE_GROUP }}" \
+            --name "${{ secrets.STORAGE_ACCOUNT_NAME }}" \
+            --public-network-access Enabled
+  
           # Add the IP rule (idempotent-ish; ignore 'already exists' error)
           az storage account network-rule add \
             --resource-group "${{ secrets.RESOURCE_GROUP }}" \
@@ -303,3 +308,8 @@ jobs:
             --ip-address "${agentIP}" \
             --only-show-errors \
             --api-version "${AZ_API_VERSION}" || true
+
+          az storage account update \
+            --resource-group "${{ secrets.RESOURCE_GROUP }}" \
+            --name "${{ secrets.STORAGE_ACCOUNT_NAME }}" \
+            --public-network-access Disabled
