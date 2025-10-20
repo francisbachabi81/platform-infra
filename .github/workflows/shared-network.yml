@@ -218,12 +218,6 @@ jobs:
             write_env TF_VAR_prod_tenant_id        "${{ secrets.AZ_TENANT_PUB }}"
           fi
 
-          # Optional DB secrets (mask them first if you want)
-          [ -n "${{ secrets.PG_ADMIN_PASSWORD }}" ] && echo "::add-mask::${{ secrets.PG_ADMIN_PASSWORD }}"
-          [ -n "${{ secrets.CDBPG_ADMIN_PASSWORD }}" ] && echo "::add-mask::${{ secrets.CDBPG_ADMIN_PASSWORD }}"
-          write_env TF_VAR_pg_admin_password       "${{ secrets.PG_ADMIN_PASSWORD }}"
-          write_env TF_VAR_cdbpg_admin_password    "${{ secrets.CDBPG_ADMIN_PASSWORD }}"
-
           echo "[export] end"
           
       - name: Setup Terraform
