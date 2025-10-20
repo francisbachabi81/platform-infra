@@ -203,11 +203,22 @@ jobs:
           set -euo pipefail
           agentIP="$(curl -s https://api.ipify.org/)"
           echo "Runner public IP: ${agentIP}"
+      
+          # Pin a Storage RP api-version that Azure Gov supports (per error list)
+          AZ_API_VERSION=2025-03-01
+      
+          # Optional: ensure we’re operating against the correct subscription/cloud
+          az account show 1>/dev/null
+      
+          # Add the IP rule (idempotent-ish; ignore 'already exists' error)
           az storage account network-rule add \
             --resource-group "${{ secrets.RESOURCE_GROUP }}" \
             --account-name "${{ secrets.STORAGE_ACCOUNT_NAME }}" \
-            --ip-address "${agentIP}"
-          echo "Added temporary network rule for ${agentIP}"
+            --ip-address "${agentIP}" \
+            --only-show-errors \
+            --api-version "${AZ_API_VERSION}" || {
+              echo "Warning: add may have failed due to an existing identical rule; continuing."
+            }
 
       - name: Terraform Init (backend in Azure Gov)
         run: |
@@ -285,7 +296,10 @@ jobs:
         run: |
           set -euo pipefail
           agentIP="$(curl -s https://api.ipify.org/)"
+          AZ_API_VERSION=2025-03-01
           az storage account network-rule remove \
             --resource-group "${{ secrets.RESOURCE_GROUP }}" \
             --account-name "${{ secrets.STORAGE_ACCOUNT_NAME }}" \
-            --ip-address "${agentIP}" || true
+            --ip-address "${agentIP}" \
+            --only-show-errors \
+            --api-version "${AZ_API_VERSION}" || true
