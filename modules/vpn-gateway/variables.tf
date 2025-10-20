@@ -88,3 +88,15 @@ variable "p2s_aad_tenant_uri_override" {
   type    = string
   default = null
 }
+
+variable "azure_environment" {
+  type        = string
+  description = "Az environment name: public | usgovernment | germany | china"
+  # For your setup you can default from product at the caller; keep this required here.
+}
+
+variable "p2s_aad_audience_override" {
+  type        = string
+  default     = null
+  description = "Force a specific audience App ID (optional)."
+}

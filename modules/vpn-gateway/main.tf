@@ -9,8 +9,34 @@ terraform {
 # locals
 locals {
   _p2s_tenant_id       = coalesce(var.p2s_aad_tenant_id_override, var.tenant_id)
-  p2s_aad_tenant_uri   = coalesce(var.p2s_aad_tenant_uri_override,  "https://login.microsoftonline.com/${local._p2s_tenant_id}")
-  p2s_aad_issuer_uri   = coalesce(var.p2s_aad_issuer_uri_override,  "https://sts.windows.net/${local._p2s_tenant_id}/")
+
+  _audience_by_env = {
+    public       = "41b23e61-6c1e-4545-b367-cd054e0ed4b4"
+    usgovernment = "51bb15d4-3a4f-4ebf-9dca-40096fe32426"
+  }
+
+  _login_host_by_env = {
+    public       = "login.microsoftonline.com"
+    usgovernment = "login.microsoftonline.us"
+  }
+
+  _issuer_host_default = "sts.windows.net"
+
+  p2s_aad_tenant_uri = coalesce(
+    var.p2s_aad_tenant_uri_override,
+    "https://${lookup(local._login_host_by_env, var.azure_environment)}/${local._p2s_tenant_id}"
+  )
+
+  p2s_aad_issuer_uri = coalesce(
+    var.p2s_aad_issuer_uri_override,
+    "https://${local._issuer_host_default}/${local._p2s_tenant_id}/"  # keep trailing slash
+  )
+
+  p2s_aad_audience = coalesce(
+    var.p2s_aad_audience_override,
+    lookup(local._audience_by_env, var.azure_environment)
+  )
+
   use_managed_pip      = var.create_public_ip
   effective_public_ip_id = var.create_public_ip ? azurerm_public_ip.pip["main"].id : var.public_ip_id
 }
@@ -54,9 +80,9 @@ resource "azurerm_virtual_network_gateway" "this" {
       address_space        = var.p2s_address_space
       vpn_client_protocols = var.p2s_vpn_client_protocols
       vpn_auth_types       = var.p2s_vpn_auth_types
-      aad_tenant           = contains(var.p2s_vpn_auth_types, "AAD") ? local.p2s_aad_tenant_uri   : null
-      aad_issuer           = contains(var.p2s_vpn_auth_types, "AAD") ? local.p2s_aad_issuer_uri   : null
-      aad_audience         = contains(var.p2s_vpn_auth_types, "AAD") ? var.p2s_aad_audience       : null
+      aad_tenant           = contains(var.p2s_vpn_auth_types, "AAD") ? local.p2s_aad_tenant_uri : null
+      aad_issuer           = contains(var.p2s_vpn_auth_types, "AAD") ? local.p2s_aad_issuer_uri : null
+      aad_audience         = contains(var.p2s_vpn_auth_types, "AAD") ? local.p2s_aad_audience   : null
     }
   }
 

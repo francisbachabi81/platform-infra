@@ -461,6 +461,7 @@ module "vpng" {
   public_ip_id        = local.create_external_vpng_pip ? azurerm_public_ip.vpngw[0].id : null
   gateway_subnet_id   = local.vpng_gateway_subnet_id
   tenant_id           = var.hub_tenant_id
+  azure_environment   = var.product == "hrz" ? "usgovernment" : "public"
   tags = merge(local.tag_base, {
     purpose = "p2s-vpn-gateway"
     service = "connectivity"
