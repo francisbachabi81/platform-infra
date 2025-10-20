@@ -999,11 +999,6 @@ locals {
   dnsr_tags = merge(local.tag_base, { purpose = "dns-private-resolver", lane = local.lane })
 }
 
-resource "time_sleep" "wait_dns_outbound" {
-  depends_on      = [module.nsg]
-  create_duration = "60s" # bump to 90s if needed
-}
-
 module "dns_resolver" {
   count               = var.create_dns_resolver ? 1 : 0
   source              = "../../modules/dns-resolver"
@@ -1020,8 +1015,7 @@ module "dns_resolver" {
   # implicit deps via VNet/Subnet IDs are sufficient
   depends_on = [
     module.vnet_hub,   # subnets exist
-    module.nsg,        # NSG associations done
-    time_sleep.wait_dns_outbound
+    module.nsg        # NSG associations done
   ]
 }
 
