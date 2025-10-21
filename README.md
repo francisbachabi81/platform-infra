@@ -26,19 +26,17 @@ This repo merges **Horizon (hrz)** and **Public (pub)** infrastructure into a si
 | **Key Vault** (`module.kv1`) | ✅ | ✅ | Count = `local.enable_both ? 1 : 0` |
 | **Storage Account** (`module.sa1`) | ✅ | ✅ | Depends on Key Vault |
 | **Cosmos (NoSQL)** (`module.cosmos1`, db, containers) |  | ✅ | `local.cosmos_enabled = local.enable_public_features` |
-| **AKS User-Assigned Identity (hub/env)** | ✅* | ✅* | Created when `local.create_aks` and env placement conditions are met |
-| **AKS Cluster (hub for dev; env for uat/prod)** | ✅* | ✅* | Hub: dev only; Env: uat/prod only; requires PDNS zone and subnet |
-| **AKS Diagnostics → Log Analytics** | ✅* | ✅* | When `local.manage_aks_diag` is true (`law_workspace_id` required) |
-| **Service Bus** (`module.sbns1`) | ✅* | ✅* | When `var.create_servicebus` |
+| **AKS User-Assigned Identity (hub/env)** | ✅ | ✅ | Created when `local.create_aks` and env placement conditions are met |
+| **AKS Cluster (hub for dev; env for uat/prod)** | ✅ | ✅ | Hub: dev only; Env: uat/prod only; requires PDNS zone and subnet |
+| **AKS Diagnostics → Log Analytics** | ✅ | ✅ | When `local.manage_aks_diag` is true (`law_workspace_id` required) |
+| **Service Bus** (`module.sbns1`) | ✅ | ✅ | When `var.create_servicebus` |
 | **App Service Plan (Linux)** |  | ✅ | Public-only app hosting |
 | **Function App #1 & #2** |  | ✅ | Uses SA for content, optional PEs/SCM PEs |
-| **Event Hubs + CGs** |  | ✅* | When `local.create_eventhub` (dev/prod only) |
-| **Cosmos DB for PostgreSQL (Citus)** |  | ✅* | When `var.create_cdbpg` |
+| **Event Hubs + CGs** |  | ✅ | When `local.create_eventhub` (dev/prod only) |
+| **Cosmos DB for PostgreSQL (Citus)** |  | ✅ | When `var.create_cdbpg` |
 | **PostgreSQL Flexible (primary)** |  | ✅ | Private networking only |
-| **PostgreSQL Flexible (replica)** | ✅* | ✅* | When `var.pg_replica_enabled && !var.pg_ha_enabled` |
+| **PostgreSQL Flexible (replica)** | ✅ | ✅ | When `var.pg_replica_enabled && !var.pg_ha_enabled` |
 | **Redis Cache** | ✅ | ✅ | Private Endpoints if provided |
-
-\* **Conditional** — subject to additional inputs such as `create_aks`, environment (`dev|uat|prod`), required subnets, PDNS zones, SKUs, etc.
 
 ---
 
