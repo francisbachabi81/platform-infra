@@ -645,7 +645,7 @@ locals {
 }
 
 module "postgres" {
-  count               = local.enable_public_features ? 1 : 0
+  count               = local.enable_both ? 1 : 0
   source              = "../../modules/postgres-flex"
   name                = local.pg_name1
   resource_group_name = var.rg_name
