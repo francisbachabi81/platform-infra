@@ -51,23 +51,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Decide target cloud + audience + tenant/subscription (used for BOTH backend and providers)
-      - name: Select cloud/tenant/subscription (target deployment)
-        id: subsel
+      # Decide cloud + audience + TENANT + two SUBs:
+      # STATE_SUB = prod sub (for backend state) in SAME CLOUD
+      # TARGET_SUB = deploy sub (varies by plane) in SAME CLOUD
+      - name: Select cloud + subscriptions
+        id: sel
         shell: bash
         run: |
           set -euo pipefail
           PLANE="${{ inputs.plane }}"
           PRODUCT="${{ inputs.product }}"
+
           if [ "$PRODUCT" = "hrz" ]; then
             CLOUD_ENV="AzureUSGovernment"
             ARM_ENV="usgovernment"
             TENANT="${{ secrets.AZ_TENANT_HRZ }}"
             CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
             AUDIENCE="api://AzureADTokenExchangeUSGov"
+            # --- state always in GOV PROD sub ---
+            STATE_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}"
+            # --- target subscription by plane ---
             case "$PLANE" in
-              nonprod) SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}";;
-              prod)    SUB="${{ secrets.AZ_SUB_HRZ_PROD }}";;
+              nonprod) TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}";;
+              prod)    TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}";;
               *) echo "Unknown plane: $PLANE"; exit 1;;
             esac
           else
@@ -76,35 +82,41 @@ jobs:
             TENANT="${{ secrets.AZ_TENANT_PUB }}"
             CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
             AUDIENCE="api://AzureADTokenExchange"
+            # --- state always in COMMERCIAL PROD sub ---
+            STATE_SUB="${{ secrets.AZ_SUB_PUB_PROD }}"
+            # --- target subscription by plane ---
             case "$PLANE" in
-              nonprod) SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}";;
-              prod)    SUB="${{ secrets.AZ_SUB_PUB_PROD }}";;
+              nonprod) TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}";;
+              prod)    TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}";;
               *) echo "Unknown plane: $PLANE"; exit 1;;
             esac
           fi
 
-          echo "CLOUD_ENV=$CLOUD_ENV" >> $GITHUB_OUTPUT
-          echo "ARM_ENV=$ARM_ENV"     >> $GITHUB_OUTPUT
-          echo "TENANT=$TENANT"       >> $GITHUB_OUTPUT
-          echo "SUB=$SUB"             >> $GITHUB_OUTPUT
-          echo "CLIENT_ID=$CLIENT_ID" >> $GITHUB_OUTPUT
-          echo "AUDIENCE=$AUDIENCE"   >> $GITHUB_OUTPUT
+          echo "CLOUD_ENV=$CLOUD_ENV"   >> $GITHUB_OUTPUT
+          echo "ARM_ENV=$ARM_ENV"       >> $GITHUB_OUTPUT
+          echo "TENANT=$TENANT"         >> $GITHUB_OUTPUT
+          echo "CLIENT_ID=$CLIENT_ID"   >> $GITHUB_OUTPUT
+          echo "AUDIENCE=$AUDIENCE"     >> $GITHUB_OUTPUT
+          echo "STATE_SUB=$STATE_SUB"   >> $GITHUB_OUTPUT
+          echo "TARGET_SUB=$TARGET_SUB" >> $GITHUB_OUTPUT
 
           {
+            # Defaults for providers (we’ll switch login later)
             echo "ARM_ENVIRONMENT=$ARM_ENV"
             echo "ARM_TENANT_ID=$TENANT"
-            echo "ARM_SUBSCRIPTION_ID=$SUB"
             echo "ARM_CLIENT_ID=$CLIENT_ID"
+
+            # Terraform variables for stacks
             echo "TF_VAR_tenant_id=$TENANT"
-            echo "TF_VAR_subscription_id=$SUB"
             echo "TF_VAR_product=${{ inputs.product }}"
-            # Default hub_* to the same account (caller can override later)
+            # Set env subscription = TARGET_SUB (deployment)
+            echo "TF_VAR_subscription_id=$TARGET_SUB"
+            # Default hub_* to TARGET_SUB (caller may override)
             echo "TF_VAR_hub_tenant_id=$TENANT"
-            echo "TF_VAR_hub_subscription_id=$SUB"
+            echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
           } >> $GITHUB_ENV
 
-      # Resolve tfvars and build a per-cloud backend path (same RG/SA names in both clouds)
-      - name: Resolve tfvars & backend (state in SAME cloud as product)
+      - name: Resolve tfvars & backend key
         id: paths
         shell: bash
         run: |
@@ -119,50 +131,59 @@ jobs:
           else echo "❌ Missing tfvars: $TV1 (or $TVFALLBACK)"; exit 1; fi
           echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
 
-          # Use the SAME names in both clouds (unique per cloud, which is fine)
+          # Same names in both clouds
           STATE_RG="rg-core-infra-state"
           STATE_SA="sacoretfstateinfra"
           STATE_CONTAINER="tfstate"
           STATE_KEY="shared-network/${PRODUCT}/${PLANE}/terraform.tfstate"
 
-          echo "STATE_RG=$STATE_RG"         >> "$GITHUB_OUTPUT"
-          echo "STATE_SA=$STATE_SA"         >> "$GITHUB_OUTPUT"
+          echo "STATE_RG=$STATE_RG"             >> "$GITHUB_OUTPUT"
+          echo "STATE_SA=$STATE_SA"             >> "$GITHUB_OUTPUT"
           echo "STATE_CONTAINER=$STATE_CONTAINER" >> "$GITHUB_OUTPUT"
-          echo "STATE_KEY=$STATE_KEY"       >> "$GITHUB_OUTPUT"
+          echo "STATE_KEY=$STATE_KEY"           >> "$GITHUB_OUTPUT"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform_version }}
 
-      # Single login to the chosen cloud — used by BOTH backend (azurerm) and providers
-      - name: Azure Login (chosen cloud for backend + deploy)
+      # 1) Login to SAME CLOUD, but the **STATE** (prod) subscription — for backend init
+      - name: Azure Login (state subscription for backend)
         uses: azure/login@v2
         with:
-          client-id:       ${{ steps.subsel.outputs.CLIENT_ID }}
-          tenant-id:       ${{ steps.subsel.outputs.TENANT }}
-          subscription-id: ${{ steps.subsel.outputs.SUB }}
-          environment:     ${{ steps.subsel.outputs.CLOUD_ENV }}
-          audience:        ${{ steps.subsel.outputs.AUDIENCE }}
+          client-id:       ${{ steps.sel.outputs.CLIENT_ID }}
+          tenant-id:       ${{ steps.sel.outputs.TENANT }}
+          subscription-id: ${{ steps.sel.outputs.STATE_SUB }}
+          environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
+          audience:        ${{ steps.sel.outputs.AUDIENCE }}
 
-      - name: Terraform Init (backend in same cloud as product)
+      - name: Terraform Init (backend in state/prod subscription)
         env:
-          # Ensure the azurerm backend uses the same OIDC context
           ARM_USE_OIDC: true
-          ARM_CLIENT_ID: ${{ steps.subsel.outputs.CLIENT_ID }}
-          ARM_TENANT_ID: ${{ steps.subsel.outputs.TENANT }}
-          ARM_SUBSCRIPTION_ID: ${{ steps.subsel.outputs.SUB }}
-          ARM_ENVIRONMENT: ${{ steps.subsel.outputs.ARM_ENV }}
+          ARM_CLIENT_ID:       ${{ steps.sel.outputs.CLIENT_ID }}
+          ARM_TENANT_ID:       ${{ steps.sel.outputs.TENANT }}
+          ARM_SUBSCRIPTION_ID: ${{ steps.sel.outputs.STATE_SUB }}
+          ARM_ENVIRONMENT:     ${{ steps.sel.outputs.ARM_ENV }}
         run: |
           terraform init -input=false -reconfigure \
-            -backend-config="environment=${{ steps.subsel.outputs.ARM_ENV }}" \
-            -backend-config="tenant_id=${{ steps.subsel.outputs.TENANT }}" \
-            -backend-config="subscription_id=${{ steps.subsel.outputs.SUB }}" \
+            -backend-config="environment=${{ steps.sel.outputs.ARM_ENV }}" \
+            -backend-config="tenant_id=${{ steps.sel.outputs.TENANT }}" \
+            -backend-config="subscription_id=${{ steps.sel.outputs.STATE_SUB }}" \
             -backend-config="resource_group_name=${{ steps.paths.outputs.STATE_RG }}" \
             -backend-config="storage_account_name=${{ steps.paths.outputs.STATE_SA }}" \
             -backend-config="container_name=${{ steps.paths.outputs.STATE_CONTAINER }}" \
             -backend-config="key=${{ steps.paths.outputs.STATE_KEY }}" \
             -backend-config="use_azuread_auth=true"
+
+      # 2) Switch login to the **TARGET** subscription for providers (plan/apply)
+      - name: Azure Login (target subscription for deploy)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ steps.sel.outputs.CLIENT_ID }}
+          tenant-id:       ${{ steps.sel.outputs.TENANT }}
+          subscription-id: ${{ steps.sel.outputs.TARGET_SUB }}
+          environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
+          audience:        ${{ steps.sel.outputs.AUDIENCE }}
 
       - name: Terraform Fmt
         run: terraform fmt -recursive
