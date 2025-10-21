@@ -11,6 +11,15 @@ output "meta" {
   }
 }
 
+output "action_group" {
+  value = try({
+    id        = azurerm_monitor_action_group.core[0].id
+    name      = azurerm_monitor_action_group.core[0].name
+    short_name= var.action_group_short_name
+    rg_name   = local.rg_name_core
+  }, null)
+}
+
 output "features" {
   value = {
     enable_public_features = local.enable_public_features
@@ -26,6 +35,7 @@ output "features" {
     law_created              = try(length(azurerm_log_analytics_workspace.plane) > 0, false)
     appi_created             = try(length(azurerm_application_insights.plane) > 0, false)
     rsv_created              = try(length(azurerm_recovery_services_vault.plane) > 0, false)
+    action_group_created     = try(length(azurerm_monitor_action_group.core) > 0, false)
   }
 }
 

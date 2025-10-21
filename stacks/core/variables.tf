@@ -162,3 +162,22 @@ variable "create_recovery_vault" {
   type    = bool
   default = true
 }
+
+variable "create_action_group" {
+  type    = bool
+  default = true
+}
+
+variable "action_group_short_name" {
+  type    = string
+  default = "coreag"
+}
+
+variable "action_group_email_receivers" {
+  type = list(object({
+    name                    = string
+    email_address           = string
+    use_common_alert_schema = optional(bool, true)
+  }))
+  default = []
+}

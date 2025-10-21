@@ -104,3 +104,106 @@ resource "azurerm_recovery_services_vault" "plane" {
   tags                = merge(local.tags_common, { service = "recovery-services-vault", plane = local.plane_code })
   depends_on          = [module.rg_core_platform]
 }
+
+locals {
+  action_group_name = "ag-${var.product}-${local.plane_code}-${var.region}-core-01"
+}
+
+resource "azurerm_monitor_action_group" "core" {
+  count               = (var.create_action_group && local.create_scope_both) ? 1 : 0
+  name                = local.action_group_name
+  resource_group_name = local.rg_name_core
+  short_name          = var.action_group_short_name
+  enabled             = true
+  tags                = merge(local.tags_common, { service = "monitor-action-group", plane = local.plane_code })
+
+  dynamic "email_receiver" {
+    for_each = var.action_group_email_receivers
+    content {
+      name                    = email_receiver.value.name
+      email_address           = email_receiver.value.email_address
+      use_common_alert_schema = try(email_receiver.value.use_common_alert_schema, true)
+    }
+  }
+
+  depends_on = [module.rg_core_platform]
+}
+
+data "azurerm_resource_group" "core" {
+  name = local.rg_name_core
+}
+
+resource "azurerm_monitor_activity_log_alert" "rg_admin_ops" {
+  name                = "ala-${var.product}-${local.plane_code}-${var.region}-core-admin"
+  resource_group_name = local.rg_name_core
+  scopes              = [data.azurerm_resource_group.core.id]
+  description         = "Admin ops on core RG"
+  enabled             = true
+  location = var.location
+
+  criteria {
+    category       = "Administrative"
+    resource_group = local.rg_name_core
+    operation_name = [
+      "Microsoft.Resources/subscriptions/resourcegroups/write",
+      "Microsoft.Resources/subscriptions/resourcegroups/delete"
+    ]
+    # you can add more filters like status, caller, etc.
+  }
+
+  action {
+    action_group_id = azurerm_monitor_action_group.core[0].id
+  }
+}
+
+resource "azurerm_monitor_metric_alert" "appi_failures" {
+  count               = length(azurerm_application_insights.plane) > 0 ? 1 : 0
+  name                = "mal-${var.product}-${local.plane_code}-${var.region}-core-appi-fail"
+  resource_group_name = local.rg_name_core
+  scopes              = [azurerm_application_insights.plane[0].id]
+  description         = "App Insights request failures > 0"
+  severity            = 2
+  enabled             = true
+  frequency           = "PT5M"
+  window_size         = "PT5M"
+
+  criteria {
+    metric_namespace = "microsoft.insights/components"
+    metric_name      = "requests/failed"
+    aggregation      = "Total"
+    operator         = "GreaterThan"
+    threshold        = 0
+  }
+
+  action {
+    action_group_id = azurerm_monitor_action_group.core[0].id
+  }
+}
+
+resource "azurerm_monitor_scheduled_query_rules_alert_v2" "heartbeat_missing" {
+  count               = length(azurerm_log_analytics_workspace.plane) > 0 ? 1 : 0
+  name                = "sq-${var.product}-${local.plane_code}-${var.region}-core-heartbeat"
+  resource_group_name = local.rg_name_core
+  location            = var.location
+  enabled             = true
+  evaluation_frequency = "PT5M"
+  window_duration      = "PT10M"
+  severity             = 2
+  scopes               = [azurerm_log_analytics_workspace.plane[0].id]
+  display_name         = "Heartbeat missing (10m)"
+
+  criteria {
+    query = <<KQL
+Heartbeat
+| where TimeGenerated > ago(10m)
+| summarize hb = count()
+    KQL
+    time_aggregation_method = "Count"
+    operator                = "LessThan"
+    threshold               = 1
+  }
+
+  action {
+    action_groups = [azurerm_monitor_action_group.core[0].id]
+  }
+}
