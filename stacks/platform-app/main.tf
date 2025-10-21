@@ -410,11 +410,12 @@ locals {
 
 locals {
   want_aks_diag = local.create_aks  # plan-known flag
+  diag_name = "aks-diag-${var.product}-${local.plane_code}-${var.region}"
 }
 
 resource "azurerm_monitor_diagnostic_setting" "aks" {
-  for_each = local.want_aks_diag ? toset(["aks-diag"]) : toset([])
-  name                       = "aks-diag"
+  for_each                   = local.want_aks_diag ? toset([local.diag_name]) : toset([])
+  name                       = each.key
   target_resource_id         = local.aks_id
   log_analytics_workspace_id = local.law_workspace_id
   enabled_log { category = "kube-audit" }
