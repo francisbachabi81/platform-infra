@@ -1080,3 +1080,18 @@ module "fd" {
 
   depends_on = [module.rg_hub]
 }
+
+# ── network watcher (regional, managed by this stack) ─────────────────────────
+resource "azurerm_network_watcher" "hub" {
+  name                = "nw-${var.product}-${local.plane_code}-${var.region}-01"
+  location            = var.location
+  resource_group_name = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
+
+  tags = merge(local.tag_base, {
+    purpose = "network-watcher"
+    service = "netops"
+    lane    = local.lane
+  })
+
+  depends_on = [module.rg_hub]
+}
