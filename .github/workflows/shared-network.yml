@@ -183,15 +183,23 @@ jobs:
         with:
           client-id:       ${{ secrets.AZURE_CLIENT_ID_HRZ }}
           tenant-id:       ${{ secrets.AZ_TENANT_HRZ }}
-          # Use a dedicated state subscription if you have one; else fall back sensibly
           subscription-id: ${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}
           environment:     AzureUSGovernment
           audience:        api://AzureADTokenExchangeUSGov
-
+      
       - name: Terraform Init (backend in Azure Gov)
+        env:
+          # force the azurerm backend to use Gov OIDC creds
+          ARM_USE_OIDC: true
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID_HRZ }}
+          ARM_TENANT_ID: ${{ secrets.AZ_TENANT_HRZ }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}
+          ARM_ENVIRONMENT: usgovernment
         run: |
           terraform init -input=false -reconfigure \
             -backend-config="environment=usgovernment" \
+            -backend-config="tenant_id=${{ secrets.AZ_TENANT_HRZ }}" \
+            -backend-config="subscription_id=${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}" \
             -backend-config="resource_group_name=${{ steps.paths.outputs.STATE_RG }}" \
             -backend-config="storage_account_name=${{ steps.paths.outputs.STATE_SA }}" \
             -backend-config="container_name=${{ steps.paths.outputs.STATE_CONTAINER }}" \
