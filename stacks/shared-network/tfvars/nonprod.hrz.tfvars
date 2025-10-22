@@ -98,7 +98,7 @@ nonprod_hub = {
 }
 
 dev_spoke = {
-  rg    = "rg-hrz-dev-usaz-01"
+  rg    = "rg-hrz-dev-usaz-net-01"
   vnet  = "vnet-hrz-dev-usaz-01"
   cidrs = ["10.11.0.0/16"]
 
@@ -194,7 +194,7 @@ dev_spoke = {
 }
 
 qa_spoke = {
-  rg    = "rg-hrz-qa-usaz-01"
+  rg    = "rg-hrz-qa-usaz-net-01"
   vnet  = "vnet-hrz-qa-usaz-01"
   cidrs = ["10.12.0.0/16"]
 

@@ -157,6 +157,65 @@ locals {
 
   deploy_aks_in_hub = local.is_dev && local.enable_both && local.create_aks
   deploy_aks_in_env = (local.is_uat || local.is_prod) && local.enable_both && local.create_aks
+
+  dev_only_tags  = { environment = "dev",  purpose = "env-dev",  criticality = "Low",    patchgroup = "Test",    lane = "nonprod" }
+  qa_only_tags   = { environment = "qa",   purpose = "env-qa",   criticality = "Medium", patchgroup = "Test",    lane = "nonprod" }
+  uat_only_tags  = { environment = "uat",  purpose = "env-uat",  criticality = "Medium", patchgroup = "Monthly", lane = "prod" }
+  prod_only_tags = { environment = "prod", purpose = "env-prod", criticality = "High",   patchgroup = "Monthly", lane = "prod" }
+
+  is_nonprod = local.plane == "nonprod"
+
+  rg_layer_by_key = local.is_nonprod ? {
+    nphub = "shared-network"
+    dev   = "platform-dev"
+    qa    = "platform-qa"
+  } : {
+    prhub = "shared-network"
+    prod  = "platform-prod"
+    uat   = "platform-uat"
+  }
+}
+
+module "rg_dev" {
+  count     = local.is_dev ? 1 : 0
+  source    = "../../modules/resource-group"
+  name      = "rg-${var.product}-${var.env}-${var.region}-01"
+  location  = var.location
+  tags      = merge(local.tags_common, local.dev_only_tags, { layer = local.rg_layer_by_key["dev"] })
+}
+
+module "rg_qa" {
+  count     = local.is_qa ? 1 : 0
+  source    = "../../modules/resource-group"
+  name      = "rg-${var.product}-${var.env}-${var.region}-01"
+  location  = var.location
+  tags      = merge(local.tags_common, local.qa_only_tags, { layer = local.rg_layer_by_key["qa"] })
+}
+
+module "rg_prod" {
+  count     = local.is_prod ? 1 : 0
+  source    = "../../modules/resource-group"
+  name      = "rg-${var.product}-${var.env}-${var.region}-01"
+  location  = var.location
+  tags      = merge(local.tags_common, local.prod_only_tags, { layer = local.rg_layer_by_key["prod"] })
+}
+
+module "rg_uat" {
+  count     = local.is_uat ? 1 : 0
+  source    = "../../modules/resource-group"
+  name      = "rg-${var.product}-${var.env}-${var.region}-01"
+  location  = var.location
+  tags      = merge(local.tags_common, local.uat_only_tags, { layer = local.rg_layer_by_key["uat"] })
+}
+
+data "azurerm_resource_group" "env" {
+  name = var.rg_name
+  depends_on = [
+    module.rg_dev,
+    module.rg_qa,
+    module.rg_uat,
+    module.rg_prod
+  ]
 }
 
 check "gov_region_supported" {
@@ -211,6 +270,8 @@ module "kv1" {
   purge_protection_enabled   = var.purge_protection_enabled
   soft_delete_retention_days = var.soft_delete_retention_days
   tags = merge(local.tags_common, local.tags_kv, var.tags)
+
+  depends_on = [data.azurerm_resource_group.env]
 }
 
 # Storage Account (env)
@@ -235,7 +296,7 @@ module "sa1" {
   file_zone_group_name = "pdns-${local.sa1_name_cleaned}-file"
 
   tags       = merge(local.tags_common, local.tags_sa, var.tags)
-  depends_on = [module.kv1]
+  depends_on = [data.azurerm_resource_group.env, module.kv1]
 }
 
 # Cosmos (NoSQL) (env)
@@ -263,7 +324,7 @@ module "cosmos1" {
     workload_purpose     = "Stores notification_jobs and notification_history"
     workload_description = "Scalable fan-out with dedup via partitioned containers"
   })
-  depends_on = [module.sa1]
+  depends_on = [data.azurerm_resource_group.env, module.sa1]
 }
 
 resource "azurerm_cosmosdb_sql_database" "app" {
@@ -272,7 +333,7 @@ resource "azurerm_cosmosdb_sql_database" "app" {
   resource_group_name = var.rg_name
   account_name        = local.cosmos1_name
   throughput          = 400
-  depends_on          = [module.cosmos1]
+  depends_on          = [data.azurerm_resource_group.env, module.cosmos1]
 }
 
 resource "azurerm_cosmosdb_sql_container" "items" {
@@ -283,7 +344,7 @@ resource "azurerm_cosmosdb_sql_container" "items" {
   database_name         = azurerm_cosmosdb_sql_database.app[0].name
   partition_key_paths   = ["/shard_id"]
   partition_key_version = 2
-  depends_on            = [module.cosmos1]
+  depends_on            = [data.azurerm_resource_group.env, module.cosmos1]
 }
 
 resource "azurerm_cosmosdb_sql_container" "events" {
@@ -294,7 +355,7 @@ resource "azurerm_cosmosdb_sql_container" "events" {
   database_name         = azurerm_cosmosdb_sql_database.app[0].name
   partition_key_paths   = ["/user_id"]
   partition_key_version = 2
-  depends_on            = [module.cosmos1]
+  depends_on            = [data.azurerm_resource_group.env, module.cosmos1]
 }
 
 # AKS (dev in hub; uat/prod in env)
@@ -323,6 +384,7 @@ resource "azurerm_user_assigned_identity" "aks_env" {
   location            = var.location
   resource_group_name = var.rg_name
   tags                = merge(local.tags_common, { purpose = "aks-control-plane-identity" }, var.tags)
+  depends_on          = [data.azurerm_resource_group.env]
 }
 
 resource "azurerm_role_assignment" "aks_pdz_contrib_hub" {
@@ -337,6 +399,7 @@ resource "azurerm_role_assignment" "aks_pdz_contrib_hub" {
       error_message = "AKS PDZ '${local.aks_pdns_name}' not found."
     }
   }
+  depends_on          = [data.azurerm_resource_group.env]
 }
 
 resource "azurerm_role_assignment" "aks_pdz_contrib_env" {
@@ -351,6 +414,7 @@ resource "azurerm_role_assignment" "aks_pdz_contrib_env" {
       error_message = "AKS PDZ '${local.aks_pdns_name}' not found."
     }
   }
+  depends_on          = [data.azurerm_resource_group.env]
 }
 
 module "aks1_hub" {
@@ -405,7 +469,7 @@ module "aks1_env" {
   user_assigned_identity_id = azurerm_user_assigned_identity.aks_env[0].id
 
   tags       = merge(local.tags_common, local.tags_aks, var.tags)
-  depends_on = [azurerm_role_assignment.aks_pdz_contrib_env]
+  depends_on          = [data.azurerm_resource_group.env, azurerm_role_assignment.aks_pdz_contrib_env]
 }
 
 locals {
@@ -470,6 +534,7 @@ module "sbns1" {
     workload_purpose     = "Captures poison messages or failed notifications"
     workload_description = "Durable failure isolation for retry/audit"
   })
+  depends_on  = [data.azurerm_resource_group.env]
 }
 
 # App Service Plan + Function Apps (env)
@@ -482,6 +547,8 @@ module "plan1_func" {
   os_type             = var.asp_os_type
   sku_name            = var.func_linux_plan_sku_name
   tags                = merge(local.tags_common, { component = "app-service-plan", os = "linux" }, var.tags)
+
+  depends_on  = [data.azurerm_resource_group.env]
 }
 
 locals {
@@ -524,6 +591,8 @@ module "funcapp1" {
 
   application_insights_connection_string = local.appi_connection_string
   tags = merge(local.tags_common, { component = "function-app", os = "linux" }, var.tags)
+
+  depends_on  = [data.azurerm_resource_group.env, module.plan1_func, module.sa1]
 }
 
 module "funcapp2" {
@@ -559,6 +628,8 @@ module "funcapp2" {
 
   application_insights_connection_string = local.appi_connection_string
   tags = merge(local.tags_common, { component = "function-app", os = "linux" }, var.tags)
+
+  depends_on  = [data.azurerm_resource_group.env, module.plan1_func, module.sa1, module.funcapp1]
 }
 
 # Event Hubs (env)
@@ -592,7 +663,7 @@ module "eventhub" {
   psc_name                      = local.eh1_psc_name
   pe_zone_group_name            = local.eh1_pdz_group_name
   tags                          = merge(local.tags_common, { component = "event-hubs" }, var.tags)
-  depends_on                    = [module.funcapp2]
+  depends_on                    = [data.azurerm_resource_group.env, module.funcapp2]
 }
 
 module "eventhub_cgs" {
@@ -603,7 +674,7 @@ module "eventhub_cgs" {
   eventhub_name           = module.eventhub[0].eventhub_name
   consumer_group_names    = ["af1-cg", "af2-cg"]
   consumer_group_metadata = { "af1-cg" = "Incident Processor", "af2-cg" = "Location Processor" }
-  depends_on              = [module.eventhub]
+  depends_on              = [data.azurerm_resource_group.env, module.eventhub]
 }
 
 # Cosmos DB for PostgreSQL (Citus) (env)
@@ -642,6 +713,8 @@ module "cdbpg1" {
   coordinator_zone_group_name = "pdns-${local.cdbpg_name_cleaned}-coordinator"
 
   tags = merge(local.tags_common, { component = "cosmosdb-postgresql" }, var.tags)
+
+  depends_on  = [data.azurerm_resource_group.env]
 }
 
 # PostgreSQL Flexible (env)
@@ -681,6 +754,8 @@ module "postgres" {
   enable_postgis = var.pg_enable_postgis
 
   tags = merge(local.tags_common, local.tags_postgres, var.tags, { role = "primary" })
+
+  depends_on  = [data.azurerm_resource_group.env]
 }
 
 module "postgres_replica" {
@@ -704,7 +779,7 @@ module "postgres_replica" {
   source_server_id = module.postgres[0].id
 
   tags       = merge(local.tags_common, local.tags_postgres, var.tags, { role = "replica" })
-  depends_on = [module.postgres]
+  depends_on  = [data.azurerm_resource_group.env, module.postgres]
 }
 
 # Redis (env)
@@ -732,6 +807,8 @@ module "redis1" {
   zone_group_name = "pdns-${local.redis1_name_clean}-cache"
 
   tags = merge(local.tags_common, local.tags_redis, var.tags)
+
+  depends_on  = [data.azurerm_resource_group.env]
 }
 
 # ############################################
