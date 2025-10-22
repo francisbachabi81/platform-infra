@@ -9,6 +9,20 @@ terraform {
   }
 }
 
+locals {
+  dev_sub  = length(trimspace(coalesce(var.dev_subscription_id, "")))  > 0 ? var.dev_subscription_id  : var.hub_subscription_id
+  dev_ten  = length(trimspace(coalesce(var.dev_tenant_id, "")))        > 0 ? var.dev_tenant_id        : var.hub_tenant_id
+
+  qa_sub   = length(trimspace(coalesce(var.qa_subscription_id, "")))   > 0 ? var.qa_subscription_id   : var.hub_subscription_id
+  qa_ten   = length(trimspace(coalesce(var.qa_tenant_id, "")))         > 0 ? var.qa_tenant_id         : var.hub_tenant_id
+
+  uat_sub  = length(trimspace(coalesce(var.uat_subscription_id, "")))  > 0 ? var.uat_subscription_id  : var.hub_subscription_id
+  uat_ten  = length(trimspace(coalesce(var.uat_tenant_id, "")))        > 0 ? var.uat_tenant_id        : var.hub_tenant_id
+
+  prod_sub = length(trimspace(coalesce(var.prod_subscription_id, ""))) > 0 ? var.prod_subscription_id : var.hub_subscription_id
+  prod_ten = length(trimspace(coalesce(var.prod_tenant_id, "")))       > 0 ? var.prod_tenant_id       : var.hub_tenant_id
+}
+
 # Default = HUB subscription
 provider "azurerm" {
   features {}
@@ -17,33 +31,35 @@ provider "azurerm" {
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
-# Per-env aliases (fallback to hub if not provided)
 provider "azurerm" {
-  alias     = "dev"
+  alias    = "dev"
   features {}
-  subscription_id = var.dev_subscription_id != "" ? var.dev_subscription_id : var.hub_subscription_id
-  tenant_id       = var.dev_tenant_id       != "" ? var.dev_tenant_id       : var.hub_tenant_id
+  subscription_id = local.dev_sub
+  tenant_id       = local.dev_ten
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
+
 provider "azurerm" {
-  alias     = "qa"
+  alias    = "qa"
   features {}
-  subscription_id = var.qa_subscription_id != "" ? var.qa_subscription_id : var.hub_subscription_id
-  tenant_id       = var.qa_tenant_id       != "" ? var.qa_tenant_id       : var.hub_tenant_id
+  subscription_id = local.qa_sub
+  tenant_id       = local.qa_ten
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
+
 provider "azurerm" {
-  alias     = "prod"
+  alias    = "uat"
   features {}
-  subscription_id = var.prod_subscription_id != "" ? var.prod_subscription_id : var.hub_subscription_id
-  tenant_id       = var.prod_tenant_id       != "" ? var.prod_tenant_id       : var.hub_tenant_id
+  subscription_id = local.uat_sub
+  tenant_id       = local.uat_ten
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
+
 provider "azurerm" {
-  alias     = "uat"
+  alias    = "prod"
   features {}
-  subscription_id = var.uat_subscription_id != "" ? var.uat_subscription_id : var.hub_subscription_id
-  tenant_id       = var.uat_tenant_id       != "" ? var.uat_tenant_id       : var.hub_tenant_id
+  subscription_id = local.prod_sub
+  tenant_id       = local.prod_ten
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 

@@ -1,6 +1,4 @@
-
 # Core / plane
-
 plane    = "nonprod"                # nonprod | prod
 product  = "pub"                    # hrz | pub
 location = "centralus"              # canonical azurerm region name
