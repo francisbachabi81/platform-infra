@@ -232,6 +232,15 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
+      - name: Show effective TF_VAR_* (masked)
+        shell: bash
+        run: |
+          mask() { v="$1"; echo "${v:0:8}...${v: -6}"; }
+          echo "dev sub:  $(mask "${TF_VAR_dev_subscription_id:-<unset>}")"
+          echo "qa  sub:  $(mask "${TF_VAR_qa_subscription_id:-<unset>}")"
+          echo "uat sub:  $(mask "${TF_VAR_uat_subscription_id:-<unset>}")"
+          echo "prod sub: $(mask "${TF_VAR_prod_subscription_id:-<unset>}")"
+
       - name: Terraform Plan
         if: ${{ !inputs.destroy }}
         run: |
