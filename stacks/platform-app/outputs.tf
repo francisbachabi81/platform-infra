@@ -9,7 +9,7 @@ output "meta" {
     subscription = var.subscription_id
     tenant       = var.tenant_id
     rg_name      = var.rg_name
-    rg_hub       = local.rg_hub
+    # rg_hub       = local.rg_hub
     vnet_key     = local.vnet_key
   }
 }
