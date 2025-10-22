@@ -105,7 +105,10 @@ data "terraform_remote_state" "core" {
 
 # Effective networking + observability inputs
 locals {
-  shared_defaults = { vnets = {}, private_dns_zone_ids_by_name = {} }
+  shared_defaults = {
+    vnets       = {}
+    private_dns = { zone_ids_by_name = {}, zone_ids = {} }
+  }
 
   rs_outputs = merge(
     local.shared_defaults,
@@ -113,7 +116,12 @@ locals {
   )
 
   subnet_ids_from_state = try(local.rs_outputs.vnets[local.vnet_key].subnets, {})
-  zone_ids_from_state   = try(local.rs_outputs.private_dns_zone_ids_by_name, {})
+  # zone_ids_from_state   = try(local.rs_outputs.private_dns_zone_ids_by_name, {})
+  zone_ids_from_state = coalesce(
+    try(local.rs_outputs.private_dns.zone_ids_by_name, null),
+    try(local.rs_outputs.private_dns_zone_ids_by_name,  null), # legacy
+    {}
+  )
 
   zone_ids_effective            = length(var.private_dns_zone_ids) > 0 ? var.private_dns_zone_ids : local.zone_ids_from_state
   pe_subnet_id_effective = (
