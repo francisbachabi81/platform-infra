@@ -35,10 +35,10 @@ locals {
   runtime_tags       = { managed_by = "terraform", deployed_via = "github-actions", layer = "core-resources" }
   tags_common        = merge(local.org_base_tags, local.plane_overlay_tags, local.runtime_tags, var.tags)
 
-  law_name  = "law-${var.product}-${local.plane_code}-${var.region}-01"
-  appi_name = "appi-${var.product}-${local.plane_code}-${var.region}-01"
-  rsv_name  = "rsv-${var.product}-${local.plane_code}-${var.region}-01"
-  rg_name_core = "rg-${var.product}-${local.plane_code}-${var.region}-core-01"
+  law_name      = "law-${var.product}-${local.plane_code}-${var.region}-01"
+  appi_name     = "appi-${var.product}-${local.plane_code}-${var.region}-01"
+  rsv_name      = "rsv-${var.product}-${local.plane_code}-${var.region}-01"
+  rg_name_core  = "rg-${var.product}-${local.plane_code}-${var.region}-core-01"
 
   # choose ONE of these to control scope:
   create_scope_pub  = local.enable_public_features
@@ -133,26 +133,49 @@ data "azurerm_resource_group" "core" {
   name = local.rg_name_core
 }
 
-resource "azurerm_monitor_activity_log_alert" "rg_admin_ops" {
-  name                = "ala-${var.product}-${local.plane_code}-${var.region}-core-admin"
+# Activity Log Alert: RG Write (Create/Update)
+resource "azurerm_monitor_activity_log_alert" "rg_admin_write" {
+  name                = "ala-${var.product}-${local.plane_code}-${var.region}-core-admin-write"
   resource_group_name = local.rg_name_core
   scopes              = [data.azurerm_resource_group.core.id]
-  description         = "Admin ops on core RG"
+  description         = "Admin WRITE ops on core RG"
   enabled             = true
-  location = var.location
+  location            = "Global"
 
   criteria {
     category       = "Administrative"
     resource_group = local.rg_name_core
-    operation_name = [
-      "Microsoft.Resources/subscriptions/resourcegroups/write",
-      "Microsoft.Resources/subscriptions/resourcegroups/delete"
-    ]
-    # you can add more filters like status, caller, etc.
+    operation_name = "Microsoft.Resources/subscriptions/resourcegroups/write"
   }
 
-  action {
-    action_group_id = azurerm_monitor_action_group.core[0].id
+  dynamic "action" {
+    for_each = length(azurerm_monitor_action_group.core) > 0 ? [1] : []
+    content {
+      action_group_id = azurerm_monitor_action_group.core[0].id
+    }
+  }
+}
+
+# Activity Log Alert: RG Delete
+resource "azurerm_monitor_activity_log_alert" "rg_admin_delete" {
+  name                = "ala-${var.product}-${local.plane_code}-${var.region}-core-admin-delete"
+  resource_group_name = local.rg_name_core
+  scopes              = [data.azurerm_resource_group.core.id]
+  description         = "Admin DELETE ops on core RG"
+  enabled             = true
+  location            = "Global"
+
+  criteria {
+    category       = "Administrative"
+    resource_group = local.rg_name_core
+    operation_name = "Microsoft.Resources/subscriptions/resourcegroups/delete"
+  }
+
+  dynamic "action" {
+    for_each = length(azurerm_monitor_action_group.core) > 0 ? [1] : []
+    content {
+      action_group_id = azurerm_monitor_action_group.core[0].id
+    }
   }
 }
 
@@ -175,17 +198,20 @@ resource "azurerm_monitor_metric_alert" "appi_failures" {
     threshold        = 0
   }
 
-  action {
-    action_group_id = azurerm_monitor_action_group.core[0].id
+  dynamic "action" {
+    for_each = length(azurerm_monitor_action_group.core) > 0 ? [1] : []
+    content {
+      action_group_id = azurerm_monitor_action_group.core[0].id
+    }
   }
 }
 
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "heartbeat_missing" {
-  count               = length(azurerm_log_analytics_workspace.plane) > 0 ? 1 : 0
-  name                = "sq-${var.product}-${local.plane_code}-${var.region}-core-heartbeat"
-  resource_group_name = local.rg_name_core
-  location            = var.location
-  enabled             = true
+  count                = length(azurerm_log_analytics_workspace.plane) > 0 ? 1 : 0
+  name                 = "sq-${var.product}-${local.plane_code}-${var.region}-core-heartbeat"
+  resource_group_name  = local.rg_name_core
+  location             = var.location
+  enabled              = true
   evaluation_frequency = "PT5M"
   window_duration      = "PT10M"
   severity             = 2
@@ -197,13 +223,16 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "heartbeat_missing" {
 Heartbeat
 | where TimeGenerated > ago(10m)
 | summarize hb = count()
-    KQL
+KQL
     time_aggregation_method = "Count"
     operator                = "LessThan"
     threshold               = 1
   }
 
-  action {
-    action_groups = [azurerm_monitor_action_group.core[0].id]
+  dynamic "action" {
+    for_each = length(azurerm_monitor_action_group.core) > 0 ? [1] : []
+    content {
+      action_groups = [azurerm_monitor_action_group.core[0].id]
+    }
   }
 }
