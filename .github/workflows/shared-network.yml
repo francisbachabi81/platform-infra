@@ -68,11 +68,8 @@ jobs:
             TENANT="${{ secrets.AZ_TENANT_HRZ }}"
             CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
             AUDIENCE="api://AzureADTokenExchangeUSGov"
-
             # State sub: prefer dedicated, fallback to GOV prod
             STATE_SUB="${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}"
-
-            # Target subscription by plane
             case "$PLANE" in
               nonprod) TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}";;
               prod)    TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}";;
@@ -84,11 +81,8 @@ jobs:
             TENANT="${{ secrets.AZ_TENANT_PUB }}"
             CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
             AUDIENCE="api://AzureADTokenExchange"
-
             # State sub: prefer dedicated, fallback to COMM prod
             STATE_SUB="${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}"
-
-            # Target subscription by plane
             case "$PLANE" in
               nonprod) TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}";;
               prod)    TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}";;
@@ -115,7 +109,7 @@ jobs:
             echo "TF_VAR_product=${{ inputs.product }}"
             # Set env subscription = TARGET_SUB (deployment)
             echo "TF_VAR_subscription_id=$TARGET_SUB"
-            # Default hub_* to TARGET_SUB (caller may override)
+            # Default hub_* to TARGET_SUB (caller can override)
             echo "TF_VAR_hub_tenant_id=$TENANT"
             echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
           } >> $GITHUB_ENV
@@ -145,6 +139,49 @@ jobs:
           echo "STATE_SA=$STATE_SA"               >> "$GITHUB_OUTPUT"
           echo "STATE_CONTAINER=$STATE_CONTAINER" >> "$GITHUB_OUTPUT"
           echo "STATE_KEY=$STATE_KEY"             >> "$GITHUB_OUTPUT"
+
+      # Optional: export overrides / secrets (per-env & hub)
+      - name: Export optional per-env / hub overrides to TF_VAR_*
+        shell: bash
+        env:
+          TENANT: ${{ steps.sel.outputs.TENANT }}
+        run: |
+          set -euo pipefail
+          write_env () {
+            local name="$1"; local value="$2"
+            if [ -n "${value:-}" ]; then
+              {
+                echo "${name}<<EOF"
+                printf '%s\n' "$value"
+                echo "EOF"
+              } >> "$GITHUB_ENV"
+              echo "[export] set ${name}"
+            fi
+          }
+
+          PRODUCT="${{ inputs.product }}"
+
+          if [ "$PRODUCT" = "hrz" ]; then
+            write_env TF_VAR_hub_subscription_id "${{ secrets.HUB_SUB_ID_HRZ }}"
+            write_env TF_VAR_hub_tenant_id       "${{ secrets.HUB_TENANT_ID_HRZ }}"
+            write_env TF_VAR_dev_subscription_id  "${{ secrets.AZ_SUB_HRZ_DEV }}"
+            write_env TF_VAR_qa_subscription_id   "${{ secrets.AZ_SUB_HRZ_QA }}"
+            write_env TF_VAR_uat_subscription_id  "${{ secrets.AZ_SUB_HRZ_UAT }}"
+            write_env TF_VAR_prod_subscription_id "${{ secrets.AZ_SUB_HRZ_PROD }}"
+          else
+            write_env TF_VAR_hub_subscription_id "${{ secrets.HUB_SUB_ID_PUB }}"
+            write_env TF_VAR_hub_tenant_id       "${{ secrets.HUB_TENANT_ID_PUB }}"
+            write_env TF_VAR_dev_subscription_id  "${{ secrets.AZ_SUB_PUB_DEV }}"
+            write_env TF_VAR_qa_subscription_id   "${{ secrets.AZ_SUB_PUB_QA }}"
+            write_env TF_VAR_uat_subscription_id  "${{ secrets.AZ_SUB_PUB_UAT }}"
+            write_env TF_VAR_prod_subscription_id "${{ secrets.AZ_SUB_PUB_PROD }}"
+          fi
+
+          # If you don't have distinct tenants per env, default them to the selected tenant
+          write_env TF_VAR_dev_tenant_id  "${{ secrets.DEV_TENANT_ID || steps.sel.outputs.TENANT }}"
+          write_env TF_VAR_qa_tenant_id   "${{ secrets.QA_TENANT_ID  || steps.sel.outputs.TENANT }}"
+          write_env TF_VAR_uat_tenant_id  "${{ secrets.UAT_TENANT_ID || steps.sel.outputs.TENANT }}"
+          write_env TF_VAR_prod_tenant_id "${{ secrets.PROD_TENANT_ID|| steps.sel.outputs.TENANT }}"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
