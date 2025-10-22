@@ -50,8 +50,7 @@ locals {
   sa1_name  = substr("sa${var.product}${var.env}${var.region}01${local.uniq}", 0, 24)
   aks1_name = "aks-${var.product}-${local.plane_code}-${var.region}-100"
 
-  # Default hub RG name (plane/core)
-  rg_hub_default = "rg-${var.product}-${local.plane_code}-${var.region}-core-01"
+  rg_hub = coalesce(var.rg_plane_name, "rg-${var.product}-${local.plane_code}-${var.region}-core-01")
 
   org_base_tags = {
     product      = var.product
@@ -117,14 +116,14 @@ locals {
   )
 
   subnet_ids_from_state = try(local.rs_outputs.vnets[local.vnet_key].subnets, {})
+  # zone_ids_from_state   = try(local.rs_outputs.private_dns_zone_ids_by_name, {})
   zone_ids_from_state = coalesce(
     try(local.rs_outputs.private_dns.zone_ids_by_name, null),
     try(local.rs_outputs.private_dns_zone_ids_by_name,  null), # legacy
     {}
   )
 
-  zone_ids_effective = length(var.private_dns_zone_ids) > 0 ? var.private_dns_zone_ids : local.zone_ids_from_state
-
+  zone_ids_effective            = length(var.private_dns_zone_ids) > 0 ? var.private_dns_zone_ids : local.zone_ids_from_state
   pe_subnet_id_effective = (
     var.pe_subnet_id != null && trimspace(var.pe_subnet_id) != ""
   ) ? var.pe_subnet_id : try(local.subnet_ids_from_state["privatelink"], null)
@@ -153,8 +152,8 @@ locals {
   core_defaults = { observability = { law_workspace_id = null, appi_connection_string = null } }
   core_outputs  = merge(local.core_defaults, try(data.terraform_remote_state.core[0].outputs, {}))
 
-  law_workspace_id       = var.law_workspace_id_override       != null ? var.law_workspace_id_override       : try(local.core_outputs.observability.law_workspace_id, null)
-  appi_connection_string = var.appi_connection_string_override != null ? var.appi_connection_string_override : try(local.core_outputs.observability.appi_connection_string, null)
+  law_workspace_id        = var.law_workspace_id_override        != null ? var.law_workspace_id_override        : try(local.core_outputs.observability.law_workspace_id, null)
+  appi_connection_string  = var.appi_connection_string_override  != null ? var.appi_connection_string_override  : try(local.core_outputs.observability.appi_connection_string, null)
 
   deploy_aks_in_hub = local.is_dev && local.enable_both && local.create_aks
   deploy_aks_in_env = (local.is_uat || local.is_prod) && local.enable_both && local.create_aks
@@ -175,16 +174,6 @@ locals {
     prod  = "platform-prod"
     uat   = "platform-uat"
   }
-}
-
-# --- Resolve hub RG name from core state (or override), else fallback to default ---
-locals {
-  _core_rg_name_from_state = coalesce(
-    try(data.terraform_remote_state.core[0].outputs.resource_group.name, null),
-    try(data.terraform_remote_state.core[0].outputs.meta.rg_core_name, null)
-  )
-  # If var.rg_plane_name is set, respect it; else use core state value; else default
-  hub_rg_name_effective = coalesce(var.rg_plane_name, local._core_rg_name_from_state, local.rg_hub_default)
 }
 
 module "rg_dev" {
@@ -218,9 +207,6 @@ module "rg_uat" {
   location  = var.location
   tags      = merge(local.tags_common, local.uat_only_tags, { layer = local.rg_layer_by_key["uat"] })
 }
-
-# NOTE: we no longer look up the hub RG via data source to avoid plan failures when it already exists
-# and provider alias/subscription scoping causes transient not-found. We pass the effective name directly.
 
 data "azurerm_resource_group" "env" {
   name = var.rg_name
@@ -387,7 +373,7 @@ resource "azurerm_user_assigned_identity" "aks_hub" {
   provider            = azurerm.hub
   name                = "uai-${var.product}-${local.plane_code}-aks-${var.region}-100"
   location            = var.location
-  resource_group_name = local.hub_rg_name_effective
+  resource_group_name = local.rg_hub
   tags                = merge(local.tags_common, { purpose = "aks-control-plane-identity", layer = "plane-resources" }, var.tags)
 }
 
@@ -413,6 +399,7 @@ resource "azurerm_role_assignment" "aks_pdz_contrib_hub" {
       error_message = "AKS PDZ '${local.aks_pdns_name}' not found."
     }
   }
+  depends_on          = [data.azurerm_resource_group.env]
 }
 
 resource "azurerm_role_assignment" "aks_pdz_contrib_env" {
@@ -427,7 +414,7 @@ resource "azurerm_role_assignment" "aks_pdz_contrib_env" {
       error_message = "AKS PDZ '${local.aks_pdns_name}' not found."
     }
   }
-  depends_on = [data.azurerm_resource_group.env]
+  depends_on          = [data.azurerm_resource_group.env]
 }
 
 module "aks1_hub" {
@@ -437,7 +424,7 @@ module "aks1_hub" {
 
   name                        = local.aks1_name
   location                    = var.location
-  resource_group_name         = local.hub_rg_name_effective
+  resource_group_name         = local.rg_hub
   node_resource_group         = "rg-${var.product}-${local.plane_code}-${var.region}-aksn-01"
   default_nodepool_subnet_id  = local.aks_nodepool_subnet_effective
 
@@ -482,7 +469,7 @@ module "aks1_env" {
   user_assigned_identity_id = azurerm_user_assigned_identity.aks_env[0].id
 
   tags       = merge(local.tags_common, local.tags_aks, var.tags)
-  depends_on = [data.azurerm_resource_group.env, azurerm_role_assignment.aks_pdz_contrib_env]
+  depends_on          = [data.azurerm_resource_group.env, azurerm_role_assignment.aks_pdz_contrib_env]
 }
 
 locals {
@@ -491,9 +478,11 @@ locals {
 }
 
 # Diagnostics (AKS → LA)
+# locals { manage_aks_diag = local.enable_both && local.create_aks && local.aks_id != null && local.law_workspace_id != null }
+
 locals {
-  want_aks_diag = local.create_aks
-  diag_name     = "aks-diag-${var.product}-${local.plane_code}-${var.region}"
+  want_aks_diag = local.create_aks  # plan-known flag
+  diag_name = "aks-diag-${var.product}-${local.plane_code}-${var.region}"
 }
 
 resource "azurerm_monitor_diagnostic_setting" "aks" {
