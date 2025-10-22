@@ -22,6 +22,29 @@ provider "azurerm" {
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
+# --- Hub provider introspection & guardrails ---
+data "azurerm_client_config" "hub" {
+  provider = azurerm.hub
+}
+
+data "azurerm_subscription" "hub" {
+  provider = azurerm.hub
+}
+
+check "hub_provider_points_to_expected_subscription" {
+  assert {
+    condition = (
+      var.hub_subscription_id == null ||
+      lower(data.azurerm_subscription.hub.subscription_id) == lower(var.hub_subscription_id)
+    )
+    error_message = format(
+      "azurerm.hub provider subscription mismatch. Provider is '%s' but hub_subscription_id is '%s'.",
+      data.azurerm_subscription.hub.subscription_id,
+      coalesce(var.hub_subscription_id, "<unset>")
+    )
+  }
+}
+
 # Env flags, naming, tags
 locals {
   enable_public_features = var.product == "pub"
@@ -50,6 +73,7 @@ locals {
   sa1_name  = substr("sa${var.product}${var.env}${var.region}01${local.uniq}", 0, 24)
   aks1_name = "aks-${var.product}-${local.plane_code}-${var.region}-100"
 
+  # Default (fallback) hub RG name if core state doesn't provide one
   rg_hub = coalesce(var.rg_plane_name, "rg-${var.product}-${local.plane_code}-${var.region}-core-01")
 
   org_base_tags = {
@@ -116,14 +140,13 @@ locals {
   )
 
   subnet_ids_from_state = try(local.rs_outputs.vnets[local.vnet_key].subnets, {})
-  # zone_ids_from_state   = try(local.rs_outputs.private_dns_zone_ids_by_name, {})
   zone_ids_from_state = coalesce(
     try(local.rs_outputs.private_dns.zone_ids_by_name, null),
     try(local.rs_outputs.private_dns_zone_ids_by_name,  null), # legacy
     {}
   )
 
-  zone_ids_effective            = length(var.private_dns_zone_ids) > 0 ? var.private_dns_zone_ids : local.zone_ids_from_state
+  zone_ids_effective = length(var.private_dns_zone_ids) > 0 ? var.private_dns_zone_ids : local.zone_ids_from_state
   pe_subnet_id_effective = (
     var.pe_subnet_id != null && trimspace(var.pe_subnet_id) != ""
   ) ? var.pe_subnet_id : try(local.subnet_ids_from_state["privatelink"], null)
@@ -136,8 +159,8 @@ locals {
   _reg_lower = lower(var.region)
 
   aks_gov_region_by_code = { usaz = "usgovarizona", usva = "usgovvirginia" }
-  _is_az = length(regexall("arizona",  local._loc_lower))  > 0
-  _is_va = length(regexall("virginia", local._loc_lower))  > 0
+  _is_az = length(regexall("arizona",  local._loc_lower)) > 0
+  _is_va = length(regexall("virginia", local._loc_lower)) > 0
 
   aks_region_token = local.enable_hrz_features ? coalesce(
     lookup(local.aks_gov_region_by_code, local._reg_lower, null),
@@ -152,8 +175,8 @@ locals {
   core_defaults = { observability = { law_workspace_id = null, appi_connection_string = null } }
   core_outputs  = merge(local.core_defaults, try(data.terraform_remote_state.core[0].outputs, {}))
 
-  law_workspace_id        = var.law_workspace_id_override        != null ? var.law_workspace_id_override        : try(local.core_outputs.observability.law_workspace_id, null)
-  appi_connection_string  = var.appi_connection_string_override  != null ? var.appi_connection_string_override  : try(local.core_outputs.observability.appi_connection_string, null)
+  law_workspace_id       = var.law_workspace_id_override       != null ? var.law_workspace_id_override       : try(local.core_outputs.observability.law_workspace_id, null)
+  appi_connection_string = var.appi_connection_string_override != null ? var.appi_connection_string_override : try(local.core_outputs.observability.appi_connection_string, null)
 
   deploy_aks_in_hub = local.is_dev && local.enable_both && local.create_aks
   deploy_aks_in_env = (local.is_uat || local.is_prod) && local.enable_both && local.create_aks
@@ -174,6 +197,29 @@ locals {
     prod  = "platform-prod"
     uat   = "platform-uat"
   }
+}
+
+# --- Resolve hub RG from core state (if provided), else fallback to derived name ---
+locals {
+  _core_rg_name_from_state = coalesce(
+    try(data.terraform_remote_state.core[0].outputs.resource_group.name, null),
+    try(data.terraform_remote_state.core[0].outputs.meta.rg_core_name, null)
+  )
+  _core_rg_id_from_state = try(
+    data.terraform_remote_state.core[0].outputs.resource_group.id,
+    null
+  )
+
+  hub_rg_name_effective = coalesce(local._core_rg_name_from_state, local.rg_hub)
+
+  hub_rg_id_effective = coalesce(
+    local._core_rg_id_from_state,
+    format(
+      "/subscriptions/%s/resourceGroups/%s",
+      data.azurerm_subscription.hub.subscription_id,
+      local.hub_rg_name_effective
+    )
+  )
 }
 
 module "rg_dev" {
@@ -212,7 +258,7 @@ module "rg_uat" {
 data "azurerm_resource_group" "hub" {
   count    = local.deploy_aks_in_hub ? 1 : 0
   provider = azurerm.hub
-  name     = local.rg_hub
+  name     = local.hub_rg_name_effective
 }
 
 data "azurerm_resource_group" "env" {
@@ -251,6 +297,19 @@ check "aks_pdz_exists" {
   assert {
     condition     = !local.create_aks || try(local.zone_ids_effective[local.aks_pdns_name], null) != null
     error_message = "AKS PDZ '${local.aks_pdns_name}' not found."
+  }
+}
+
+# Extra: ensure the hub RG is in the hub provider's subscription (clear failure message)
+check "hub_rg_found_in_hub_subscription" {
+  assert {
+    condition = !local.deploy_aks_in_hub || length(data.azurerm_resource_group.hub) == 1
+    error_message = format(
+      "Hub RG '%s' not found in subscription '%s' (tenant '%s') used by azurerm.hub provider.",
+      local.hub_rg_name_effective,
+      data.azurerm_subscription.hub.subscription_id,
+      data.azurerm_client_config.hub.tenant_id
+    )
   }
 }
 
@@ -423,7 +482,7 @@ resource "azurerm_role_assignment" "aks_pdz_contrib_env" {
       error_message = "AKS PDZ '${local.aks_pdns_name}' not found."
     }
   }
-  depends_on          = [data.azurerm_resource_group.env]
+  depends_on = [data.azurerm_resource_group.env]
 }
 
 module "aks1_hub" {
@@ -482,7 +541,7 @@ module "aks1_env" {
   user_assigned_identity_id = azurerm_user_assigned_identity.aks_env[0].id
 
   tags       = merge(local.tags_common, local.tags_aks, var.tags)
-  depends_on          = [data.azurerm_resource_group.env, azurerm_role_assignment.aks_pdz_contrib_env]
+  depends_on = [data.azurerm_resource_group.env, azurerm_role_assignment.aks_pdz_contrib_env]
 }
 
 locals {
@@ -491,11 +550,9 @@ locals {
 }
 
 # Diagnostics (AKS → LA)
-# locals { manage_aks_diag = local.enable_both && local.create_aks && local.aks_id != null && local.law_workspace_id != null }
-
 locals {
   want_aks_diag = local.create_aks  # plan-known flag
-  diag_name = "aks-diag-${var.product}-${local.plane_code}-${var.region}"
+  diag_name     = "aks-diag-${var.product}-${local.plane_code}-${var.region}"
 }
 
 resource "azurerm_monitor_diagnostic_setting" "aks" {
@@ -547,7 +604,7 @@ module "sbns1" {
     workload_purpose     = "Captures poison messages or failed notifications"
     workload_description = "Durable failure isolation for retry/audit"
   })
-  depends_on  = [data.azurerm_resource_group.env]
+  depends_on = [data.azurerm_resource_group.env]
 }
 
 # App Service Plan + Function Apps (env)
@@ -561,7 +618,7 @@ module "plan1_func" {
   sku_name            = var.func_linux_plan_sku_name
   tags                = merge(local.tags_common, { component = "app-service-plan", os = "linux" }, var.tags)
 
-  depends_on  = [data.azurerm_resource_group.env]
+  depends_on = [data.azurerm_resource_group.env]
 }
 
 locals {
@@ -605,7 +662,7 @@ module "funcapp1" {
   application_insights_connection_string = local.appi_connection_string
   tags = merge(local.tags_common, { component = "function-app", os = "linux" }, var.tags)
 
-  depends_on  = [data.azurerm_resource_group.env, module.plan1_func, module.sa1]
+  depends_on = [data.azurerm_resource_group.env, module.plan1_func, module.sa1]
 }
 
 module "funcapp2" {
@@ -642,7 +699,7 @@ module "funcapp2" {
   application_insights_connection_string = local.appi_connection_string
   tags = merge(local.tags_common, { component = "function-app", os = "linux" }, var.tags)
 
-  depends_on  = [data.azurerm_resource_group.env, module.plan1_func, module.sa1, module.funcapp1]
+  depends_on = [data.azurerm_resource_group.env, module.plan1_func, module.sa1, module.funcapp1]
 }
 
 # Event Hubs (env)
@@ -727,7 +784,7 @@ module "cdbpg1" {
 
   tags = merge(local.tags_common, { component = "cosmosdb-postgresql" }, var.tags)
 
-  depends_on  = [data.azurerm_resource_group.env]
+  depends_on = [data.azurerm_resource_group.env]
 }
 
 # PostgreSQL Flexible (env)
@@ -768,7 +825,7 @@ module "postgres" {
 
   tags = merge(local.tags_common, local.tags_postgres, var.tags, { role = "primary" })
 
-  depends_on  = [data.azurerm_resource_group.env]
+  depends_on = [data.azurerm_resource_group.env]
 }
 
 module "postgres_replica" {
@@ -791,8 +848,8 @@ module "postgres_replica" {
   replica_enabled  = true
   source_server_id = module.postgres[0].id
 
-  tags       = merge(local.tags_common, local.tags_postgres, var.tags, { role = "replica" })
-  depends_on  = [data.azurerm_resource_group.env, module.postgres]
+  tags      = merge(local.tags_common, local.tags_postgres, var.tags, { role = "replica" })
+  depends_on = [data.azurerm_resource_group.env, module.postgres]
 }
 
 # Redis (env)
@@ -821,7 +878,7 @@ module "redis1" {
 
   tags = merge(local.tags_common, local.tags_redis, var.tags)
 
-  depends_on  = [data.azurerm_resource_group.env]
+  depends_on = [data.azurerm_resource_group.env]
 }
 
 # ############################################
@@ -831,7 +888,6 @@ module "redis1" {
 #   is_dev_or_qa   = local.is_dev || local.is_qa
 #   env_to_rg      = { dev = "rg-${var.product}-dev-cus-01", qa = "rg-${var.product}-qa-cus-01" }
 #   target_rg_name = local.is_dev ? local.env_to_rg.dev : local.is_qa ? local.env_to_rg.qa : null
-#
 #   dev_team_principals = ["e7d56a14-7c2d-4802-827b-bc81db286bf0"]
 #   qa_team_principals  = ["e7d56a14-7c2d-4802-827b-bc81db286bf0"]
 #   team_principals     = local.is_dev ? local.dev_team_principals : local.is_qa ? local.qa_team_principals : []
