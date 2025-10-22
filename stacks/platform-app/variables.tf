@@ -473,12 +473,14 @@ variable "hub_subscription_id" {
   description = "override hub subscription id"
   type        = string
   default     = null
+  ephemeral   = true
 }
 
 variable "hub_tenant_id" {
   description = "override hub tenant id"
   type        = string
   default     = null
+  ephemeral   = true
 }
 
 # optional per-env overrides
@@ -486,48 +488,56 @@ variable "dev_subscription_id" {
   description = "dev subscription override"
   type        = string
   default     = null
+  ephemeral   = true
 }
 
 variable "dev_tenant_id" {
   description = "dev tenant override"
   type        = string
   default     = null
+  ephemeral   = true
 }
 
 variable "qa_subscription_id" {
   description = "qa subscription override"
   type        = string
   default     = null
+  ephemeral   = true
 }
 
 variable "qa_tenant_id" {
   description = "qa tenant override"
   type        = string
   default     = null
+  ephemeral   = true
 }
 
 variable "uat_subscription_id" {
   description = "uat subscription override"
   type        = string
   default     = null
+  ephemeral   = true
 }
 
 variable "uat_tenant_id" {
   description = "uat tenant override"
   type        = string
   default     = null
+  ephemeral   = true
 }
 
 variable "prod_subscription_id" {
   description = "prod subscription override"
   type        = string
   default     = null
+  ephemeral   = true
 }
 
 variable "prod_tenant_id" {
   description = "prod tenant override"
   type        = string
   default     = null
+  ephemeral   = true
 }
 
 # overrides to bypass core state for observability
