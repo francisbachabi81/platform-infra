@@ -68,9 +68,11 @@ jobs:
             TENANT="${{ secrets.AZ_TENANT_HRZ }}"
             CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
             AUDIENCE="api://AzureADTokenExchangeUSGov"
-            # --- state always in GOV PROD sub ---
-            STATE_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}"
-            # --- target subscription by plane ---
+
+            # State sub: prefer dedicated, fallback to GOV prod
+            STATE_SUB="${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}"
+
+            # Target subscription by plane
             case "$PLANE" in
               nonprod) TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}";;
               prod)    TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}";;
@@ -82,9 +84,11 @@ jobs:
             TENANT="${{ secrets.AZ_TENANT_PUB }}"
             CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
             AUDIENCE="api://AzureADTokenExchange"
-            # --- state always in COMMERCIAL PROD sub ---
-            STATE_SUB="${{ secrets.AZ_SUB_PUB_PROD }}"
-            # --- target subscription by plane ---
+
+            # State sub: prefer dedicated, fallback to COMM prod
+            STATE_SUB="${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}"
+
+            # Target subscription by plane
             case "$PLANE" in
               nonprod) TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}";;
               prod)    TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}";;
@@ -137,10 +141,10 @@ jobs:
           STATE_CONTAINER="tfstate"
           STATE_KEY="shared-network/${PRODUCT}/${PLANE}/terraform.tfstate"
 
-          echo "STATE_RG=$STATE_RG"             >> "$GITHUB_OUTPUT"
-          echo "STATE_SA=$STATE_SA"             >> "$GITHUB_OUTPUT"
+          echo "STATE_RG=$STATE_RG"               >> "$GITHUB_OUTPUT"
+          echo "STATE_SA=$STATE_SA"               >> "$GITHUB_OUTPUT"
           echo "STATE_CONTAINER=$STATE_CONTAINER" >> "$GITHUB_OUTPUT"
-          echo "STATE_KEY=$STATE_KEY"           >> "$GITHUB_OUTPUT"
+          echo "STATE_KEY=$STATE_KEY"             >> "$GITHUB_OUTPUT"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
