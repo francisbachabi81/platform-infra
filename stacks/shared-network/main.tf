@@ -9,6 +9,7 @@ terraform {
   }
 }
 
+# Per-env subscription/tenant fallbacks (prefer explicit IDs, else hub)
 locals {
   dev_sub  = (var.dev_subscription_id  != null && trimspace(var.dev_subscription_id)  != "") ? var.dev_subscription_id  : var.hub_subscription_id
   dev_ten  = (var.dev_tenant_id        != null && trimspace(var.dev_tenant_id)        != "") ? var.dev_tenant_id        : var.hub_tenant_id
@@ -31,6 +32,7 @@ provider "azurerm" {
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
+# Per-env aliases (each can be pointed to distinct subs/tenants)
 provider "azurerm" {
   alias    = "dev"
   features {}
@@ -38,7 +40,6 @@ provider "azurerm" {
   tenant_id       = local.dev_ten
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
-
 provider "azurerm" {
   alias    = "qa"
   features {}
@@ -46,7 +47,6 @@ provider "azurerm" {
   tenant_id       = local.qa_ten
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
-
 provider "azurerm" {
   alias    = "uat"
   features {}
@@ -54,7 +54,6 @@ provider "azurerm" {
   tenant_id       = local.uat_ten
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
-
 provider "azurerm" {
   alias    = "prod"
   features {}
@@ -290,7 +289,7 @@ resource "azurerm_virtual_network_peering" "hub_to_dev" {
   allow_gateway_transit         = true
   allow_forwarded_traffic       = true
   use_remote_gateways           = false
-  depends_on                    = [module.vpng] # critical
+  depends_on                    = [module.vpng]
 }
 
 resource "azurerm_virtual_network_peering" "dev_to_hub" {
@@ -315,7 +314,7 @@ resource "azurerm_virtual_network_peering" "hub_to_qa" {
   allow_gateway_transit         = true
   allow_forwarded_traffic       = true
   use_remote_gateways           = false
-  depends_on                    = [module.vpng] # critical
+  depends_on                    = [module.vpng]
 }
 
 resource "azurerm_virtual_network_peering" "qa_to_hub" {
@@ -340,7 +339,7 @@ resource "azurerm_virtual_network_peering" "hub_to_prod" {
   allow_gateway_transit         = true
   allow_forwarded_traffic       = true
   use_remote_gateways           = false
-  depends_on                    = [module.vpng] # critical
+  depends_on                    = [module.vpng]
 }
 
 resource "azurerm_virtual_network_peering" "prod_to_hub" {
@@ -365,7 +364,7 @@ resource "azurerm_virtual_network_peering" "hub_to_uat" {
   allow_gateway_transit         = true
   allow_forwarded_traffic       = true
   use_remote_gateways           = false
-  depends_on                    = [module.vpng] # critical
+  depends_on                    = [module.vpng]
 }
 
 resource "azurerm_virtual_network_peering" "uat_to_hub" {
@@ -463,7 +462,7 @@ resource "azurerm_public_ip" "vpngw" {
     service = "connectivity"
     lane    = local.lane
   })
-  depends_on = [module.rg_hub] # keep RG creation edge only
+  depends_on = [module.rg_hub]
 }
 
 module "vpng" {
@@ -483,7 +482,10 @@ module "vpng" {
     service = "connectivity"
     lane    = local.lane
   })
-  depends_on = [module.vnet_hub, module.nsg] # ensure GatewaySubnet exists
+  depends_on = [
+    module.vnet_hub,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 # ── ingress: waf & appgw ──────────────────────────────────────────────────────
@@ -529,7 +531,6 @@ resource "azurerm_network_security_rule" "appgw_allow_gwmgr" {
   network_security_group_name = azurerm_network_security_group.appgw_nsg[0].name
 }
 
-# Only if public listeners are enabled:
 resource "azurerm_network_security_rule" "appgw_allow_https_public" {
   count                       = local.appgw_enabled && var.appgw_public_ip_enabled ? 1 : 0
   name                        = "allow-https-from-internet"
@@ -592,11 +593,12 @@ module "appgw" {
 # ── generic nsgs (except excluded) ────────────────────────────────────────────
 locals {
   _np_hub_subnet_names  = local.is_nonprod ? keys(var.nonprod_hub.subnets) : []
-  _np_dev_subnet_names  = local.is_nonprod ? keys(var.dev_spoke.subnets) : []
-  _np_qa_subnet_names   = local.is_nonprod ? keys(var.qa_spoke.subnets) : []
-  _pr_hub_subnet_names  = local.is_prod ? keys(var.prod_hub.subnets) : []
+  _np_dev_subnet_names  = local.is_nonprod ? keys(var.dev_spoke.subnets)   : []
+  _np_qa_subnet_names   = local.is_nonprod ? keys(var.qa_spoke.subnets)    : []
+
+  _pr_hub_subnet_names  = local.is_prod ? keys(var.prod_hub.subnets)  : []
   _pr_prod_subnet_names = local.is_prod ? keys(var.prod_spoke.subnets) : []
-  _pr_uat_subnet_names  = local.is_prod ? keys(var.uat_spoke.subnets) : []
+  _pr_uat_subnet_names  = local.is_prod ? keys(var.uat_spoke.subnets)  : []
 
   _exclude = concat(var.nsg_exclude_subnets, ["appgw", "GatewaySubnet"])
 
@@ -627,33 +629,105 @@ locals {
     )
   }
 
+  # Which RG each NSG lives in (same sub/RG as the target subnet/vnet)
+  nsg_rg_by_key = {
+    for k in local.nsg_keys :
+    k => (
+      can(regex("^hub-",  k)) ? (local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg) :
+      can(regex("^dev-",  k)) ? var.dev_spoke.rg  :
+      can(regex("^qa-",   k)) ? var.qa_spoke.rg   :
+      can(regex("^prod-", k)) ? var.prod_spoke.rg :
+      can(regex("^uat-",  k)) ? var.uat_spoke.rg  :
+      (local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg)
+    )
+  }
+
+  # NSG inputs for module(s)
   subnet_nsgs_all = {
     for k in local.nsg_keys :
     k => { name = local.nsg_name_by_key[k], subnet_id = local.subnet_id_by_key[k] }
   }
+
+  nsgs_hub  = { for k, v in local.subnet_nsgs_all : k => v if can(regex("^hub-",  k)) }
+  nsgs_dev  = { for k, v in local.subnet_nsgs_all : k => v if can(regex("^dev-",  k)) }
+  nsgs_qa   = { for k, v in local.subnet_nsgs_all : k => v if can(regex("^qa-",   k)) }
+  nsgs_prod = { for k, v in local.subnet_nsgs_all : k => v if can(regex("^prod-", k)) }
+  nsgs_uat  = { for k, v in local.subnet_nsgs_all : k => v if can(regex("^uat-",  k)) }
 }
 
-module "nsg" {
+# Create NSGs per subscription (so associations are sub-local)
+module "nsg_hub" {
   source              = "../../modules/network/nsg"
   location            = var.location
   resource_group_name = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
-  subnet_nsgs         = local.subnet_nsgs_all
+  subnet_nsgs         = local.nsgs_hub
   tags                = merge(local.tag_base, { lane = local.lane })
-  # implicit deps via subnet IDs are sufficient
+}
+
+module "nsg_dev" {
+  count               = local.is_nonprod ? 1 : 0
+  providers           = { azurerm = azurerm.dev }
+  source              = "../../modules/network/nsg"
+  location            = var.location
+  resource_group_name = var.dev_spoke.rg
+  subnet_nsgs         = local.nsgs_dev
+  tags                = merge(local.tag_base, local.dev_only_tags, { lane = "nonprod" })
+}
+
+module "nsg_qa" {
+  count               = local.is_nonprod ? 1 : 0
+  providers           = { azurerm = azurerm.qa }
+  source              = "../../modules/network/nsg"
+  location            = var.location
+  resource_group_name = var.qa_spoke.rg
+  subnet_nsgs         = local.nsgs_qa
+  tags                = merge(local.tag_base, local.qa_only_tags, { lane = "nonprod" })
+}
+
+module "nsg_prod" {
+  count               = local.is_prod ? 1 : 0
+  providers           = { azurerm = azurerm.prod }
+  source              = "../../modules/network/nsg"
+  location            = var.location
+  resource_group_name = var.prod_spoke.rg
+  subnet_nsgs         = local.nsgs_prod
+  tags                = merge(local.tag_base, local.prod_only_tags, { lane = "prod" })
+}
+
+module "nsg_uat" {
+  count               = local.is_prod ? 1 : 0
+  providers           = { azurerm = azurerm.uat }
+  source              = "../../modules/network/nsg"
+  location            = var.location
+  resource_group_name = var.uat_spoke.rg
+  subnet_nsgs         = local.nsgs_uat
+  tags                = merge(local.tag_base, local.uat_only_tags, { lane = "prod" })
 }
 
 # ── nsg rules: isolation & baseline ───────────────────────────────────────────
 locals {
-  all_plane_nsg_targets = {
+  # Build structured targets { name, rg } so rules are created in correct RG/sub
+  all_plane_nsg_targets_struct = {
     for k in local.nsg_keys :
-    k => local.nsg_name_by_key[k]
+    k => { name = local.nsg_name_by_key[k], rg = local.nsg_rg_by_key[k] }
     if !can(regex("privatelink", k)) && !can(regex("-appgw$", k))
   }
 
-  dev_nsg_targets_np  = local.is_nonprod ? { for k in local.nsg_keys : k => local.nsg_name_by_key[k] if can(regex("^dev-",  k)) } : {}
-  qa_nsg_targets_np   = local.is_nonprod ? { for k in local.nsg_keys : k => local.nsg_name_by_key[k] if can(regex("^qa-",   k)) } : {}
-  prod_nsg_targets_pr = local.is_prod    ? { for k in local.nsg_keys : k => local.nsg_name_by_key[k] if can(regex("^prod-", k)) } : {}
-  uat_nsg_targets_pr  = local.is_prod    ? { for k in local.nsg_keys : k => local.nsg_name_by_key[k] if can(regex("^uat-",  k)) } : {}
+  dev_nsg_targets_np_struct  = local.is_nonprod ? {
+    for k in local.nsg_keys : k => { name = local.nsg_name_by_key[k], rg = local.nsg_rg_by_key[k] } if can(regex("^dev-",  k))
+  } : {}
+
+  qa_nsg_targets_np_struct   = local.is_nonprod ? {
+    for k in local.nsg_keys : k => { name = local.nsg_name_by_key[k], rg = local.nsg_rg_by_key[k] } if can(regex("^qa-",   k))
+  } : {}
+
+  prod_nsg_targets_pr_struct = local.is_prod ? {
+    for k in local.nsg_keys : k => { name = local.nsg_name_by_key[k], rg = local.nsg_rg_by_key[k] } if can(regex("^prod-", k))
+  } : {}
+
+  uat_nsg_targets_pr_struct  = local.is_prod ? {
+    for k in local.nsg_keys : k => { name = local.nsg_name_by_key[k], rg = local.nsg_rg_by_key[k] } if can(regex("^uat-",  k))
+  } : {}
 
   dev_vnet_cidr  = local.is_nonprod ? lookup(var.dev_spoke,  "cidrs", ["0.0.0.0/32"])[0] : null
   qa_vnet_cidr   = local.is_nonprod ? lookup(var.qa_spoke,   "cidrs", ["0.0.0.0/32"])[0] : null
@@ -662,7 +736,7 @@ locals {
 }
 
 resource "azurerm_network_security_rule" "deny_all_to_internet" {
-  for_each                    = local.all_plane_nsg_targets
+  for_each                    = local.all_plane_nsg_targets_struct
   name                        = "deny-to-internet"
   priority                    = 3900
   direction                   = "Outbound"
@@ -672,13 +746,15 @@ resource "azurerm_network_security_rule" "deny_all_to_internet" {
   destination_port_range      = "*"
   source_address_prefix       = "*"
   destination_address_prefix  = "Internet"
-  resource_group_name         = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
-  network_security_group_name = each.value
-  depends_on                  = [module.nsg]
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on = [
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "deny_dev_to_qa_np" {
-  for_each                    = local.dev_nsg_targets_np
+  for_each                    = local.dev_nsg_targets_np_struct
   name                        = "deny-to-qa"
   priority                    = 4000
   direction                   = "Outbound"
@@ -688,13 +764,13 @@ resource "azurerm_network_security_rule" "deny_dev_to_qa_np" {
   destination_port_range      = "*"
   source_address_prefix       = "*"
   destination_address_prefix  = local.qa_vnet_cidr
-  resource_group_name         = var.nonprod_hub.rg
-  network_security_group_name = each.value
-  depends_on                  = [module.nsg]
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on = [module.nsg_hub, module.nsg_dev, module.nsg_qa]
 }
 
 resource "azurerm_network_security_rule" "deny_qa_to_dev_np" {
-  for_each                    = local.qa_nsg_targets_np
+  for_each                    = local.qa_nsg_targets_np_struct
   name                        = "deny-to-dev"
   priority                    = 4000
   direction                   = "Outbound"
@@ -704,13 +780,13 @@ resource "azurerm_network_security_rule" "deny_qa_to_dev_np" {
   destination_port_range      = "*"
   source_address_prefix       = "*"
   destination_address_prefix  = local.dev_vnet_cidr
-  resource_group_name         = var.nonprod_hub.rg
-  network_security_group_name = each.value
-  depends_on                  = [module.nsg]
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on = [module.nsg_hub, module.nsg_dev, module.nsg_qa]
 }
 
 resource "azurerm_network_security_rule" "deny_prod_to_uat_pr" {
-  for_each                    = local.prod_nsg_targets_pr
+  for_each                    = local.prod_nsg_targets_pr_struct
   name                        = "deny-to-uat"
   priority                    = 4000
   direction                   = "Outbound"
@@ -720,13 +796,13 @@ resource "azurerm_network_security_rule" "deny_prod_to_uat_pr" {
   destination_port_range      = "*"
   source_address_prefix       = "*"
   destination_address_prefix  = local.uat_vnet_cidr
-  resource_group_name         = var.prod_hub.rg
-  network_security_group_name = each.value
-  depends_on                  = [module.nsg]
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on = [module.nsg_hub, module.nsg_prod, module.nsg_uat]
 }
 
 resource "azurerm_network_security_rule" "deny_uat_to_prod_pr" {
-  for_each                    = local.uat_nsg_targets_pr
+  for_each                    = local.uat_nsg_targets_pr_struct
   name                        = "deny-to-prod"
   priority                    = 4000
   direction                   = "Outbound"
@@ -736,9 +812,9 @@ resource "azurerm_network_security_rule" "deny_uat_to_prod_pr" {
   destination_port_range      = "*"
   source_address_prefix       = "*"
   destination_address_prefix  = local.prod_vnet_cidr
-  resource_group_name         = var.prod_hub.rg
-  network_security_group_name = each.value
-  depends_on                  = [module.nsg]
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on = [module.nsg_hub, module.nsg_prod, module.nsg_uat]
 }
 
 # ── baseline egress on workload nsgs ──────────────────────────────────────────
@@ -747,20 +823,21 @@ locals {
     for k in local.nsg_keys :
     k => {
       nsg_name    = local.nsg_name_by_key[k]
+      nsg_rg      = local.nsg_rg_by_key[k]
       subnet_key  = k
       subnet_name = element(split("-", k), length(split("-", k)) - 1)
     }
   }
 
-  workload_nsg_targets = {
+  workload_nsg_targets_struct = {
     for k, v in local._workload_pairs :
-    k => v.nsg_name
+    k => { name = v.nsg_name, rg = v.nsg_rg }
     if !contains(var.nsg_exclude_subnets, v.subnet_name) && !can(regex("privatelink", k))
   }
 }
 
 resource "azurerm_network_security_rule" "allow_dns_to_azure" {
-  for_each                    = local.workload_nsg_targets
+  for_each                    = local.workload_nsg_targets_struct
   name                        = "allow-dns-azure"
   priority                    = 300
   direction                   = "Outbound"
@@ -770,13 +847,15 @@ resource "azurerm_network_security_rule" "allow_dns_to_azure" {
   destination_port_ranges     = ["53"]
   source_address_prefix       = "*"
   destination_address_prefix  = "168.63.129.16"
-  resource_group_name         = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
-  network_security_group_name = each.value
-  depends_on                  = [module.nsg]
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on = [
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "allow_ntp_to_azure" {
-  for_each                    = local.workload_nsg_targets
+  for_each                    = local.workload_nsg_targets_struct
   name                        = "allow-ntp-azure"
   priority                    = 305
   direction                   = "Outbound"
@@ -786,13 +865,15 @@ resource "azurerm_network_security_rule" "allow_ntp_to_azure" {
   destination_port_range      = "123"
   source_address_prefix       = "*"
   destination_address_prefix  = "168.63.129.16"
-  resource_group_name         = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
-  network_security_group_name = each.value
-  depends_on                  = [module.nsg]
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on = [
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "allow_storage_egress" {
-  for_each                    = local.workload_nsg_targets
+  for_each                    = local.workload_nsg_targets_struct
   name                        = "allow-storage-egress"
   priority                    = 330
   direction                   = "Outbound"
@@ -802,13 +883,15 @@ resource "azurerm_network_security_rule" "allow_storage_egress" {
   destination_port_range      = "443"
   source_address_prefix       = "*"
   destination_address_prefix  = "Storage"
-  resource_group_name         = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
-  network_security_group_name = each.value
-  depends_on                  = [module.nsg]
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on = [
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "allow_azuremonitor_egress" {
-  for_each                    = local.workload_nsg_targets
+  for_each                    = local.workload_nsg_targets_struct
   name                        = "allow-azuremonitor-egress"
   priority                    = 335
   direction                   = "Outbound"
@@ -818,9 +901,11 @@ resource "azurerm_network_security_rule" "allow_azuremonitor_egress" {
   destination_port_range      = "443"
   source_address_prefix       = "*"
   destination_address_prefix  = "AzureMonitor"
-  resource_group_name         = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
-  network_security_group_name = each.value
-  depends_on                  = [module.nsg]
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on = [
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 # ── pep rules (private endpoints allow/deny) ──────────────────────────────────
@@ -860,14 +945,14 @@ locals {
     for k, role in local._pe_role_by_key :
     k => {
       nsg_name = local.nsg_name_by_key[k]
+      nsg_rg   = local.nsg_rg_by_key[k]
       prefixes = lookup(local._lane_prefixes, role, [])
     }
   }
 
   pe_rules_allow_nonempty = {
     for k, v in local.pe_rules_planemap :
-    k => v
-    if length(v.prefixes) > 0 && v.nsg_name != null
+    k => v if length(v.prefixes) > 0 && v.nsg_name != null
   }
 
   lane_all_cidrs = compact(local.is_nonprod
@@ -879,6 +964,7 @@ locals {
     for k, v in local.pe_rules_allow_nonempty :
     k => {
       nsg_name      = v.nsg_name
+      nsg_rg        = v.nsg_rg
       deny_prefixes = [for c in local.lane_all_cidrs : c if !contains(v.prefixes, c)]
     }
     if length([for c in local.lane_all_cidrs : c if !contains(v.prefixes, c)]) > 0
@@ -896,9 +982,11 @@ resource "azurerm_network_security_rule" "pe_allow_lane_producers" {
   destination_port_range      = "*"
   source_address_prefixes     = each.value.prefixes
   destination_address_prefix  = "*"
-  resource_group_name         = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
+  resource_group_name         = each.value.nsg_rg
   network_security_group_name = each.value.nsg_name
-  depends_on                  = [module.nsg]
+  depends_on = [
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "pe_deny_other_vnets" {
@@ -912,22 +1000,24 @@ resource "azurerm_network_security_rule" "pe_deny_other_vnets" {
   destination_port_range      = "*"
   source_address_prefixes     = each.value.deny_prefixes
   destination_address_prefix  = "*"
-  resource_group_name         = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
+  resource_group_name         = each.value.nsg_rg
   network_security_group_name = each.value.nsg_name
-  depends_on                  = [module.nsg]
+  depends_on = [
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 # ── aks egress ────────────────────────────────────────────────────────────────
 locals {
-  aks_nsg_targets = {
+  aks_nsg_targets_struct = {
     for k in local.nsg_keys :
-    k => local.nsg_name_by_key[k]
+    k => { name = local.nsg_name_by_key[k], rg = local.nsg_rg_by_key[k] }
     if can(regex("-(aks${var.product})$", k))
   }
 }
 
 resource "azurerm_network_security_rule" "aks_allow_https_internet" {
-  for_each                    = local.aks_nsg_targets
+  for_each                    = local.aks_nsg_targets_struct
   name                        = "allow-aks-https-internet"
   priority                    = 340
   direction                   = "Outbound"
@@ -937,13 +1027,15 @@ resource "azurerm_network_security_rule" "aks_allow_https_internet" {
   destination_port_range      = "443"
   source_address_prefix       = "*"
   destination_address_prefix  = "Internet"
-  resource_group_name         = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
-  network_security_group_name = each.value
-  depends_on                  = [module.nsg]
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on = [
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_http_internet" {
-  for_each                    = local.aks_nsg_targets
+  for_each                    = local.aks_nsg_targets_struct
   name                        = "allow-aks-http-internet"
   priority                    = 345
   direction                   = "Outbound"
@@ -953,13 +1045,15 @@ resource "azurerm_network_security_rule" "aks_allow_http_internet" {
   destination_port_range      = "80"
   source_address_prefix       = "*"
   destination_address_prefix  = "Internet"
-  resource_group_name         = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
-  network_security_group_name = each.value
-  depends_on                  = [module.nsg]
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on = [
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_acr" {
-  for_each                    = local.aks_nsg_targets
+  for_each                    = local.aks_nsg_targets_struct
   name                        = "allow-aks-acr"
   priority                    = 350
   direction                   = "Outbound"
@@ -969,19 +1063,24 @@ resource "azurerm_network_security_rule" "aks_allow_acr" {
   destination_port_range      = "443"
   source_address_prefix       = "*"
   destination_address_prefix  = "AzureContainerRegistry"
-  resource_group_name         = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
-  network_security_group_name = each.value
-  depends_on                  = [module.nsg]
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on = [
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 # ── pe (cosmosdb for postgresql) – outbound baseline ──────────────────────────
 locals {
-  pe_cdbpg_keys    = [for k in local.nsg_keys : k if can(regex("privatelink-cdbpg$", k))]
-  pe_cdbpg_targets = { for k in local.pe_cdbpg_keys : k => local.nsg_name_by_key[k] }
+  pe_cdbpg_targets_struct = {
+    for k in local.nsg_keys :
+    k => { name = local.nsg_name_by_key[k], rg = local.nsg_rg_by_key[k] }
+    if can(regex("privatelink-cdbpg$", k))
+  }
 }
 
 resource "azurerm_network_security_rule" "pe_cdbpg_deny_internet_egress" {
-  for_each                    = local.pe_cdbpg_targets
+  for_each                    = local.pe_cdbpg_targets_struct
   name                        = "deny-internet-egress"
   priority                    = 3900
   direction                   = "Outbound"
@@ -991,9 +1090,11 @@ resource "azurerm_network_security_rule" "pe_cdbpg_deny_internet_egress" {
   destination_port_range      = "*"
   source_address_prefix       = "*"
   destination_address_prefix  = "Internet"
-  resource_group_name         = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
-  network_security_group_name = each.value
-  depends_on                  = [module.nsg]
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on = [
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 # ── dns: private resolver ─────────────────────────────────────────────────────
@@ -1028,10 +1129,9 @@ module "dns_resolver" {
   forwarding_rules    = var.dns_forwarding_rules
   vnet_links          = local.dnsr_ruleset_links
   tags                = local.dnsr_tags
-  # implicit deps via VNet/Subnet IDs are sufficient
   depends_on = [
-    module.vnet_hub,   # subnets exist
-    module.nsg        # NSG associations done
+    module.vnet_hub,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
   ]
 }
 
@@ -1053,9 +1153,7 @@ resource "azurerm_dns_zone" "public" {
   depends_on = [module.rg_hub]
 }
 
-############################################
 # front door (shared-network rg)
-############################################
 locals {
   fd_is_nonprod    = local.lane == "nonprod"
   fd_profile_name  = "afd-${var.product}-${local.plane_code}-${var.region}-01"
@@ -1110,4 +1208,70 @@ resource "azurerm_network_watcher" "hub" {
   })
 
   depends_on = [module.rg_hub]
+}
+
+# ── network watcher (spokes, subscription-local) ──────────────────────────────
+
+# DEV (nonprod plane only)
+resource "azurerm_network_watcher" "dev" {
+  count               = local.is_nonprod ? 1 : 0
+  provider            = azurerm.dev
+  name                = "nw-${var.product}-dev-${local.plane_code}-${var.region}-01"
+  location            = var.location
+  resource_group_name = var.dev_spoke.rg
+
+  tags = merge(local.tag_base, local.dev_only_tags, {
+    purpose = "network-watcher"
+    service = "netops"
+  })
+
+  depends_on = [module.rg_dev]
+}
+
+# QA (nonprod plane only)
+resource "azurerm_network_watcher" "qa" {
+  count               = local.is_nonprod ? 1 : 0
+  provider            = azurerm.qa
+  name                = "nw-${var.product}-qa-${local.plane_code}-${var.region}-01"
+  location            = var.location
+  resource_group_name = var.qa_spoke.rg
+
+  tags = merge(local.tag_base, local.qa_only_tags, {
+    purpose = "network-watcher"
+    service = "netops"
+  })
+
+  depends_on = [module.rg_qa]
+}
+
+# PROD (prod plane only)
+resource "azurerm_network_watcher" "prod" {
+  count               = local.is_prod ? 1 : 0
+  provider            = azurerm.prod
+  name                = "nw-${var.product}-prod-${local.plane_code}-${var.region}-01"
+  location            = var.location
+  resource_group_name = var.prod_spoke.rg
+
+  tags = merge(local.tag_base, local.prod_only_tags, {
+    purpose = "network-watcher"
+    service = "netops"
+  })
+
+  depends_on = [module.rg_prod]
+}
+
+# UAT (prod plane only)
+resource "azurerm_network_watcher" "uat" {
+  count               = local.is_prod ? 1 : 0
+  provider            = azurerm.uat
+  name                = "nw-${var.product}-uat-${local.plane_code}-${var.region}-01"
+  location            = var.location
+  resource_group_name = var.uat_spoke.rg
+
+  tags = merge(local.tag_base, local.uat_only_tags, {
+    purpose = "network-watcher"
+    service = "netops"
+  })
+
+  depends_on = [module.rg_uat]
 }
