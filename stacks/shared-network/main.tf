@@ -127,6 +127,8 @@ locals {
     "privatelink.file.core.windows.net"       = "plf"
     "privatelink.queue.core.windows.net"      = "plq"
     "privatelink.table.core.windows.net"      = "plt"
+    "privatelink.dfs.core.windows.net"        = "pldfs"
+    "privatelink.web.core.windows.net"        = "plweb"
     "privatelink.vaultcore.azure.net"         = "kv"
     "privatelink.redis.cache.windows.net"     = "redis"
     "privatelink.documents.azure.com"         = "cosmos"
@@ -704,9 +706,9 @@ module "nsg_uat" {
   tags                = merge(local.tag_base, local.uat_only_tags, { lane = "prod" })
 }
 
-# ── nsg rules: isolation & baseline ───────────────────────────────────────────
+# ── nsg rules: isolation & baseline (provider-correct per subscription) ───────
 locals {
-  # Build structured targets { name, rg } so rules are created in correct RG/sub
+  # Existing struct maps from earlier locals (unchanged)
   all_plane_nsg_targets_struct = {
     for k in local.nsg_keys :
     k => { name = local.nsg_name_by_key[k], rg = local.nsg_rg_by_key[k] }
@@ -733,92 +735,15 @@ locals {
   qa_vnet_cidr   = local.is_nonprod ? lookup(var.qa_spoke,   "cidrs", ["0.0.0.0/32"])[0] : null
   prod_vnet_cidr = local.is_prod    ? lookup(var.prod_spoke, "cidrs", ["0.0.0.0/32"])[0] : null
   uat_vnet_cidr  = local.is_prod    ? lookup(var.uat_spoke,  "cidrs", ["0.0.0.0/32"])[0] : null
-}
 
-resource "azurerm_network_security_rule" "deny_all_to_internet" {
-  for_each                    = local.all_plane_nsg_targets_struct
-  name                        = "deny-to-internet"
-  priority                    = 3900
-  direction                   = "Outbound"
-  access                      = "Deny"
-  protocol                    = "*"
-  source_port_range           = "*"
-  destination_port_range      = "*"
-  source_address_prefix       = "*"
-  destination_address_prefix  = "Internet"
-  resource_group_name         = each.value.rg
-  network_security_group_name = each.value.name
-  depends_on = [
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
-}
+  # Split generic targets by subscription (so each resource can use a fixed provider)
+  all_targets_hub  = { for k, v in local.all_plane_nsg_targets_struct : k => v if can(regex("^hub-",  k)) }
+  all_targets_dev  = { for k, v in local.all_plane_nsg_targets_struct : k => v if can(regex("^dev-",  k)) }
+  all_targets_qa   = { for k, v in local.all_plane_nsg_targets_struct : k => v if can(regex("^qa-",   k)) }
+  all_targets_prod = { for k, v in local.all_plane_nsg_targets_struct : k => v if can(regex("^prod-", k)) }
+  all_targets_uat  = { for k, v in local.all_plane_nsg_targets_struct : k => v if can(regex("^uat-",  k)) }
 
-resource "azurerm_network_security_rule" "deny_dev_to_qa_np" {
-  for_each                    = local.dev_nsg_targets_np_struct
-  name                        = "deny-to-qa"
-  priority                    = 4000
-  direction                   = "Outbound"
-  access                      = "Deny"
-  protocol                    = "*"
-  source_port_range           = "*"
-  destination_port_range      = "*"
-  source_address_prefix       = "*"
-  destination_address_prefix  = local.qa_vnet_cidr
-  resource_group_name         = each.value.rg
-  network_security_group_name = each.value.name
-  depends_on = [module.nsg_hub, module.nsg_dev, module.nsg_qa]
-}
-
-resource "azurerm_network_security_rule" "deny_qa_to_dev_np" {
-  for_each                    = local.qa_nsg_targets_np_struct
-  name                        = "deny-to-dev"
-  priority                    = 4000
-  direction                   = "Outbound"
-  access                      = "Deny"
-  protocol                    = "*"
-  source_port_range           = "*"
-  destination_port_range      = "*"
-  source_address_prefix       = "*"
-  destination_address_prefix  = local.dev_vnet_cidr
-  resource_group_name         = each.value.rg
-  network_security_group_name = each.value.name
-  depends_on = [module.nsg_hub, module.nsg_dev, module.nsg_qa]
-}
-
-resource "azurerm_network_security_rule" "deny_prod_to_uat_pr" {
-  for_each                    = local.prod_nsg_targets_pr_struct
-  name                        = "deny-to-uat"
-  priority                    = 4000
-  direction                   = "Outbound"
-  access                      = "Deny"
-  protocol                    = "*"
-  source_port_range           = "*"
-  destination_port_range      = "*"
-  source_address_prefix       = "*"
-  destination_address_prefix  = local.uat_vnet_cidr
-  resource_group_name         = each.value.rg
-  network_security_group_name = each.value.name
-  depends_on = [module.nsg_hub, module.nsg_prod, module.nsg_uat]
-}
-
-resource "azurerm_network_security_rule" "deny_uat_to_prod_pr" {
-  for_each                    = local.uat_nsg_targets_pr_struct
-  name                        = "deny-to-prod"
-  priority                    = 4000
-  direction                   = "Outbound"
-  access                      = "Deny"
-  protocol                    = "*"
-  source_port_range           = "*"
-  destination_port_range      = "*"
-  source_address_prefix       = "*"
-  destination_address_prefix  = local.prod_vnet_cidr
-  resource_group_name         = each.value.rg
-  network_security_group_name = each.value.name
-  depends_on = [module.nsg_hub, module.nsg_prod, module.nsg_uat]
-}
-
-# ── baseline egress on workload nsgs ──────────────────────────────────────────
-locals {
+  # ── workload (non-PE) NSGs for baseline egress rules
   _workload_pairs = {
     for k in local.nsg_keys :
     k => {
@@ -829,87 +754,19 @@ locals {
     }
   }
 
-  workload_nsg_targets_struct = {
+  workload_targets_all = {
     for k, v in local._workload_pairs :
     k => { name = v.nsg_name, rg = v.nsg_rg }
     if !contains(var.nsg_exclude_subnets, v.subnet_name) && !can(regex("privatelink", k))
   }
-}
 
-resource "azurerm_network_security_rule" "allow_dns_to_azure" {
-  for_each                    = local.workload_nsg_targets_struct
-  name                        = "allow-dns-azure"
-  priority                    = 300
-  direction                   = "Outbound"
-  access                      = "Allow"
-  protocol                    = "*"
-  source_port_range           = "*"
-  destination_port_ranges     = ["53"]
-  source_address_prefix       = "*"
-  destination_address_prefix  = "168.63.129.16"
-  resource_group_name         = each.value.rg
-  network_security_group_name = each.value.name
-  depends_on = [
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
-}
+  workload_targets_hub  = { for k, v in local.workload_targets_all : k => v if can(regex("^hub-",  k)) }
+  workload_targets_dev  = { for k, v in local.workload_targets_all : k => v if can(regex("^dev-",  k)) }
+  workload_targets_qa   = { for k, v in local.workload_targets_all : k => v if can(regex("^qa-",   k)) }
+  workload_targets_prod = { for k, v in local.workload_targets_all : k => v if can(regex("^prod-", k)) }
+  workload_targets_uat  = { for k, v in local.workload_targets_all : k => v if can(regex("^uat-",  k)) }
 
-resource "azurerm_network_security_rule" "allow_ntp_to_azure" {
-  for_each                    = local.workload_nsg_targets_struct
-  name                        = "allow-ntp-azure"
-  priority                    = 305
-  direction                   = "Outbound"
-  access                      = "Allow"
-  protocol                    = "Udp"
-  source_port_range           = "*"
-  destination_port_range      = "123"
-  source_address_prefix       = "*"
-  destination_address_prefix  = "168.63.129.16"
-  resource_group_name         = each.value.rg
-  network_security_group_name = each.value.name
-  depends_on = [
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
-}
-
-resource "azurerm_network_security_rule" "allow_storage_egress" {
-  for_each                    = local.workload_nsg_targets_struct
-  name                        = "allow-storage-egress"
-  priority                    = 330
-  direction                   = "Outbound"
-  access                      = "Allow"
-  protocol                    = "Tcp"
-  source_port_range           = "*"
-  destination_port_range      = "443"
-  source_address_prefix       = "*"
-  destination_address_prefix  = "Storage"
-  resource_group_name         = each.value.rg
-  network_security_group_name = each.value.name
-  depends_on = [
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
-}
-
-resource "azurerm_network_security_rule" "allow_azuremonitor_egress" {
-  for_each                    = local.workload_nsg_targets_struct
-  name                        = "allow-azuremonitor-egress"
-  priority                    = 335
-  direction                   = "Outbound"
-  access                      = "Allow"
-  protocol                    = "Tcp"
-  source_port_range           = "*"
-  destination_port_range      = "443"
-  source_address_prefix       = "*"
-  destination_address_prefix  = "AzureMonitor"
-  resource_group_name         = each.value.rg
-  network_security_group_name = each.value.name
-  depends_on = [
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
-}
-
-# ── pep rules (private endpoints allow/deny) ──────────────────────────────────
-locals {
+  # ── PE subnet NSGs
   _pe_keys_plane = [for k in local.nsg_keys : k if can(regex("privatelink", k))]
 
   _pe_role_by_key = {
@@ -969,10 +826,502 @@ locals {
     }
     if length([for c in local.lane_all_cidrs : c if !contains(v.prefixes, c)]) > 0
   }
+
+  pe_allow_hub  = { for k, v in local.pe_rules_allow_nonempty : k => v if can(regex("^hub-",  k)) }
+  pe_allow_dev  = { for k, v in local.pe_rules_allow_nonempty : k => v if can(regex("^dev-",  k)) }
+  pe_allow_qa   = { for k, v in local.pe_rules_allow_nonempty : k => v if can(regex("^qa-",   k)) }
+  pe_allow_prod = { for k, v in local.pe_rules_allow_nonempty : k => v if can(regex("^prod-", k)) }
+  pe_allow_uat  = { for k, v in local.pe_rules_allow_nonempty : k => v if can(regex("^uat-",  k)) }
+
+  pe_deny_hub  = { for k, v in local.pe_rules_deny_nonempty : k => v if can(regex("^hub-",  k)) }
+  pe_deny_dev  = { for k, v in local.pe_rules_deny_nonempty : k => v if can(regex("^dev-",  k)) }
+  pe_deny_qa   = { for k, v in local.pe_rules_deny_nonempty : k => v if can(regex("^qa-",   k)) }
+  pe_deny_prod = { for k, v in local.pe_rules_deny_nonempty : k => v if can(regex("^prod-", k)) }
+  pe_deny_uat  = { for k, v in local.pe_rules_deny_nonempty : k => v if can(regex("^uat-",  k)) }
+
+  # AKS egress targets (pods/aks subnets)
+  aks_nsg_targets_struct = {
+    for k in local.nsg_keys :
+    k => { name = local.nsg_name_by_key[k], rg = local.nsg_rg_by_key[k] }
+    if can(regex("-(aks${var.product})$", k))
+  }
+  aks_targets_hub  = { for k, v in local.aks_nsg_targets_struct : k => v if can(regex("^hub-",  k)) }
+  aks_targets_dev  = { for k, v in local.aks_nsg_targets_struct : k => v if can(regex("^dev-",  k)) }
+  aks_targets_qa   = { for k, v in local.aks_nsg_targets_struct : k => v if can(regex("^qa-",   k)) }
+  aks_targets_prod = { for k, v in local.aks_nsg_targets_struct : k => v if can(regex("^prod-", k)) }
+  aks_targets_uat  = { for k, v in local.aks_nsg_targets_struct : k => v if can(regex("^uat-",  k)) }
+
+  # CosmosDB for PostgreSQL private endpoints (privatelink-cdbpg)
+  pe_cdbpg_targets_struct = {
+    for k in local.nsg_keys :
+    k => { name = local.nsg_name_by_key[k], rg = local.nsg_rg_by_key[k] }
+    if can(regex("privatelink-cdbpg$", k))
+  }
+  pe_cdbpg_hub  = { for k, v in local.pe_cdbpg_targets_struct : k => v if can(regex("^hub-",  k)) }
+  pe_cdbpg_dev  = { for k, v in local.pe_cdbpg_targets_struct : k => v if can(regex("^dev-",  k)) }
+  pe_cdbpg_qa   = { for k, v in local.pe_cdbpg_targets_struct : k => v if can(regex("^qa-",   k)) }
+  pe_cdbpg_prod = { for k, v in local.pe_cdbpg_targets_struct : k => v if can(regex("^prod-", k)) }
+  pe_cdbpg_uat  = { for k, v in local.pe_cdbpg_targets_struct : k => v if can(regex("^uat-",  k)) }
 }
 
-resource "azurerm_network_security_rule" "pe_allow_lane_producers" {
-  for_each                    = local.pe_rules_allow_nonempty
+# ---------- DENY TO INTERNET (all non-PE, non-appgw NSGs) ----------
+resource "azurerm_network_security_rule" "deny_all_to_internet_hub" {
+  for_each                    = local.all_targets_hub
+  name                        = "deny-to-internet"
+  priority                    = 3900
+  direction                   = "Outbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+resource "azurerm_network_security_rule" "deny_all_to_internet_dev" {
+  provider                    = azurerm.dev
+  for_each                    = local.all_targets_dev
+  name                        = "deny-to-internet"
+  priority                    = 3900
+  direction                   = "Outbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+resource "azurerm_network_security_rule" "deny_all_to_internet_qa" {
+  provider                    = azurerm.qa
+  for_each                    = local.all_targets_qa
+  name                        = "deny-to-internet"
+  priority                    = 3900
+  direction                   = "Outbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+resource "azurerm_network_security_rule" "deny_all_to_internet_prod" {
+  provider                    = azurerm.prod
+  for_each                    = local.all_targets_prod
+  name                        = "deny-to-internet"
+  priority                    = 3900
+  direction                   = "Outbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+resource "azurerm_network_security_rule" "deny_all_to_internet_uat" {
+  provider                    = azurerm.uat
+  for_each                    = local.all_targets_uat
+  name                        = "deny-to-internet"
+  priority                    = 3900
+  direction                   = "Outbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+# ---------- PLANE ISOLATION (nonprod: dev↔qa) ----------
+resource "azurerm_network_security_rule" "deny_dev_to_qa_np" {
+  provider                    = azurerm.dev
+  for_each                    = local.dev_nsg_targets_np_struct
+  name                        = "deny-to-qa"
+  priority                    = 4000
+  direction                   = "Outbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = local.qa_vnet_cidr
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+resource "azurerm_network_security_rule" "deny_qa_to_dev_np" {
+  provider                    = azurerm.qa
+  for_each                    = local.qa_nsg_targets_np_struct
+  name                        = "deny-to-dev"
+  priority                    = 4000
+  direction                   = "Outbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = local.dev_vnet_cidr
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+# ---------- PLANE ISOLATION (prod: prod↔uat) ----------
+resource "azurerm_network_security_rule" "deny_prod_to_uat_pr" {
+  provider                    = azurerm.prod
+  for_each                    = local.prod_nsg_targets_pr_struct
+  name                        = "deny-to-uat"
+  priority                    = 4000
+  direction                   = "Outbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = local.uat_vnet_cidr
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+resource "azurerm_network_security_rule" "deny_uat_to_prod_pr" {
+  provider                    = azurerm.uat
+  for_each                    = local.uat_nsg_targets_pr_struct
+  name                        = "deny-to-prod"
+  priority                    = 4000
+  direction                   = "Outbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = local.prod_vnet_cidr
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+# ── baseline egress on workload nsgs (per subscription) ───────────────────────
+resource "azurerm_network_security_rule" "allow_dns_to_azure_hub" {
+  for_each                    = local.workload_targets_hub
+  name                        = "allow-dns-azure"
+  priority                    = 300
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_ranges     = ["53"]
+  source_address_prefix       = "*"
+  destination_address_prefix  = "168.63.129.16"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+resource "azurerm_network_security_rule" "allow_dns_to_azure_dev" {
+  provider                    = azurerm.dev
+  for_each                    = local.workload_targets_dev
+  name                        = "allow-dns-azure"
+  priority                    = 300
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_ranges     = ["53"]
+  source_address_prefix       = "*"
+  destination_address_prefix  = "168.63.129.16"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+resource "azurerm_network_security_rule" "allow_dns_to_azure_qa" {
+  provider                    = azurerm.qa
+  for_each                    = local.workload_targets_qa
+  name                        = "allow-dns-azure"
+  priority                    = 300
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_ranges     = ["53"]
+  source_address_prefix       = "*"
+  destination_address_prefix  = "168.63.129.16"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+resource "azurerm_network_security_rule" "allow_dns_to_azure_prod" {
+  provider                    = azurerm.prod
+  for_each                    = local.workload_targets_prod
+  name                        = "allow-dns-azure"
+  priority                    = 300
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_ranges     = ["53"]
+  source_address_prefix       = "*"
+  destination_address_prefix  = "168.63.129.16"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+resource "azurerm_network_security_rule" "allow_dns_to_azure_uat" {
+  provider                    = azurerm.uat
+  for_each                    = local.workload_targets_uat
+  name                        = "allow-dns-azure"
+  priority                    = 300
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_ranges     = ["53"]
+  source_address_prefix       = "*"
+  destination_address_prefix  = "168.63.129.16"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "allow_ntp_to_azure_hub" {
+  for_each                    = local.workload_targets_hub
+  name                        = "allow-ntp-azure"
+  priority                    = 305
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Udp"
+  source_port_range           = "*"
+  destination_port_range      = "123"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "168.63.129.16"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "allow_ntp_to_azure_dev" {
+  provider                    = azurerm.dev
+  for_each                    = local.workload_targets_dev
+  name                        = "allow-ntp-azure"
+  priority                    = 305
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Udp"
+  source_port_range           = "*"
+  destination_port_range      = "123"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "168.63.129.16"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "allow_ntp_to_azure_qa" {
+  provider                    = azurerm.qa
+  for_each                    = local.workload_targets_qa
+  name                        = "allow-ntp-azure"
+  priority                    = 305
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Udp"
+  source_port_range           = "*"
+  destination_port_range      = "123"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "168.63.129.16"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "allow_ntp_to_azure_prod" {
+  provider                    = azurerm.prod
+  for_each                    = local.workload_targets_prod
+  name                        = "allow-ntp-azure"
+  priority                    = 305
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Udp"
+  source_port_range           = "*"
+  destination_port_range      = "123"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "168.63.129.16"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "allow_ntp_to_azure_uat" {
+  provider                    = azurerm.uat
+  for_each                    = local.workload_targets_uat
+  name                        = "allow-ntp-azure"
+  priority                    = 305
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Udp"
+  source_port_range           = "*"
+  destination_port_range      = "123"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "168.63.129.16"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+# ---- Storage egress (TCP/443 to Service Tag: Storage) ----
+resource "azurerm_network_security_rule" "allow_storage_egress_hub" {
+  for_each                    = local.workload_targets_hub
+  name                        = "allow-storage-egress"
+  priority                    = 330
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Storage"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "allow_storage_egress_dev" {
+  provider                    = azurerm.dev
+  for_each                    = local.workload_targets_dev
+  name                        = "allow-storage-egress"
+  priority                    = 330
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Storage"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "allow_storage_egress_qa" {
+  provider                    = azurerm.qa
+  for_each                    = local.workload_targets_qa
+  name                        = "allow-storage-egress"
+  priority                    = 330
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Storage"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "allow_storage_egress_prod" {
+  provider                    = azurerm.prod
+  for_each                    = local.workload_targets_prod
+  name                        = "allow-storage-egress"
+  priority                    = 330
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Storage"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "allow_storage_egress_uat" {
+  provider                    = azurerm.uat
+  for_each                    = local.workload_targets_uat
+  name                        = "allow-storage-egress"
+  priority                    = 330
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Storage"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+# ---- Azure Monitor egress (TCP/443 to Service Tag: AzureMonitor) ----
+resource "azurerm_network_security_rule" "allow_azuremonitor_hub" {
+  for_each                    = local.workload_targets_hub
+  name                        = "allow-azuremonitor-egress"
+  priority                    = 335
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "AzureMonitor"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "allow_azuremonitor_dev" {
+  provider                    = azurerm.dev
+  for_each                    = local.workload_targets_dev
+  name                        = "allow-azuremonitor-egress"
+  priority                    = 335
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "AzureMonitor"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "allow_azuremonitor_qa" {
+  provider                    = azurerm.qa
+  for_each                    = local.workload_targets_qa
+  name                        = "allow-azuremonitor-egress"
+  priority                    = 335
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "AzureMonitor"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "allow_azuremonitor_prod" {
+  provider                    = azurerm.prod
+  for_each                    = local.workload_targets_prod
+  name                        = "allow-azuremonitor-egress"
+  priority                    = 335
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "AzureMonitor"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "allow_azuremonitor_uat" {
+  provider                    = azurerm.uat
+  for_each                    = local.workload_targets_uat
+  name                        = "allow-azuremonitor-egress"
+  priority                    = 335
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "AzureMonitor"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+# ── private endpoint rules (lane allow/deny) per subscription ────────────────
+resource "azurerm_network_security_rule" "pe_allow_lane_hub" {
+  for_each                    = local.pe_allow_hub
   name                        = "allow-from-hub-and-spoke"
   priority                    = 200
   direction                   = "Inbound"
@@ -984,13 +1333,70 @@ resource "azurerm_network_security_rule" "pe_allow_lane_producers" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.nsg_rg
   network_security_group_name = each.value.nsg_name
-  depends_on = [
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+}
+resource "azurerm_network_security_rule" "pe_allow_lane_dev" {
+  provider                    = azurerm.dev
+  for_each                    = local.pe_allow_dev
+  name                        = "allow-from-hub-and-spoke"
+  priority                    = 200
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefixes     = each.value.prefixes
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.nsg_rg
+  network_security_group_name = each.value.nsg_name
+}
+resource "azurerm_network_security_rule" "pe_allow_lane_qa" {
+  provider                    = azurerm.qa
+  for_each                    = local.pe_allow_qa
+  name                        = "allow-from-hub-and-spoke"
+  priority                    = 200
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefixes     = each.value.prefixes
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.nsg_rg
+  network_security_group_name = each.value.nsg_name
+}
+resource "azurerm_network_security_rule" "pe_allow_lane_prod" {
+  provider                    = azurerm.prod
+  for_each                    = local.pe_allow_prod
+  name                        = "allow-from-hub-and-spoke"
+  priority                    = 200
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefixes     = each.value.prefixes
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.nsg_rg
+  network_security_group_name = each.value.nsg_name
+}
+resource "azurerm_network_security_rule" "pe_allow_lane_uat" {
+  provider                    = azurerm.uat
+  for_each                    = local.pe_allow_uat
+  name                        = "allow-from-hub-and-spoke"
+  priority                    = 200
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefixes     = each.value.prefixes
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.nsg_rg
+  network_security_group_name = each.value.nsg_name
 }
 
-resource "azurerm_network_security_rule" "pe_deny_other_vnets" {
-  for_each                    = local.pe_rules_deny_nonempty
+resource "azurerm_network_security_rule" "pe_deny_other_vnets_hub" {
+  for_each                    = local.pe_deny_hub
   name                        = "deny-other-vnets"
   priority                    = 300
   direction                   = "Inbound"
@@ -1002,22 +1408,73 @@ resource "azurerm_network_security_rule" "pe_deny_other_vnets" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.nsg_rg
   network_security_group_name = each.value.nsg_name
-  depends_on = [
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+}
+resource "azurerm_network_security_rule" "pe_deny_other_vnets_dev" {
+  provider                    = azurerm.dev
+  for_each                    = local.pe_deny_dev
+  name                        = "deny-other-vnets"
+  priority                    = 300
+  direction                   = "Inbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefixes     = each.value.deny_prefixes
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.nsg_rg
+  network_security_group_name = each.value.nsg_name
+}
+resource "azurerm_network_security_rule" "pe_deny_other_vnets_qa" {
+  provider                    = azurerm.qa
+  for_each                    = local.pe_deny_qa
+  name                        = "deny-other-vnets"
+  priority                    = 300
+  direction                   = "Inbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefixes     = each.value.deny_prefixes
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.nsg_rg
+  network_security_group_name = each.value.nsg_name
+}
+resource "azurerm_network_security_rule" "pe_deny_other_vnets_prod" {
+  provider                    = azurerm.prod
+  for_each                    = local.pe_deny_prod
+  name                        = "deny-other-vnets"
+  priority                    = 300
+  direction                   = "Inbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefixes     = each.value.deny_prefixes
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.nsg_rg
+  network_security_group_name = each.value.nsg_name
+}
+resource "azurerm_network_security_rule" "pe_deny_other_vnets_uat" {
+  provider                    = azurerm.uat
+  for_each                    = local.pe_deny_uat
+  name                        = "deny-other-vnets"
+  priority                    = 300
+  direction                   = "Inbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefixes     = each.value.deny_prefixes
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.nsg_rg
+  network_security_group_name = each.value.nsg_name
 }
 
-# ── aks egress ────────────────────────────────────────────────────────────────
-locals {
-  aks_nsg_targets_struct = {
-    for k in local.nsg_keys :
-    k => { name = local.nsg_name_by_key[k], rg = local.nsg_rg_by_key[k] }
-    if can(regex("-(aks${var.product})$", k))
-  }
-}
+# ── AKS egress (per subscription) ─────────────────────────────────────────────
 
-resource "azurerm_network_security_rule" "aks_allow_https_internet" {
-  for_each                    = local.aks_nsg_targets_struct
+# HTTPS to Internet
+resource "azurerm_network_security_rule" "aks_allow_https_internet_hub" {
+  for_each                    = local.aks_targets_hub
   name                        = "allow-aks-https-internet"
   priority                    = 340
   direction                   = "Outbound"
@@ -1029,13 +1486,75 @@ resource "azurerm_network_security_rule" "aks_allow_https_internet" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on = [
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
 }
 
-resource "azurerm_network_security_rule" "aks_allow_http_internet" {
-  for_each                    = local.aks_nsg_targets_struct
+resource "azurerm_network_security_rule" "aks_allow_https_internet_dev" {
+  provider                    = azurerm.dev
+  for_each                    = local.aks_targets_dev
+  name                        = "allow-aks-https-internet"
+  priority                    = 340
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_allow_https_internet_qa" {
+  provider                    = azurerm.qa
+  for_each                    = local.aks_targets_qa
+  name                        = "allow-aks-https-internet"
+  priority                    = 340
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_allow_https_internet_prod" {
+  provider                    = azurerm.prod
+  for_each                    = local.aks_targets_prod
+  name                        = "allow-aks-https-internet"
+  priority                    = 340
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_allow_https_internet_uat" {
+  provider                    = azurerm.uat
+  for_each                    = local.aks_targets_uat
+  name                        = "allow-aks-https-internet"
+  priority                    = 340
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+# HTTP to Internet
+resource "azurerm_network_security_rule" "aks_allow_http_internet_hub" {
+  for_each                    = local.aks_targets_hub
   name                        = "allow-aks-http-internet"
   priority                    = 345
   direction                   = "Outbound"
@@ -1047,13 +1566,75 @@ resource "azurerm_network_security_rule" "aks_allow_http_internet" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on = [
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
 }
 
-resource "azurerm_network_security_rule" "aks_allow_acr" {
-  for_each                    = local.aks_nsg_targets_struct
+resource "azurerm_network_security_rule" "aks_allow_http_internet_dev" {
+  provider                    = azurerm.dev
+  for_each                    = local.aks_targets_dev
+  name                        = "allow-aks-http-internet"
+  priority                    = 345
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "80"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_allow_http_internet_qa" {
+  provider                    = azurerm.qa
+  for_each                    = local.aks_targets_qa
+  name                        = "allow-aks-http-internet"
+  priority                    = 345
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "80"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_allow_http_internet_prod" {
+  provider                    = azurerm.prod
+  for_each                    = local.aks_targets_prod
+  name                        = "allow-aks-http-internet"
+  priority                    = 345
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "80"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_allow_http_internet_uat" {
+  provider                    = azurerm.uat
+  for_each                    = local.aks_targets_uat
+  name                        = "allow-aks-http-internet"
+  priority                    = 345
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "80"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+# ACR (Service Tag: AzureContainerRegistry)
+resource "azurerm_network_security_rule" "aks_allow_acr_hub" {
+  for_each                    = local.aks_targets_hub
   name                        = "allow-aks-acr"
   priority                    = 350
   direction                   = "Outbound"
@@ -1065,22 +1646,75 @@ resource "azurerm_network_security_rule" "aks_allow_acr" {
   destination_address_prefix  = "AzureContainerRegistry"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on = [
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
 }
 
-# ── pe (cosmosdb for postgresql) – outbound baseline ──────────────────────────
-locals {
-  pe_cdbpg_targets_struct = {
-    for k in local.nsg_keys :
-    k => { name = local.nsg_name_by_key[k], rg = local.nsg_rg_by_key[k] }
-    if can(regex("privatelink-cdbpg$", k))
-  }
+resource "azurerm_network_security_rule" "aks_allow_acr_dev" {
+  provider                    = azurerm.dev
+  for_each                    = local.aks_targets_dev
+  name                        = "allow-aks-acr"
+  priority                    = 350
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "AzureContainerRegistry"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
 }
 
-resource "azurerm_network_security_rule" "pe_cdbpg_deny_internet_egress" {
-  for_each                    = local.pe_cdbpg_targets_struct
+resource "azurerm_network_security_rule" "aks_allow_acr_qa" {
+  provider                    = azurerm.qa
+  for_each                    = local.aks_targets_qa
+  name                        = "allow-aks-acr"
+  priority                    = 350
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "AzureContainerRegistry"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_allow_acr_prod" {
+  provider                    = azurerm.prod
+  for_each                    = local.aks_targets_prod
+  name                        = "allow-aks-acr"
+  priority                    = 350
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "AzureContainerRegistry"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_allow_acr_uat" {
+  provider                    = azurerm.uat
+  for_each                    = local.aks_targets_uat
+  name                        = "allow-aks-acr"
+  priority                    = 350
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "AzureContainerRegistry"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+# ── PE (Cosmos DB for PostgreSQL) - outbound baseline (per subscription) ─────
+resource "azurerm_network_security_rule" "pe_cdbpg_deny_internet_hub" {
+  for_each                    = local.pe_cdbpg_hub
   name                        = "deny-internet-egress"
   priority                    = 3900
   direction                   = "Outbound"
@@ -1092,9 +1726,70 @@ resource "azurerm_network_security_rule" "pe_cdbpg_deny_internet_egress" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on = [
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+}
+
+resource "azurerm_network_security_rule" "pe_cdbpg_deny_internet_dev" {
+  provider                    = azurerm.dev
+  for_each                    = local.pe_cdbpg_dev
+  name                        = "deny-internet-egress"
+  priority                    = 3900
+  direction                   = "Outbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "pe_cdbpg_deny_internet_qa" {
+  provider                    = azurerm.qa
+  for_each                    = local.pe_cdbpg_qa
+  name                        = "deny-internet-egress"
+  priority                    = 3900
+  direction                   = "Outbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "pe_cdbpg_deny_internet_prod" {
+  provider                    = azurerm.prod
+  for_each                    = local.pe_cdbpg_prod
+  name                        = "deny-internet-egress"
+  priority                    = 3900
+  direction                   = "Outbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "pe_cdbpg_deny_internet_uat" {
+  provider                    = azurerm.uat
+  for_each                    = local.pe_cdbpg_uat
+  name                        = "deny-internet-egress"
+  priority                    = 3900
+  direction                   = "Outbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
 }
 
 # ── dns: private resolver ─────────────────────────────────────────────────────
