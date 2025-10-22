@@ -130,14 +130,19 @@ resource "azurerm_monitor_action_group" "core" {
 }
 
 data "azurerm_resource_group" "core" {
-  name = local.rg_name_core
+  count = (var.create_rg_core_platform ? 0 : 1)
+  name  = local.rg_name_core
 }
 
-# Activity Log Alert: RG Write (Create/Update)
+locals {
+  # Use the module RG id when we create it; otherwise use the data source id.
+  core_rg_id = var.create_rg_core_platform ? module.rg_core_platform[0].id : data.azurerm_resource_group.core[0].id
+}
+
 resource "azurerm_monitor_activity_log_alert" "rg_admin_write" {
   name                = "ala-${var.product}-${local.plane_code}-${var.region}-core-admin-write"
   resource_group_name = local.rg_name_core
-  scopes              = [data.azurerm_resource_group.core.id]
+  scopes              = [local.core_rg_id]
   description         = "Admin WRITE ops on core RG"
   enabled             = true
   location            = "Global"
@@ -156,11 +161,10 @@ resource "azurerm_monitor_activity_log_alert" "rg_admin_write" {
   }
 }
 
-# Activity Log Alert: RG Delete
 resource "azurerm_monitor_activity_log_alert" "rg_admin_delete" {
   name                = "ala-${var.product}-${local.plane_code}-${var.region}-core-admin-delete"
   resource_group_name = local.rg_name_core
-  scopes              = [data.azurerm_resource_group.core.id]
+  scopes              = [local.core_rg_id]
   description         = "Admin DELETE ops on core RG"
   enabled             = true
   location            = "Global"
