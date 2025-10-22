@@ -208,6 +208,12 @@ module "rg_uat" {
   tags      = merge(local.tags_common, local.uat_only_tags, { layer = local.rg_layer_by_key["uat"] })
 }
 
+# Require the hub (plane) RG to exist when deploying AKS in hub
+data "azurerm_resource_group" "hub" {
+  count = local.deploy_aks_in_hub ? 1 : 0
+  name  = local.rg_hub
+}
+
 data "azurerm_resource_group" "env" {
   name = var.rg_name
   depends_on = [
@@ -375,6 +381,8 @@ resource "azurerm_user_assigned_identity" "aks_hub" {
   location            = var.location
   resource_group_name = local.rg_hub
   tags                = merge(local.tags_common, { purpose = "aks-control-plane-identity", layer = "plane-resources" }, var.tags)
+
+  depends_on = [data.azurerm_resource_group.hub]
 }
 
 resource "azurerm_user_assigned_identity" "aks_env" {
@@ -399,7 +407,7 @@ resource "azurerm_role_assignment" "aks_pdz_contrib_hub" {
       error_message = "AKS PDZ '${local.aks_pdns_name}' not found."
     }
   }
-  depends_on          = [data.azurerm_resource_group.env]
+  depends_on = [data.azurerm_resource_group.hub]
 }
 
 resource "azurerm_role_assignment" "aks_pdz_contrib_env" {
@@ -442,7 +450,11 @@ module "aks1_hub" {
   user_assigned_identity_id = azurerm_user_assigned_identity.aks_hub[0].id
 
   tags       = merge(local.tags_common, local.tags_aks, var.tags, { layer = "plane-resources" })
-  depends_on = [azurerm_role_assignment.aks_pdz_contrib_hub]
+  
+  depends_on = [
+    data.azurerm_resource_group.hub,
+    azurerm_role_assignment.aks_pdz_contrib_hub
+  ]
 }
 
 module "aks1_env" {
