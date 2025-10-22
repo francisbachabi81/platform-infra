@@ -8,8 +8,8 @@ subscription_id = "57f8aa30-981c-4764-94f6-6691c4d5c01c"
 tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
 # Hub overrides (only set if hub ≠ env subscription)
-hub_subscription_id = null
-hub_tenant_id       = null
+hub_subscription_id = "ee8a4693-54d4-4de8-842b-b6f35fc0674d"
+hub_tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
 # ── remote state (shared-network + core) ──────────────────────────────────────
 state_rg_name        = "rg-core-infra-state"
