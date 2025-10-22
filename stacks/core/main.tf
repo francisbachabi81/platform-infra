@@ -197,7 +197,7 @@ resource "azurerm_monitor_metric_alert" "appi_failures" {
   criteria {
     metric_namespace = "microsoft.insights/components"
     metric_name      = "requests/failed"
-    aggregation      = "Total"
+    aggregation      = "Count" 
     operator         = "GreaterThan"
     threshold        = 0
   }
