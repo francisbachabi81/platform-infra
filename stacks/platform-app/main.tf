@@ -210,8 +210,9 @@ module "rg_uat" {
 
 # Require the hub (plane) RG to exist when deploying AKS in hub
 data "azurerm_resource_group" "hub" {
-  count = local.deploy_aks_in_hub ? 1 : 0
-  name  = local.rg_hub
+  count    = local.deploy_aks_in_hub ? 1 : 0
+  provider = azurerm.hub
+  name     = local.rg_hub
 }
 
 data "azurerm_resource_group" "env" {
@@ -379,7 +380,7 @@ resource "azurerm_user_assigned_identity" "aks_hub" {
   provider            = azurerm.hub
   name                = "uai-${var.product}-${local.plane_code}-aks-${var.region}-100"
   location            = var.location
-  resource_group_name = local.rg_hub
+  resource_group_name = data.azurerm_resource_group.hub[0].name
   tags                = merge(local.tags_common, { purpose = "aks-control-plane-identity", layer = "plane-resources" }, var.tags)
 
   depends_on = [data.azurerm_resource_group.hub]
@@ -432,7 +433,7 @@ module "aks1_hub" {
 
   name                        = local.aks1_name
   location                    = var.location
-  resource_group_name         = local.rg_hub
+  resource_group_name         = data.azurerm_resource_group.hub[0].name
   node_resource_group         = "rg-${var.product}-${local.plane_code}-${var.region}-aksn-01"
   default_nodepool_subnet_id  = local.aks_nodepool_subnet_effective
 
@@ -450,7 +451,7 @@ module "aks1_hub" {
   user_assigned_identity_id = azurerm_user_assigned_identity.aks_hub[0].id
 
   tags       = merge(local.tags_common, local.tags_aks, var.tags, { layer = "plane-resources" })
-  
+
   depends_on = [
     data.azurerm_resource_group.hub,
     azurerm_role_assignment.aks_pdz_contrib_hub
