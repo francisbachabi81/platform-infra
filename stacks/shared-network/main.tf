@@ -10,17 +10,17 @@ terraform {
 }
 
 locals {
-  dev_sub  = length(trimspace(coalesce(var.dev_subscription_id, "")))  > 0 ? var.dev_subscription_id  : var.hub_subscription_id
-  dev_ten  = length(trimspace(coalesce(var.dev_tenant_id, "")))        > 0 ? var.dev_tenant_id        : var.hub_tenant_id
+  dev_sub  = (var.dev_subscription_id  != null && trimspace(var.dev_subscription_id)  != "") ? var.dev_subscription_id  : var.hub_subscription_id
+  dev_ten  = (var.dev_tenant_id        != null && trimspace(var.dev_tenant_id)        != "") ? var.dev_tenant_id        : var.hub_tenant_id
 
-  qa_sub   = length(trimspace(coalesce(var.qa_subscription_id, "")))   > 0 ? var.qa_subscription_id   : var.hub_subscription_id
-  qa_ten   = length(trimspace(coalesce(var.qa_tenant_id, "")))         > 0 ? var.qa_tenant_id         : var.hub_tenant_id
+  qa_sub   = (var.qa_subscription_id   != null && trimspace(var.qa_subscription_id)   != "") ? var.qa_subscription_id   : var.hub_subscription_id
+  qa_ten   = (var.qa_tenant_id         != null && trimspace(var.qa_tenant_id)         != "") ? var.qa_tenant_id         : var.hub_tenant_id
 
-  uat_sub  = length(trimspace(coalesce(var.uat_subscription_id, "")))  > 0 ? var.uat_subscription_id  : var.hub_subscription_id
-  uat_ten  = length(trimspace(coalesce(var.uat_tenant_id, "")))        > 0 ? var.uat_tenant_id        : var.hub_tenant_id
+  uat_sub  = (var.uat_subscription_id  != null && trimspace(var.uat_subscription_id)  != "") ? var.uat_subscription_id  : var.hub_subscription_id
+  uat_ten  = (var.uat_tenant_id        != null && trimspace(var.uat_tenant_id)        != "") ? var.uat_tenant_id        : var.hub_tenant_id
 
-  prod_sub = length(trimspace(coalesce(var.prod_subscription_id, ""))) > 0 ? var.prod_subscription_id : var.hub_subscription_id
-  prod_ten = length(trimspace(coalesce(var.prod_tenant_id, "")))       > 0 ? var.prod_tenant_id       : var.hub_tenant_id
+  prod_sub = (var.prod_subscription_id != null && trimspace(var.prod_subscription_id) != "") ? var.prod_subscription_id : var.hub_subscription_id
+  prod_ten = (var.prod_tenant_id       != null && trimspace(var.prod_tenant_id)       != "") ? var.prod_tenant_id       : var.hub_tenant_id
 }
 
 # Default = HUB subscription
