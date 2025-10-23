@@ -691,7 +691,7 @@ locals {
   # Final plane code
   plane_effective_code = coalesce(local.plane_override_norm, local.plane_from_env)
 
-  want_aks_diag = local.aks_enabled_env && var.manage_aks_diag_here
+  want_aks_diag = local.aks_enabled_env
 
   # Name uses the normalized plane code (np | pr | uat)
   diag_name = "diag-${var.product}-${local.plane_effective_code}-${var.region}"
@@ -703,35 +703,6 @@ locals {
     local.plane_effective_code == "uat" ? try(azurerm_monitor_diagnostic_setting.aks_uat[0].id,            null) :
                                           null
   ) : null
-}
-
-locals {
-  # Parse JSON → list(string); tolerate null/empty
-  diag_target_ids_raw = try(jsondecode(var.diag_targets_json), [])
-  diag_target_ids     = tolist(distinct(compact(local.diag_target_ids_raw)))
-
-  # Optional: basic “plane” bucketing by RG naming convention, if you use it consistently:
-  #   rg-<prod>-np-...  => np
-  #   rg-<prod>-uat-... => uat
-  #   rg-<prod>-pr-...  => pr
-  # If you prefer to partition by subscription, swap the filters accordingly.
-  diags_np = {
-    for id in local.diag_target_ids :
-    id => id
-    if can(regex("/resourceGroups/rg-${var.product}-np-", id))
-  }
-
-  diags_uat = {
-    for id in local.diag_target_ids :
-    id => id
-    if can(regex("/resourceGroups/rg-${var.product}-uat-", id))
-  }
-
-  diags_pr = {
-    for id in local.diag_target_ids :
-    id => id
-    if can(regex("/resourceGroups/rg-${var.product}-pr-", id))
-  }
 }
 
 resource "azurerm_monitor_diagnostic_setting" "aks_shared_nonprod" {
