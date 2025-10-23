@@ -716,11 +716,21 @@ resource "azurerm_monitor_diagnostic_setting" "aks_shared_nonprod" {
   enabled_log { category = "guard" }
 
   lifecycle {
+    ignore_changes = [
+      # Azure may mutate this; ignore to reduce churn (optional)
+      log_analytics_destination_type
+    ]
     precondition {
       condition     = local.aks_id != null && local.law_workspace_id != null
       error_message = "AKS diagnostics requires AKS id and Log Analytics workspace id."
     }
   }
+}
+
+# Auto-import the setting if it already exists
+import {
+  to = azurerm_monitor_diagnostic_setting.aks_shared_nonprod[0]
+  id = "${local.aks_id}|${local.diag_name}"
 }
 
 resource "azurerm_monitor_diagnostic_setting" "aks_prod" {
@@ -734,11 +744,21 @@ resource "azurerm_monitor_diagnostic_setting" "aks_prod" {
   enabled_log { category = "guard" }
 
   lifecycle {
+    ignore_changes = [
+      # Azure may mutate this; ignore to reduce churn (optional)
+      log_analytics_destination_type
+    ]
     precondition {
       condition     = local.aks_id != null && local.law_workspace_id != null
       error_message = "AKS diagnostics requires AKS id and Log Analytics workspace id."
     }
   }
+}
+
+# Auto-import the setting if it already exists
+import {
+  to = azurerm_monitor_diagnostic_setting.aks_prod[0]
+  id = "${local.aks_id}|${local.diag_name}"
 }
 
 resource "azurerm_monitor_diagnostic_setting" "aks_uat" {
@@ -752,11 +772,21 @@ resource "azurerm_monitor_diagnostic_setting" "aks_uat" {
   enabled_log { category = "guard" }
 
   lifecycle {
+    ignore_changes = [
+      # Azure may mutate this; ignore to reduce churn (optional)
+      log_analytics_destination_type
+    ]
     precondition {
       condition     = local.aks_id != null && local.law_workspace_id != null
       error_message = "AKS diagnostics requires AKS id and Log Analytics workspace id."
     }
   }
+}
+
+# Auto-import the setting if it already exists
+import {
+  to = azurerm_monitor_diagnostic_setting.aks_uat[0]
+  id = "${local.aks_id}|${local.diag_name}"
 }
 
 # Service Bus (env)
