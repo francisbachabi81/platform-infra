@@ -48,7 +48,7 @@ locals {
   sa_suffix_short = substr(local.sa_suffix_clean, 0, 6)
 
   sa1_name  = substr("sa${var.product}${var.env}${var.region}01${local.uniq}", 0, 24)
-  aks1_name = "aks-${var.product}-${local.plane_code}-${var.region}-100"
+  aks1_name = "aks-${var.product}-${var.env}-${var.region}-100"
 
   rg_hub = coalesce(var.rg_plane_name, "rg-${var.product}-${local.plane_code}-${var.region}-core-01")
 
@@ -372,7 +372,7 @@ locals {
 resource "azurerm_user_assigned_identity" "aks_env" {
   count               = local.deploy_aks_in_env ? 1 : 0
   provider            = azurerm
-  name                = "uai-${var.product}-${local.plane_code}-aks-${var.region}-100"
+  name                = "uai-${var.product}-${var.env}-aks-${var.region}-100"
   location            = var.location
   resource_group_name = var.rg_name
   tags                = merge(local.tags_common, { purpose = "aks-control-plane-identity" }, var.tags)
@@ -430,7 +430,7 @@ locals {
 # Diagnostics (AKS → LA)
 locals {
   want_aks_diag = local.create_aks  # plan-known flag
-  diag_name     = "aks-diag-${var.product}-${local.plane_code}-${var.region}"
+  diag_name     = "aks-diag-${var.product}-${var.env}-${var.region}"
 }
 
 resource "azurerm_monitor_diagnostic_setting" "aks" {
