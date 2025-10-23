@@ -640,3 +640,15 @@ variable "plane_override" {
     error_message = "plane_override must be one of: np, uat, pr, nonprod, prod (or null)."
   }
 }
+
+variable "manage_aks_diag_here" {
+  description = "If true, this stack creates the single AKS diagnostic setting for the current env."
+  type        = bool
+  default     = true
+}
+
+variable "diag_targets_json" {
+  description = "JSON array of resource IDs to attach diagnostics to (consumed by a future diag stack)."
+  type        = string
+  default     = "[]"
+}

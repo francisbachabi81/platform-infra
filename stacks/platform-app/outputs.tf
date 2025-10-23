@@ -236,3 +236,19 @@ output "function_apps" {
     }, null)
   }
 }
+
+output "diag_targets_partitioned" {
+  value = {
+    np  = local.diags_np
+    uat = local.diags_uat
+    pr  = local.diags_pr
+  }
+}
+
+output "diag_plane_code_effective" {
+  value = local.plane_effective_code
+}
+
+output "diag_name_default" {
+  value = local.diag_name
+}
