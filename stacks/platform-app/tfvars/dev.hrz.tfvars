@@ -9,12 +9,12 @@ tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
 # Hub overrides — shared-network (nonprod hub) usually lives in the shared nonprod sub.
 # Set these so data sources that use provider.azurerm.hub resolve correctly.
-hub_subscription_id = "PUT-SHARED-NONPROD-SUBSCRIPTION-GUID"
-hub_tenant_id       = "PUT-SHARED-NONPROD-TENANT-GUID"
+hub_subscription_id = "641d3872-8322-4bdb-83ce-bfbc119fa3cd"
+hub_tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
 # AKS provider alias for env=dev → shared nonprod subscription
-shared_nonprod_subscription_id = "PUT-SHARED-NONPROD-SUBSCRIPTION-GUID"
-shared_nonprod_tenant_id       = "PUT-SHARED-NONPROD-TENANT-GUID"
+shared_nonprod_subscription_id = "641d3872-8322-4bdb-83ce-bfbc119fa3cd"
+shared_nonprod_tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
 # (Optional for other env runs; defaults to subscription_id/tenant_id if omitted)
 # prod_subscription_id = "..."

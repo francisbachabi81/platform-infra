@@ -789,8 +789,11 @@ module "sbns1" {
     workload_purpose     = "Captures poison messages or failed notifications"
     workload_description = "Durable failure isolation for retry/audit"
   })
-  depends_on  = [data.azurerm_resource_group.env, module.aks1_env_prod, module.aks1_env_shared_nonprod, module.aks1_env_uat]
-}
+  depends_on = [
+    data.azurerm_resource_group.env,
+    module.funcapp2
+  ]
+  }
 
 # App Service Plan + Function Apps (env)
 module "plan1_func" {
@@ -847,7 +850,11 @@ module "funcapp1" {
   application_insights_connection_string = local.appi_connection_string
   tags = merge(local.tags_common, { component = "function-app", os = "linux" }, var.tags)
 
-  depends_on  = [data.azurerm_resource_group.env, module.plan1_func, module.sa1, module.sbns1]
+  depends_on  = [
+    data.azurerm_resource_group.env, 
+    module.plan1_func, 
+    module.sa1
+  ]
 }
 
 module "funcapp2" {
@@ -884,7 +891,12 @@ module "funcapp2" {
   application_insights_connection_string = local.appi_connection_string
   tags = merge(local.tags_common, { component = "function-app", os = "linux" }, var.tags)
 
-  depends_on  = [data.azurerm_resource_group.env, module.plan1_func, module.sa1, module.funcapp1]
+  depends_on  = [
+    data.azurerm_resource_group.env, 
+    module.plan1_func, 
+    module.sa1, 
+    module.funcapp1
+  ]
 }
 
 # Event Hubs (env)
