@@ -566,10 +566,10 @@ module "aks1_env_shared_nonprod" {
   source    = "../../modules/aks"
   providers = { azurerm = azurerm.shared_nonprod }
 
-  name                        = local.aks1_name
+  name                        = "aks-${var.product}-${local.plane_code}-${var.region}-100"
   location                    = var.location
   resource_group_name         = local.aks_rg_name_effective
-  node_resource_group         = "rg-${var.product}-${var.env}-${var.region}-aksn-01"
+  node_resource_group         = "rg-${var.product}-${local.plane_code}-${var.region}-aksn-01"
   default_nodepool_subnet_id  = local.aks_default_nodepool_subnet_id
 
   kubernetes_version = var.kubernetes_version
@@ -642,24 +642,42 @@ module "aks1_env_uat" {
   tags = merge(local.tags_common, local.tags_aks, var.tags)
 }
 
-# unify AKS ids/names for later references/outputs
+# unify AKS ids/names for later references/outputs (env-conditional to avoid zero-count indexing)
 locals {
-  aks_id = coalesce(
-    try(module.aks1_env_shared_nonprod[0].id, null),
-    try(module.aks1_env_prod[0].id,           null),
-    try(module.aks1_env_uat[0].id,            null)
-  )
-  aks_name = coalesce(
-    try(module.aks1_env_shared_nonprod[0].name, null),
-    try(module.aks1_env_prod[0].name,           null),
-    try(module.aks1_env_uat[0].name,            null)
-  )
+  aks_id = local.aks_enabled_env ? (
+    var.env == "dev"  ? try(module.aks1_env_shared_nonprod[0].id, null) :
+    var.env == "prod" ? try(module.aks1_env_prod[0].id,           null) :
+    var.env == "uat"  ? try(module.aks1_env_uat[0].id,            null) :
+                        null
+  ) : null
+
+  aks_name = local.aks_enabled_env ? (
+    var.env == "dev"  ? try(module.aks1_env_shared_nonprod[0].name, null) :
+    var.env == "prod" ? try(module.aks1_env_prod[0].name,           null) :
+    var.env == "uat"  ? try(module.aks1_env_uat[0].name,            null) :
+                        null
+  ) : null
+
+  aks_node_rg = local.aks_enabled_env ? (
+    var.env == "dev"  ? try(module.aks1_env_shared_nonprod[0].node_resource_group, null) :
+    var.env == "prod" ? try(module.aks1_env_prod[0].node_resource_group,           null) :
+    var.env == "uat"  ? try(module.aks1_env_uat[0].node_resource_group,            null) :
+                        null
+  ) : null
 }
 
-# Diagnostics (AKS → LA), per env
+# Diagnostics (AKS → LA)
 locals {
-  want_aks_diag = local.aks_enabled_env  # plan-known flag
+  want_aks_diag = local.aks_enabled_env
   diag_name     = "aks-diag-${var.product}-${var.env}-${var.region}"
+
+  # pick the single diag resource for this env, safely
+  aks_diag_id = local.want_aks_diag ? (
+    var.env == "dev"  ? try(azurerm_monitor_diagnostic_setting.aks_shared_nonprod[0].id, null) :
+    var.env == "prod" ? try(azurerm_monitor_diagnostic_setting.aks_prod[0].id,           null) :
+    var.env == "uat"  ? try(azurerm_monitor_diagnostic_setting.aks_uat[0].id,            null) :
+                        null
+  ) : null
 }
 
 resource "azurerm_monitor_diagnostic_setting" "aks_shared_nonprod" {

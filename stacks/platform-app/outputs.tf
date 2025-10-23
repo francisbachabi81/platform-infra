@@ -6,19 +6,11 @@ output "meta" {
     plane_code   = local.plane_code
     region_code  = var.region
     location     = var.location
-
-    # This stack’s default provider context
     subscription = var.subscription_id
     tenant       = var.tenant_id
     rg_name      = var.rg_name
     rg_hub       = local.rg_hub
     vnet_key     = local.vnet_key
-
-    # Effective AKS targeting (may differ for dev)
-    aks_provider_alias      = local.aks_provider_alias
-    aks_target_subscription = local.aks_subscription_id
-    aks_target_tenant       = local.aks_tenant_id
-    aks_target_rg_name      = local.aks_rg_name
   }
 }
 
@@ -27,15 +19,19 @@ output "features" {
     enable_public_features = local.enable_public_features
     enable_hrz_features    = local.enable_hrz_features
     create_aks             = local.create_aks
-    aks_enabled_env        = local.aks_enabled_env
-
-    sbns1_created    = try(length(module.sbns1)      > 0, false)
-    eventhub_created = try(length(module.eventhub)   > 0, false)
-    aks1_created     = try(length(module.aks1_env)   > 0, false)
-    postgres_created = try(length(module.postgres)   > 0, false)
-    redis_created    = try(length(module.redis1)     > 0, false)
-    cdbpg_created    = try(length(module.cdbpg1)     > 0, false)
-    cosmos_created   = try(length(module.cosmos1)    > 0, false)
+    deploy_aks_in_env      = local.aks_enabled_env
+    sbns1_created          = try(length(module.sbns1)  > 0, false)
+    eventhub_created       = try(length(module.eventhub) > 0, false)
+    # AKS can exist in exactly one of the three per-env modules
+    aks1_created           = (
+      try(length(module.aks1_env_shared_nonprod) > 0, false) ||
+      try(length(module.aks1_env_prod) > 0, false) ||
+      try(length(module.aks1_env_uat) > 0, false)
+    )
+    postgres_created       = try(length(module.postgres) > 0, false)
+    redis_created          = try(length(module.redis1) > 0, false)
+    cdbpg_created          = try(length(module.cdbpg1) > 0, false)
+    cosmos_created         = try(length(module.cosmos1) > 0, false)
   }
 }
 
@@ -44,13 +40,14 @@ output "ids" {
     kv1      = try(module.kv1[0].id, null)
     sa1      = try(module.sa1[0].id, null)
     cosmos1  = try(module.cosmos1[0].id, null)
-    aks1     = try(module.aks1_env[0].id, null)
+    # pick the AKS id from the locals unified above
+    aks1     = local.aks_id
     sbns1    = try(module.sbns1[0].id, null)
     eventhub = try(module.eventhub[0].id, null)
     postgres = try(module.postgres[0].id, null)
     redis    = try(module.redis1[0].id, null)
     cdbpg1   = try(module.cdbpg1[0].id, null)
-    aks_diag = try(values(azurerm_monitor_diagnostic_setting.aks)[0].id, null)
+    aks_diag = local.aks_diag_id
   }
 }
 
@@ -59,7 +56,8 @@ output "names" {
     kv1           = try(module.kv1[0].name, null)
     sa1           = try(module.sa1[0].name, null)
     cosmos1       = try(module.cosmos1[0].name, null)
-    aks1          = try(module.aks1_env[0].name, null)
+    # unified name from locals
+    aks1          = local.aks_name
     sbns1         = try(module.sbns1[0].name, null)
     eventhub_ns   = try(module.eventhub[0].namespace_name, null)
     eventhub      = try(module.eventhub[0].eventhub_name, null)
@@ -74,12 +72,11 @@ output "names" {
 
 output "networking" {
   value = {
-    pe_subnet_id_effective         = local.pe_subnet_id_effective
-    aks_nodepool_subnet_effective  = local.aks_nodepool_subnet_effective   # env-derived (pre-override)
-    aks_default_nodepool_subnet_id = local.aks_default_nodepool_subnet_id  # final subnet used by AKS (hub akspub in dev)
-    private_dns_zone_ids_used      = local.zone_ids_effective
-    aks_private_dns_zone_name      = local.aks_pdns_name
-    aks_region_token               = local.aks_region_token
+    pe_subnet_id_effective        = local.pe_subnet_id_effective
+    aks_nodepool_subnet_effective = local.aks_nodepool_subnet_effective
+    private_dns_zone_ids_used     = local.zone_ids_effective
+    aks_private_dns_zone_name     = local.aks_pdns_name
+    aks_region_token              = local.aks_region_token
   }
 }
 
@@ -88,24 +85,18 @@ output "observability" {
     law_workspace_id       = local.law_workspace_id
     appi_connection_string = local.appi_connection_string
     aks_diag_name          = local.diag_name
-    aks_diag_id            = try(values(azurerm_monitor_diagnostic_setting.aks)[0].id, null)
+    aks_diag_id            = local.aks_diag_id
   }
 }
 
 output "aks" {
-  value = try({
-    id                  = module.aks1_env[0].id
-    name                = module.aks1_env[0].name
-    node_resource_group = try(module.aks1_env[0].node_resource_group, null)
+  value = local.aks_enabled_env ? {
+    id                  = local.aks_id
+    name                = local.aks_name
+    node_resource_group = local.aks_node_rg
     service_cidr        = local.aks_service_cidr
     dns_service_ip      = local.aks_dns_service_ip
-
-    # helpful confirmations when env=dev
-    target_rg_name      = local.aks_rg_name
-    target_subscription = local.aks_subscription_id
-    provider_alias      = local.aks_provider_alias
-    subnet_id           = local.aks_default_nodepool_subnet_id
-  }, null)
+  } : null
 }
 
 locals {
