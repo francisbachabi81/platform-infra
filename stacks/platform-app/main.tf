@@ -789,7 +789,7 @@ module "sbns1" {
     workload_purpose     = "Captures poison messages or failed notifications"
     workload_description = "Durable failure isolation for retry/audit"
   })
-  depends_on  = [data.azurerm_resource_group.env]
+  depends_on  = [data.azurerm_resource_group.env, module.aks1_env_prod, module.aks1_env_shared_nonprod, module.aks1_env_uat]
 }
 
 # App Service Plan + Function Apps (env)
@@ -847,7 +847,7 @@ module "funcapp1" {
   application_insights_connection_string = local.appi_connection_string
   tags = merge(local.tags_common, { component = "function-app", os = "linux" }, var.tags)
 
-  depends_on  = [data.azurerm_resource_group.env, module.plan1_func, module.sa1]
+  depends_on  = [data.azurerm_resource_group.env, module.plan1_func, module.sa1, module.sbns1]
 }
 
 module "funcapp2" {
@@ -969,7 +969,7 @@ module "cdbpg1" {
 
   tags = merge(local.tags_common, { component = "cosmosdb-postgresql" }, var.tags)
 
-  depends_on  = [data.azurerm_resource_group.env]
+  depends_on  = [data.azurerm_resource_group.env, module.eventhub]
 }
 
 # PostgreSQL Flexible (env)
@@ -1010,7 +1010,7 @@ module "postgres" {
 
   tags = merge(local.tags_common, local.tags_postgres, var.tags, { role = "primary" })
 
-  depends_on  = [data.azurerm_resource_group.env]
+  depends_on  = [data.azurerm_resource_group.env, module.cdbpg1]
 }
 
 module "postgres_replica" {
@@ -1063,7 +1063,7 @@ module "redis1" {
 
   tags = merge(local.tags_common, local.tags_redis, var.tags)
 
-  depends_on  = [data.azurerm_resource_group.env]
+  depends_on  = [data.azurerm_resource_group.env, module.postgres, module.postgres_replica]
 }
 
 # ############################################
