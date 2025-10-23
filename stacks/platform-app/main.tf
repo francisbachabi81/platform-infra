@@ -583,7 +583,7 @@ module "funcapp2" {
 # Event Hubs (env)
 locals {
   create_eventhub      = var.env == "dev" || var.env == "prod"
-  eh1_namespace        = "evhns-${var.product}-${local.plane_code}-${var.region}-100"
+  eh1_namespace        = "evhns-${var.product}-${var.env}-${var.region}-100"
   eh1_name_clean       = replace(lower(trimspace(local.eh1_namespace)), "-", "")
   eh1_pe_name          = "pep-${local.eh1_name_clean}-namespace"
   eh1_psc_name         = "psc-${local.eh1_name_clean}-namespace"

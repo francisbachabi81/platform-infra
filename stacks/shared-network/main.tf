@@ -2147,7 +2147,7 @@ resource "azurerm_network_watcher" "hub" {
 resource "azurerm_network_watcher" "dev" {
   count               = local.is_nonprod ? 1 : 0
   provider            = azurerm.dev
-  name                = "nw-${var.product}-dev-${local.plane_code}-${var.region}-01"
+  name                = "nw-${var.product}-dev-${var.region}-01"
   location            = var.location
   resource_group_name = var.dev_spoke.rg
 
@@ -2163,7 +2163,7 @@ resource "azurerm_network_watcher" "dev" {
 resource "azurerm_network_watcher" "qa" {
   count               = local.is_nonprod ? 1 : 0
   provider            = azurerm.qa
-  name                = "nw-${var.product}-qa-${local.plane_code}-${var.region}-01"
+  name                = "nw-${var.product}-qa-${var.region}-01"
   location            = var.location
   resource_group_name = var.qa_spoke.rg
 
@@ -2179,7 +2179,7 @@ resource "azurerm_network_watcher" "qa" {
 resource "azurerm_network_watcher" "prod" {
   count               = local.is_prod ? 1 : 0
   provider            = azurerm.prod
-  name                = "nw-${var.product}-prod-${local.plane_code}-${var.region}-01"
+  name                = "nw-${var.product}-prod-${var.region}-01"
   location            = var.location
   resource_group_name = var.prod_spoke.rg
 
@@ -2195,7 +2195,7 @@ resource "azurerm_network_watcher" "prod" {
 resource "azurerm_network_watcher" "uat" {
   count               = local.is_prod ? 1 : 0
   provider            = azurerm.uat
-  name                = "nw-${var.product}-uat-${local.plane_code}-${var.region}-01"
+  name                = "nw-${var.product}-uat-${var.region}-01"
   location            = var.location
   resource_group_name = var.uat_spoke.rg
 
