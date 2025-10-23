@@ -4,12 +4,23 @@ product         = "hrz"                         # hrz (Azure Gov) | pub (Azure P
 location        = "USGov Arizona"
 region          = "usaz"
 rg_name         = "rg-hrz-dev-usaz-01"
-subscription_id = "641d3872-8322-4bdb-83ce-bfbc119fa3cd"
+subscription_id = "641d3872-8322-4bdb-83ce-bfbc119fa3cd"  # ← dev subscription (NOT the shared nonprod)
 tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
-# Hub overrides (only set if hub ≠ env subscription)
-hub_subscription_id = null
-hub_tenant_id       = null
+# Hub overrides — shared-network (nonprod hub) usually lives in the shared nonprod sub.
+# Set these so data sources that use provider.azurerm.hub resolve correctly.
+hub_subscription_id = "PUT-SHARED-NONPROD-SUBSCRIPTION-GUID"
+hub_tenant_id       = "PUT-SHARED-NONPROD-TENANT-GUID"
+
+# AKS provider alias for env=dev → shared nonprod subscription
+shared_nonprod_subscription_id = "PUT-SHARED-NONPROD-SUBSCRIPTION-GUID"
+shared_nonprod_tenant_id       = "PUT-SHARED-NONPROD-TENANT-GUID"
+
+# (Optional for other env runs; defaults to subscription_id/tenant_id if omitted)
+# prod_subscription_id = "..."
+# prod_tenant_id       = "..."
+# uat_subscription_id  = "..."
+# uat_tenant_id        = "..."
 
 # ── remote state (shared-network + core) ──────────────────────────────────────
 state_rg_name        = "rg-core-infra-state"
@@ -22,7 +33,10 @@ core_state_enabled   = true
 # core_state_key     = "core/np/terraform.tfstate"
 
 # ── tags / naming ────────────────────────────────────────────────────────────
-tags       = { env = "dev", product = "hrz" }
+tags        = { 
+    env = "dev"
+    product = "hrz" 
+}
 name_suffix = ""
 
 # ── key vault ─────────────────────────────────────────────────────────────────
@@ -32,16 +46,15 @@ soft_delete_retention_days = 7
 # ── storage ───────────────────────────────────────────────────────────────────
 sa_replication_type = "LRS"                      # LRS | ZRS | RAGRS | GZRS | RAGZRS
 
-# ── AKS (dev deploys in hub) ──────────────────────────────────────────────────
-create_aks          = true
-kubernetes_version  = "1.33.3"
-node_resource_group = "rg-hrz-np-aksnodes-usaz"  # module appends -01
-aks_node_vm_size    = "Standard_B2s"
-aks_node_count      = 1
-aks_pod_cidr        = "10.210.0.0/16"
-aks_service_cidr    = "10.110.0.0/16"
-aks_dns_service_ip  = "10.110.0.10"
-aks_sku_tier        = "Free"                     # Free | Standard | Premium
+# ── AKS (dev deploys in shared nonprod core RG; nodepool in nonprod hub/akspub) ─
+create_aks         = true
+kubernetes_version = "1.33.3"                    # ensure available in USGov region
+aks_node_vm_size   = "Standard_B2s"
+aks_node_count     = 1
+aks_pod_cidr       = "10.210.0.0/16"
+aks_service_cidr   = "10.110.0.0/16"
+aks_dns_service_ip = "10.110.0.10"
+aks_sku_tier       = "Free"                      # Free | Standard | Premium
 
 # ── ACR (hub) ─────────────────────────────────────────────────────────────────
 acr_sku                        = "Basic"         # Basic | Standard | Premium
@@ -74,7 +87,7 @@ cdbpg_node_vcore_count                = 2
 cdbpg_node_storage_quota_in_mb        = 131072
 cdbpg_enable_private_endpoint         = true
 cdbpg_preferred_primary_zone          = "2"
-# cdbpg_admin_password is provided securely by the workflow via TF_VAR_cdbpg_admin_password
+# cdbpg_admin_password via TF_VAR_cdbpg_admin_password
 
 # ── PostgreSQL Flexible Server (env) ─────────────────────────────────────────
 pg_version               = "16"
@@ -90,7 +103,7 @@ pg_firewall_rules        = []
 pg_databases             = ["appdb"]
 pg_replica_enabled       = false
 pg_enable_postgis        = true
-# pg_admin_password is provided securely by the workflow via TF_VAR_pg_admin_password
+# pg_admin_password via TF_VAR_pg_admin_password
 
 # ── Cosmos (NoSQL) (env) ─────────────────────────────────────────────────────
 cosno_total_throughput_limit = 400
@@ -100,12 +113,6 @@ redis_sku_name   = "Standard"                     # Basic | Standard | Premium
 redis_sku_family = "C"
 redis_capacity   = 1
 
-# ── App Service Plan / Functions (env; public cloud only typically) ──────────
+# ── App Service Plan / Functions (env; often off in Gov for apps) ────────────
 asp_os_type              = "Linux"
 func_linux_plan_sku_name = "P0v3"
-
-# ── Optional networking overrides (only if shared-state not ready) ───────────
-# pe_subnet_id           = "/subscriptions/.../subnets/privatelink"
-# aks_nodepool_subnet_id = "/subscriptions/.../subnets/aks-hrz-np-usaz"
-# private_dns_zone_ids   = { "privatelink.blob.core.usgovcloudapi.net" = "/subscriptions/.../privateDnsZones/..." }
-# pg_delegated_subnet_id = "/subscriptions/.../subnets/pgflex"

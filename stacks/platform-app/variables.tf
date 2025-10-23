@@ -506,26 +506,38 @@ variable "qa_tenant_id" {
   default     = null
 }
 
-variable "uat_subscription_id" {
-  description = "uat subscription override"
+variable "shared_nonprod_subscription_id" {
+  description = "Shared nonprod subscription ID (used for AKS when env=dev)"
   type        = string
   default     = null
 }
 
-variable "uat_tenant_id" {
-  description = "uat tenant override"
+variable "shared_nonprod_tenant_id" {
+  description = "Tenant ID for the shared nonprod subscription (used for AKS when env=dev)"
   type        = string
   default     = null
 }
 
 variable "prod_subscription_id" {
-  description = "prod subscription override"
+  description = "Prod subscription ID override (AKS when env=prod; defaults to var.subscription_id)"
   type        = string
   default     = null
 }
 
 variable "prod_tenant_id" {
-  description = "prod tenant override"
+  description = "Tenant ID for the prod subscription override (defaults to var.tenant_id)"
+  type        = string
+  default     = null
+}
+
+variable "uat_subscription_id" {
+  description = "UAT subscription ID override (AKS when env=uat; defaults to var.subscription_id)"
+  type        = string
+  default     = null
+}
+
+variable "uat_tenant_id" {
+  description = "Tenant ID for the UAT subscription override (defaults to var.tenant_id)"
   type        = string
   default     = null
 }
