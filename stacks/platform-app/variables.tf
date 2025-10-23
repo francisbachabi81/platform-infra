@@ -631,3 +631,12 @@ variable "cdbpg_preferred_primary_zone" {
     error_message = "cdbpg_preferred_primary_zone must be 1, 2, or 3 (or null)."
   }
 }
+
+variable "plane_override" {
+  type        = string
+  default     = null
+  validation {
+    condition     = var.plane_override == null || can(index(["np","uat","pr","nonprod","prod"], lower(var.plane_override)))
+    error_message = "plane_override must be one of: np, uat, pr, nonprod, prod (or null)."
+  }
+}

@@ -668,8 +668,30 @@ locals {
 
 # Diagnostics (AKS → LA)
 locals {
+  env_norm   = lower(var.env)
+  plane_ovrd = var.plane_override == null ? null : lower(var.plane_override)
+  
+  plane_from_env = lookup({
+    dev  = "np",
+    qa   = "np",
+    uat  = "uat",
+    prod = "pr",
+    np   = "np",
+    pr   = "pr",
+  }, local.env_norm, "np")  # default safely to np if ever unknown
+
+  plane_effective_code = coalesce(
+    contains(["nonprod","np"], local.plane_ovrd) ? "np"  :
+    contains(["prod","pr"],    local.plane_ovrd) ? "prod"  :
+    local.plane_ovrd == "uat"                    ? "uat" :
+    null,
+    local.plane_from_env
+  )
+
   want_aks_diag = local.aks_enabled_env
-  diag_name     = "aks-diag-${var.product}-${var.env}-${var.region}"
+
+  # Keep original env text for naming to avoid changing existing resource names
+  diag_name = "aks-diag-${var.product}-${local.plane_effective_code}-${var.region}"
 
   # pick the single diag resource for this env, safely
   aks_diag_id = local.want_aks_diag ? (
