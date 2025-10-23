@@ -38,7 +38,7 @@ locals {
   plane_code = local.plane == "nonprod" ? "np" : "pr"
 
   vnet_key = (
-    var.env == "dev"  ? "nphub"  :
+    var.env == "dev"  ? "dev_spoke"  :
     var.env == "qa"   ? "qa_spoke"   :
     var.env == "uat"  ? "uat_spoke"  : "prod_spoke"
   )
@@ -71,6 +71,7 @@ locals {
   tags_postgres = { purpose = "postgres-database",  service = "postgresql" }
   tags_redis    = { purpose = "redis-cache",        service = "redis" }
 
+  # Default: create AKS for all envs except 'qa'; still overridable via var.create_aks
   create_aks = var.create_aks == null ? (var.env != "qa") : var.create_aks
 }
 
@@ -155,8 +156,7 @@ locals {
   law_workspace_id        = var.law_workspace_id_override        != null ? var.law_workspace_id_override        : try(local.core_outputs.observability.law_workspace_id, null)
   appi_connection_string  = var.appi_connection_string_override  != null ? var.appi_connection_string_override  : try(local.core_outputs.observability.appi_connection_string, null)
 
-  deploy_aks_in_hub = local.is_dev && local.enable_both && local.create_aks
-  deploy_aks_in_env = (local.is_uat || local.is_prod) && local.enable_both && local.create_aks
+  deploy_aks_in_env = local.enable_both && local.create_aks
 
   dev_only_tags  = { environment = "dev",  purpose = "env-dev",  criticality = "Low",    patchgroup = "Test",    lane = "nonprod" }
   qa_only_tags   = { environment = "qa",   purpose = "env-qa",   criticality = "Medium", patchgroup = "Test",    lane = "nonprod" }
@@ -358,7 +358,7 @@ resource "azurerm_cosmosdb_sql_container" "events" {
   depends_on            = [data.azurerm_resource_group.env, module.cosmos1]
 }
 
-# AKS (dev in hub; uat/prod in env)
+# AKS (env only; none in QA)
 locals {
   aks_service_cidr = coalesce(
     var.aks_service_cidr,
@@ -368,15 +368,7 @@ locals {
   aks_dns_service_ip = coalesce(var.aks_dns_service_ip, cidrhost(local.aks_service_cidr, 10))
 }
 
-resource "azurerm_user_assigned_identity" "aks_hub" {
-  count               = local.deploy_aks_in_hub ? 1 : 0
-  provider            = azurerm.hub
-  name                = "uai-${var.product}-${local.plane_code}-aks-${var.region}-100"
-  location            = var.location
-  resource_group_name = local.rg_hub
-  tags                = merge(local.tags_common, { purpose = "aks-control-plane-identity", layer = "plane-resources" }, var.tags)
-}
-
+# (removed hub identity entirely)
 resource "azurerm_user_assigned_identity" "aks_env" {
   count               = local.deploy_aks_in_env ? 1 : 0
   provider            = azurerm
@@ -387,21 +379,7 @@ resource "azurerm_user_assigned_identity" "aks_env" {
   depends_on          = [data.azurerm_resource_group.env]
 }
 
-resource "azurerm_role_assignment" "aks_pdz_contrib_hub" {
-  count                = local.deploy_aks_in_hub ? 1 : 0
-  provider             = azurerm.hub
-  scope                = try(local.zone_ids_effective[local.aks_pdns_name], null)
-  role_definition_name = "Private DNS Zone Contributor"
-  principal_id         = azurerm_user_assigned_identity.aks_hub[0].principal_id
-  lifecycle {
-    precondition {
-      condition     = try(local.zone_ids_effective[local.aks_pdns_name], null) != null
-      error_message = "AKS PDZ '${local.aks_pdns_name}' not found."
-    }
-  }
-  depends_on          = [data.azurerm_resource_group.env]
-}
-
+# (removed hub role assignment)
 resource "azurerm_role_assignment" "aks_pdz_contrib_env" {
   count                = local.deploy_aks_in_env ? 1 : 0
   provider             = azurerm
@@ -415,34 +393,6 @@ resource "azurerm_role_assignment" "aks_pdz_contrib_env" {
     }
   }
   depends_on          = [data.azurerm_resource_group.env]
-}
-
-module "aks1_hub" {
-  count     = local.deploy_aks_in_hub ? 1 : 0
-  source    = "../../modules/aks"
-  providers = { azurerm = azurerm.hub }
-
-  name                        = local.aks1_name
-  location                    = var.location
-  resource_group_name         = local.rg_hub
-  node_resource_group         = "rg-${var.product}-${local.plane_code}-${var.region}-aksn-01"
-  default_nodepool_subnet_id  = local.aks_nodepool_subnet_effective
-
-  kubernetes_version = var.kubernetes_version
-  node_vm_size       = var.aks_node_vm_size
-  node_count         = var.aks_node_count
-  sku_tier           = var.aks_sku_tier
-
-  pod_cidr       = var.aks_pod_cidr
-  service_cidr   = local.aks_service_cidr
-  dns_service_ip = local.aks_dns_service_ip
-
-  private_dns_zone_id       = try(local.zone_ids_effective[local.aks_pdns_name], null)
-  identity_type             = "UserAssigned"
-  user_assigned_identity_id = azurerm_user_assigned_identity.aks_hub[0].id
-
-  tags       = merge(local.tags_common, local.tags_aks, var.tags, { layer = "plane-resources" })
-  depends_on = [azurerm_role_assignment.aks_pdz_contrib_hub]
 }
 
 module "aks1_env" {
@@ -469,20 +419,18 @@ module "aks1_env" {
   user_assigned_identity_id = azurerm_user_assigned_identity.aks_env[0].id
 
   tags       = merge(local.tags_common, local.tags_aks, var.tags)
-  depends_on          = [data.azurerm_resource_group.env, azurerm_role_assignment.aks_pdz_contrib_env]
+  depends_on = [data.azurerm_resource_group.env, azurerm_role_assignment.aks_pdz_contrib_env]
 }
 
 locals {
-  aks_id   = try(module.aks1_hub[0].id, module.aks1_env[0].id, null)
-  aks_name = try(module.aks1_hub[0].name, module.aks1_env[0].name, null)
+  aks_id   = try(module.aks1_env[0].id, null)
+  aks_name = try(module.aks1_env[0].name, null)
 }
 
 # Diagnostics (AKS → LA)
-# locals { manage_aks_diag = local.enable_both && local.create_aks && local.aks_id != null && local.law_workspace_id != null }
-
 locals {
   want_aks_diag = local.create_aks  # plan-known flag
-  diag_name = "aks-diag-${var.product}-${local.plane_code}-${var.region}"
+  diag_name     = "aks-diag-${var.product}-${local.plane_code}-${var.region}"
 }
 
 resource "azurerm_monitor_diagnostic_setting" "aks" {
@@ -494,7 +442,7 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
   enabled_log { category = "kube-audit-admin" }
   enabled_log { category = "guard" }
 
-  depends_on = [module.aks1_hub, module.aks1_env]
+  depends_on = [module.aks1_env]
 
   lifecycle {
     precondition {

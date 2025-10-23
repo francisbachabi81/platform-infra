@@ -9,7 +9,7 @@ output "meta" {
     subscription = var.subscription_id
     tenant       = var.tenant_id
     rg_name      = var.rg_name
-    # rg_hub       = local.rg_hub
+    rg_hub       = local.rg_hub
     vnet_key     = local.vnet_key
   }
 }
@@ -19,11 +19,10 @@ output "features" {
     enable_public_features = local.enable_public_features
     enable_hrz_features    = local.enable_hrz_features
     create_aks             = local.create_aks
-    deploy_aks_in_hub      = local.deploy_aks_in_hub
     deploy_aks_in_env      = local.deploy_aks_in_env
     sbns1_created          = try(length(module.sbns1)  > 0, false)
     eventhub_created       = try(length(module.eventhub) > 0, false)
-    aks1_created           = (try(length(module.aks1_hub) > 0, false) || try(length(module.aks1_env) > 0, false))
+    aks1_created           = (try(length(module.aks1_env) > 0, false))
     postgres_created       = try(length(module.postgres) > 0, false)
     redis_created          = try(length(module.redis1) > 0, false)
     cdbpg_created          = try(length(module.cdbpg1) > 0, false)
@@ -36,7 +35,7 @@ output "ids" {
     kv1      = try(module.kv1[0].id, null)
     sa1      = try(module.sa1[0].id, null)
     cosmos1  = try(module.cosmos1[0].id, null)
-    aks1     = try(module.aks1_hub[0].id, module.aks1_env[0].id, null)
+    aks1     = try(module.aks1_env[0].id, null)
     sbns1    = try(module.sbns1[0].id, null)
     eventhub = try(module.eventhub[0].id, null)
     postgres = try(module.postgres[0].id, null)
@@ -51,7 +50,7 @@ output "names" {
     kv1           = try(module.kv1[0].name, null)
     sa1           = try(module.sa1[0].name, null)
     cosmos1       = try(module.cosmos1[0].name, null)
-    aks1          = try(module.aks1_hub[0].name, module.aks1_env[0].name, null)
+    aks1          = try(module.aks1_env[0].name, null)
     sbns1         = try(module.sbns1[0].name, null)
     eventhub_ns   = try(module.eventhub[0].namespace_name, null)
     eventhub      = try(module.eventhub[0].eventhub_name, null)
@@ -85,9 +84,9 @@ output "observability" {
 
 output "aks" {
   value = try({
-    id                  = try(module.aks1_hub[0].id,  module.aks1_env[0].id)
-    name                = try(module.aks1_hub[0].name, module.aks1_env[0].name)
-    node_resource_group = try(module.aks1_hub[0].node_resource_group, module.aks1_env[0].node_resource_group, null)
+    id                  = try(module.aks1_env[0].id)
+    name                = try(module.aks1_env[0].name)
+    node_resource_group = try(module.aks1_env[0].node_resource_group, null)
     service_cidr        = local.aks_service_cidr
     dns_service_ip      = local.aks_dns_service_ip
   }, null)
