@@ -38,7 +38,7 @@ locals {
   plane_code = local.plane == "nonprod" ? "np" : "pr"
 
   vnet_key = (
-    var.env == "dev"  ? "dev_spoke"  :
+    var.env == "dev"  ? "nphub"  :
     var.env == "qa"   ? "qa_spoke"   :
     var.env == "uat"  ? "uat_spoke"  : "prod_spoke"
   )
