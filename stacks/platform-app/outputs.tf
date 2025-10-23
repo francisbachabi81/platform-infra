@@ -1,16 +1,24 @@
 output "meta" {
   value = {
-    product     = var.product
-    env         = var.env
-    plane       = local.plane
-    plane_code  = local.plane_code
-    region_code = var.region
-    location    = var.location
+    product      = var.product
+    env          = var.env
+    plane        = local.plane
+    plane_code   = local.plane_code
+    region_code  = var.region
+    location     = var.location
+
+    # This stack’s default provider context
     subscription = var.subscription_id
     tenant       = var.tenant_id
     rg_name      = var.rg_name
     rg_hub       = local.rg_hub
     vnet_key     = local.vnet_key
+
+    # Effective AKS targeting (may differ for dev)
+    aks_provider_alias      = local.aks_provider_alias
+    aks_target_subscription = local.aks_subscription_id
+    aks_target_tenant       = local.aks_tenant_id
+    aks_target_rg_name      = local.aks_rg_name
   }
 }
 
@@ -19,14 +27,15 @@ output "features" {
     enable_public_features = local.enable_public_features
     enable_hrz_features    = local.enable_hrz_features
     create_aks             = local.create_aks
-    deploy_aks_in_env      = local.deploy_aks_in_env
-    sbns1_created          = try(length(module.sbns1)  > 0, false)
-    eventhub_created       = try(length(module.eventhub) > 0, false)
-    aks1_created           = (try(length(module.aks1_env) > 0, false))
-    postgres_created       = try(length(module.postgres) > 0, false)
-    redis_created          = try(length(module.redis1) > 0, false)
-    cdbpg_created          = try(length(module.cdbpg1) > 0, false)
-    cosmos_created         = try(length(module.cosmos1) > 0, false)
+    aks_enabled_env        = local.aks_enabled_env
+
+    sbns1_created    = try(length(module.sbns1)      > 0, false)
+    eventhub_created = try(length(module.eventhub)   > 0, false)
+    aks1_created     = try(length(module.aks1_env)   > 0, false)
+    postgres_created = try(length(module.postgres)   > 0, false)
+    redis_created    = try(length(module.redis1)     > 0, false)
+    cdbpg_created    = try(length(module.cdbpg1)     > 0, false)
+    cosmos_created   = try(length(module.cosmos1)    > 0, false)
   }
 }
 
@@ -65,11 +74,12 @@ output "names" {
 
 output "networking" {
   value = {
-    pe_subnet_id_effective        = local.pe_subnet_id_effective
-    aks_nodepool_subnet_effective = local.aks_nodepool_subnet_effective
-    private_dns_zone_ids_used     = local.zone_ids_effective
-    aks_private_dns_zone_name     = local.aks_pdns_name
-    aks_region_token              = local.aks_region_token
+    pe_subnet_id_effective         = local.pe_subnet_id_effective
+    aks_nodepool_subnet_effective  = local.aks_nodepool_subnet_effective   # env-derived (pre-override)
+    aks_default_nodepool_subnet_id = local.aks_default_nodepool_subnet_id  # final subnet used by AKS (hub akspub in dev)
+    private_dns_zone_ids_used      = local.zone_ids_effective
+    aks_private_dns_zone_name      = local.aks_pdns_name
+    aks_region_token               = local.aks_region_token
   }
 }
 
@@ -84,11 +94,17 @@ output "observability" {
 
 output "aks" {
   value = try({
-    id                  = try(module.aks1_env[0].id)
-    name                = try(module.aks1_env[0].name)
+    id                  = module.aks1_env[0].id
+    name                = module.aks1_env[0].name
     node_resource_group = try(module.aks1_env[0].node_resource_group, null)
     service_cidr        = local.aks_service_cidr
     dns_service_ip      = local.aks_dns_service_ip
+
+    # helpful confirmations when env=dev
+    target_rg_name      = local.aks_rg_name
+    target_subscription = local.aks_subscription_id
+    provider_alias      = local.aks_provider_alias
+    subnet_id           = local.aks_default_nodepool_subnet_id
   }, null)
 }
 
