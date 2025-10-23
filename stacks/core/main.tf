@@ -91,7 +91,11 @@ resource "azurerm_application_insights" "plane" {
   internet_ingestion_enabled = var.appi_internet_ingestion_enabled
   internet_query_enabled     = var.appi_internet_query_enabled
   tags                       = merge(local.tags_common, { service = "application-insights", plane = local.plane_code })
-  depends_on                 = [module.rg_core_platform, azurerm_log_analytics_workspace.plane]
+  
+  depends_on                 = [
+    module.rg_core_platform,
+    azurerm_log_analytics_workspace.plane
+  ]
 }
 
 resource "azurerm_recovery_services_vault" "plane" {
@@ -160,7 +164,10 @@ resource "azurerm_monitor_activity_log_alert" "rg_admin_write" {
     }
   }
 
-  depends_on = [ azurerm_log_analytics_workspace.plane, module.rg_core_platform]
+  depends_on = [ 
+    module.rg_core_platform,
+    azurerm_monitor_action_group.core 
+  ]
 }
 
 resource "azurerm_monitor_activity_log_alert" "rg_admin_delete" {
@@ -184,7 +191,10 @@ resource "azurerm_monitor_activity_log_alert" "rg_admin_delete" {
     }
   }
 
-  depends_on = [ azurerm_log_analytics_workspace.plane, module.rg_core_platform, azurerm_application_insights.plane ]
+  depends_on = [ 
+    module.rg_core_platform,
+    azurerm_monitor_action_group.core 
+  ]
 }
 
 resource "azurerm_monitor_metric_alert" "appi_failures" {
@@ -213,7 +223,11 @@ resource "azurerm_monitor_metric_alert" "appi_failures" {
     }
   }
 
-  depends_on = [ azurerm_log_analytics_workspace.plane, azurerm_monitor_activity_log_alert.rg_admin_delete, azurerm_application_insights.plane ]
+  depends_on = [ 
+    module.rg_core_platform, 
+    azurerm_application_insights.plane,
+    azurerm_monitor_action_group.core 
+  ]
 }
 
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "heartbeat_missing" {
@@ -246,5 +260,9 @@ KQL
     }
   }
 
-  depends_on = [ azurerm_log_analytics_workspace.plane, azurerm_monitor_metric_alert.appi_failures, azurerm_application_insights.plane ]
+  depends_on = [
+    module.rg_core_platform,                       # RG must exist first (when you create it)
+    azurerm_log_analytics_workspace.plane,         # Workspace must exist
+    azurerm_monitor_action_group.core              # Action group (if created) must exist
+  ]
 }
