@@ -480,7 +480,7 @@ locals {
 resource "azurerm_user_assigned_identity" "aks_env_shared_nonprod" {
   count               = local.aks_enabled_env && var.env == "dev" ? 1 : 0
   provider            = azurerm.shared_nonprod
-  name                = "uai-${var.product}-${var.env}-${var.region}-aks-100"
+  name                = "uai-${var.product}-${local.plane_code}-${var.region}-aks-100"
   location            = var.location
   resource_group_name = local.aks_rg_name_effective
   tags                = merge(local.tags_common, { purpose = "aks-control-plane-identity" }, var.tags)
