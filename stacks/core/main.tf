@@ -159,6 +159,8 @@ resource "azurerm_monitor_activity_log_alert" "rg_admin_write" {
       action_group_id = azurerm_monitor_action_group.core[0].id
     }
   }
+
+  depends_on = [ azurerm_log_analytics_workspace.plane, module.rg_core_platform]
 }
 
 resource "azurerm_monitor_activity_log_alert" "rg_admin_delete" {
@@ -181,6 +183,8 @@ resource "azurerm_monitor_activity_log_alert" "rg_admin_delete" {
       action_group_id = azurerm_monitor_action_group.core[0].id
     }
   }
+
+  depends_on = [ azurerm_log_analytics_workspace.plane, module.rg_core_platform, azurerm_application_insights.plane ]
 }
 
 resource "azurerm_monitor_metric_alert" "appi_failures" {
@@ -208,6 +212,8 @@ resource "azurerm_monitor_metric_alert" "appi_failures" {
       action_group_id = azurerm_monitor_action_group.core[0].id
     }
   }
+
+  depends_on = [ azurerm_log_analytics_workspace.plane, azurerm_monitor_activity_log_alert.rg_admin_delete, azurerm_application_insights.plane ]
 }
 
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "heartbeat_missing" {
@@ -239,4 +245,6 @@ KQL
       action_groups = [azurerm_monitor_action_group.core[0].id]
     }
   }
+
+  depends_on = [ azurerm_log_analytics_workspace.plane, azurerm_monitor_metric_alert.appi_failures, azurerm_application_insights.plane ]
 }
