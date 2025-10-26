@@ -1,4 +1,4 @@
-name: 03-platform-apps-deploy
+name: xy-platform-apps-deploy
 run-name: ${{ format('{0}-{1}-{2} {3}', github.workflow, inputs.product, inputs.env, (inputs.destroy && 'destroy' || (inputs.apply && 'apply' || 'plan'))) }}
 
 on:
