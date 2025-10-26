@@ -1,15 +1,28 @@
 name: 02-core-plan
-run-name: ${{ format('{0}-{1}-{2} plan', github.workflow, inputs.product, inputs.plane) }}
+run-name: ${{ format('{0} plan {1}-{2}', github.workflow, inputs.product, inputs.plane) }}
 
 on:
   push:
     branches: [prod]
-    paths: ["stacks/core/**", "modules/**"]
+    paths:
+      - "stacks/core/**"
+      - "modules/**"
   workflow_dispatch:
     inputs:
-      plane:   { description: "Plane (np/pr)", type: choice, options: [np, pr], default: pr }
-      product: { description: "Product", type: choice, options: [hrz, pub], default: hrz }
-      terraform_version: { type: string, default: "1.13.3" }
+      plane:
+        description: "Plane (np = dev/qa, pr = uat/prod)"
+        type: choice
+        options: [np, pr]
+        default: pr
+      product:
+        description: "Product (hrz = Azure Gov, pub = Azure Commercial)"
+        type: choice
+        options: [hrz, pub]
+        default: hrz
+      terraform_version:
+        description: "Terraform version"
+        type: string
+        default: "1.13.3"
 
 permissions:
   id-token: write
@@ -22,33 +35,65 @@ env:
 
 jobs:
   plan:
+    name: "Plan (core)"
     runs-on: ubuntu-latest
-    environment: ${{ inputs.plane == 'pr' && 'prod' || 'nonprod' }}
-    defaults: { run: { working-directory: stacks/core } }
+    environment: prod
+    defaults:
+      run:
+        working-directory: stacks/core
 
     steps:
       - uses: actions/checkout@v4
 
-      # ----- original selection (unchanged) -----
+      # Pick TF version without using inline expressions that break on push
+      - name: Determine Terraform version
+        id: tfver
+        shell: bash
+        run: |
+          TV="${{ inputs.terraform_version }}"
+          if [ -z "$TV" ]; then TV="1.13.3"; fi
+          echo "version=$TV" >> "$GITHUB_OUTPUT"
+
+      # Decide cloud + audience + TENANT + subs (set safe defaults here)
       - name: Select cloud + subscriptions
         id: sel
         shell: bash
         run: |
           set -euo pipefail
-          PLANE="${{ inputs.plane || 'pr' }}"; PRODUCT="${{ inputs.product || 'hrz' }}"
+          PLANE="${{ inputs.plane }}"
+          PRODUCT="${{ inputs.product }}"
+          # Defaults if triggered by push (inputs.* unset)
+          if [ -z "${PLANE:-}" ]; then PLANE="pr"; fi
+          if [ -z "${PRODUCT:-}" ]; then PRODUCT="hrz"; fi
+
           if [ "$PRODUCT" = "hrz" ]; then
-            CLOUD_ENV="AzureUSGovernment"; ARM_ENV="usgovernment"
-            TENANT="${{ secrets.AZ_TENANT_HRZ }}"; CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
+            CLOUD_ENV="AzureUSGovernment"
+            ARM_ENV="usgovernment"
+            TENANT="${{ secrets.AZ_TENANT_HRZ }}"
+            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
             AUDIENCE="api://AzureADTokenExchangeUSGov"
             STATE_SUB="${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}"
-            case "$PLANE" in np) TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}";; pr) TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}";; esac
+            case "$PLANE" in
+              np) TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}";;
+              pr) TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}";;
+              *) echo "Unknown plane: $PLANE"; exit 1;;
+            esac
           else
-            CLOUD_ENV="AzureCloud"; ARM_ENV="public"
-            TENANT="${{ secrets.AZ_TENANT_PUB }}"; CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
+            CLOUD_ENV="AzureCloud"
+            ARM_ENV="public"
+            TENANT="${{ secrets.AZ_TENANT_PUB }}"
+            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
             AUDIENCE="api://AzureADTokenExchange"
             STATE_SUB="${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}"
-            case "$PLANE" in np) TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}";; pr) TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}";; esac
+            case "$PLANE" in
+              np) TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}";;
+              pr) TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}";;
+              *) echo "Unknown plane: $PLANE"; exit 1;;
+            esac
           fi
+
+          echo "PLANE=$PLANE"           >> $GITHUB_OUTPUT
+          echo "PRODUCT=$PRODUCT"       >> $GITHUB_OUTPUT
           echo "CLOUD_ENV=$CLOUD_ENV"   >> $GITHUB_OUTPUT
           echo "ARM_ENV=$ARM_ENV"       >> $GITHUB_OUTPUT
           echo "TENANT=$TENANT"         >> $GITHUB_OUTPUT
@@ -56,13 +101,14 @@ jobs:
           echo "AUDIENCE=$AUDIENCE"     >> $GITHUB_OUTPUT
           echo "STATE_SUB=$STATE_SUB"   >> $GITHUB_OUTPUT
           echo "TARGET_SUB=$TARGET_SUB" >> $GITHUB_OUTPUT
+
           {
             echo "ARM_ENVIRONMENT=$ARM_ENV"
             echo "ARM_TENANT_ID=$TENANT"
             echo "ARM_CLIENT_ID=$CLIENT_ID"
             echo "TF_VAR_tenant_id=$TENANT"
-            echo "TF_VAR_product=${PRODUCT}"
-            echo "TF_VAR_plane=${PLANE}"
+            echo "TF_VAR_product=$PRODUCT"
+            echo "TF_VAR_plane=$PLANE"
             echo "TF_VAR_subscription_id=$TARGET_SUB"
           } >> $GITHUB_ENV
 
@@ -71,21 +117,30 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PLANE="${{ inputs.plane || 'pr' }}"; PRODUCT="${{ inputs.product || 'hrz' }}"
+          PLANE="${{ steps.sel.outputs.PLANE }}"
+          PRODUCT="${{ steps.sel.outputs.PRODUCT }}"
+
           TV1="${GITHUB_WORKSPACE}/stacks/core/tfvars/${PLANE}.${PRODUCT}.tfvars"
           TV2="${GITHUB_WORKSPACE}/stacks/core/tfvars/${PLANE}.tfvars"
-          TFVARS_PATH="${TV1}"; [ -f "$TV1" ] || TFVARS_PATH="${TV2}"
-          [ -f "$TFVARS_PATH" ] || { echo "Missing tfvars"; exit 1; }
+          if [ -f "$TV1" ]; then
+            TFVARS_PATH="$TV1"
+          elif [ -f "$TV2" ]; then
+            TFVARS_PATH="$TV2"
+          else
+            echo "❌ Missing tfvars: $TV1 (or $TV2)"; exit 1
+          fi
           echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
-          echo "STATE_RG=rg-core-infra-state"               >> "$GITHUB_OUTPUT"
-          echo "STATE_SA=sacoretfstateinfra"               >> "$GITHUB_OUTPUT"
-          echo "STATE_CONTAINER=tfstate"                   >> "$GITHUB_OUTPUT"
+
+          echo "STATE_RG=rg-core-infra-state"     >> "$GITHUB_OUTPUT"
+          echo "STATE_SA=sacoretfstateinfra"      >> "$GITHUB_OUTPUT"
+          echo "STATE_CONTAINER=tfstate"          >> "$GITHUB_OUTPUT"
           echo "STATE_KEY=core/${PRODUCT}/${PLANE}/terraform.tfstate" >> "$GITHUB_OUTPUT"
 
       - uses: hashicorp/setup-terraform@v3
-        with: { terraform_version: ${{ inputs.terraform_version || '1.13.3' }} }
+        with:
+          terraform_version: ${{ steps.tfver.outputs.version }}
 
-      - name: Azure Login (state)
+      - name: Azure Login (state subscription for backend)
         uses: azure/login@v2
         with:
           client-id:       ${{ steps.sel.outputs.CLIENT_ID }}
@@ -94,7 +149,7 @@ jobs:
           environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
           audience:        ${{ steps.sel.outputs.AUDIENCE }}
 
-      - name: Terraform Init (backend)
+      - name: Terraform Init (backend in state/prod subscription)
         env:
           ARM_USE_OIDC: true
           ARM_CLIENT_ID:       ${{ steps.sel.outputs.CLIENT_ID }}
@@ -112,7 +167,7 @@ jobs:
             -backend-config="key=${{ steps.paths.outputs.STATE_KEY }}" \
             -backend-config="use_azuread_auth=true"
 
-      - name: Azure Login (target)
+      - name: Azure Login (target subscription for plan)
         uses: azure/login@v2
         with:
           client-id:       ${{ steps.sel.outputs.CLIENT_ID }}
@@ -121,7 +176,7 @@ jobs:
           environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
           audience:        ${{ steps.sel.outputs.AUDIENCE }}
 
-      - name: Fmt & Validate
+      - name: Terraform Fmt & Validate
         run: |
           terraform fmt -recursive
           terraform validate
@@ -131,13 +186,14 @@ jobs:
         run: |
           terraform plan -input=false -lock-timeout=5m \
             -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
-            -var "product=${{ inputs.product || 'hrz' }}" \
-            -var "plane=${{ inputs.plane || 'pr' }}" \
+            -var "product=${{ steps.sel.outputs.PRODUCT }}" \
+            -var "plane=${{ steps.sel.outputs.PLANE }}" \
             -detailed-exitcode -out=tfplan || ec=$?
           echo "exitcode=${ec:-0}" >> $GITHUB_OUTPUT
           terraform show -no-color tfplan > plan.txt
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload plan
+        uses: actions/upload-artifact@v4
         with:
           name: core-plan-${{ github.run_id }}
           path: ${{ github.workspace }}/stacks/core/plan.txt
@@ -147,8 +203,8 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const plane = `${{ inputs.plane || 'pr' }}`;
-            const product = `${{ inputs.product || 'hrz' }}`;
+            const plane = `${{ steps.sel.outputs.PLANE }}`;
+            const product = `${{ steps.sel.outputs.PRODUCT }}`;
             const body = `
             **Prod plan ready**
             - Stack: core
