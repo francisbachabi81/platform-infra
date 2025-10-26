@@ -22,14 +22,28 @@ on:
         description: "Destroy resources (danger)"
         type: boolean
         default: false
+      confirm_destroy:
+        description: "Type: I understand this will destroy production"
+        type: string
+        default: ""
       terraform_version:
         description: "Terraform version"
         type: string
         default: "1.13.3"
+  push:
+    branches: [dev, prod]
+    paths:
+      - "stacks/shared-network/**"
+      - "modules/**"
+      - ".github/workflows/**"
 
 permissions:
   id-token: write
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.product || 'auto' }}-${{ inputs.plane || 'na' }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   ARM_USE_OIDC: true
@@ -51,16 +65,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Decide cloud + audience + TENANT + two SUBs:
-      # STATE_SUB = prod sub (for backend state) in SAME CLOUD
-      # TARGET_SUB = deploy sub (varies by plane) in SAME CLOUD
       - name: Select cloud + subscriptions
         id: sel
         shell: bash
         run: |
           set -euo pipefail
-          PLANE="${{ inputs.plane }}"
-          PRODUCT="${{ inputs.product }}"
+          PLANE="${{ inputs.plane || 'nonprod' }}"
+          PRODUCT="${{ inputs.product || 'hrz' }}"
 
           if [ "$PRODUCT" = "hrz" ]; then
             CLOUD_ENV="AzureUSGovernment"
@@ -68,7 +79,6 @@ jobs:
             TENANT="${{ secrets.AZ_TENANT_HRZ }}"
             CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
             AUDIENCE="api://AzureADTokenExchangeUSGov"
-            # State sub: prefer dedicated, fallback to GOV prod
             STATE_SUB="${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}"
             case "$PLANE" in
               nonprod) TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}";;
@@ -81,7 +91,6 @@ jobs:
             TENANT="${{ secrets.AZ_TENANT_PUB }}"
             CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
             AUDIENCE="api://AzureADTokenExchange"
-            # State sub: prefer dedicated, fallback to COMM prod
             STATE_SUB="${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}"
             case "$PLANE" in
               nonprod) TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}";;
@@ -99,17 +108,12 @@ jobs:
           echo "TARGET_SUB=$TARGET_SUB" >> $GITHUB_OUTPUT
 
           {
-            # Defaults for providers (we’ll switch login later)
             echo "ARM_ENVIRONMENT=$ARM_ENV"
             echo "ARM_TENANT_ID=$TENANT"
             echo "ARM_CLIENT_ID=$CLIENT_ID"
-
-            # Terraform variables for stacks
             echo "TF_VAR_tenant_id=$TENANT"
-            echo "TF_VAR_product=${{ inputs.product }}"
-            # Set env subscription = TARGET_SUB (deployment)
+            echo "TF_VAR_product=${{ inputs.product || 'hrz' }}"
             echo "TF_VAR_subscription_id=$TARGET_SUB"
-            # Default hub_* to TARGET_SUB (caller can override)
             echo "TF_VAR_hub_tenant_id=$TENANT"
             echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
           } >> $GITHUB_ENV
@@ -119,8 +123,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PLANE="${{ inputs.plane }}"
-          PRODUCT="${{ inputs.product }}"
+          PLANE="${{ inputs.plane || 'nonprod' }}"
+          PRODUCT="${{ inputs.product || 'hrz' }}"
 
           TV1="${GITHUB_WORKSPACE}/stacks/shared-network/tfvars/${PLANE}.${PRODUCT}.tfvars"
           TVFALLBACK="${GITHUB_WORKSPACE}/stacks/shared-network/tfvars/${PLANE}.tfvars"
@@ -129,7 +133,6 @@ jobs:
           else echo "❌ Missing tfvars: $TV1 (or $TVFALLBACK)"; exit 1; fi
           echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
 
-          # Same names in both clouds
           STATE_RG="rg-core-infra-state"
           STATE_SA="sacoretfstateinfra"
           STATE_CONTAINER="tfstate"
@@ -140,11 +143,8 @@ jobs:
           echo "STATE_CONTAINER=$STATE_CONTAINER" >> "$GITHUB_OUTPUT"
           echo "STATE_KEY=$STATE_KEY"             >> "$GITHUB_OUTPUT"
 
-      # Optional: export overrides / secrets (per-env & hub)
       - name: Export optional per-env / hub overrides to TF_VAR_*
         shell: bash
-        env:
-          TENANT: ${{ steps.sel.outputs.TENANT }}
         run: |
           set -euo pipefail
           write_env () {
@@ -159,7 +159,7 @@ jobs:
             fi
           }
 
-          PRODUCT="${{ inputs.product }}"
+          PRODUCT="${{ inputs.product || 'hrz' }}"
 
           if [ "$PRODUCT" = "hrz" ]; then
             write_env TF_VAR_hub_subscription_id "${{ secrets.HUB_SUB_ID_HRZ }}"
@@ -177,18 +177,23 @@ jobs:
             write_env TF_VAR_prod_subscription_id "${{ secrets.AZ_SUB_PUB_PROD }}"
           fi
 
-          # If you don't have distinct tenants per env, default them to the selected tenant
-          write_env TF_VAR_dev_tenant_id  "${{ secrets.DEV_TENANT_ID || steps.sel.outputs.TENANT }}"
-          write_env TF_VAR_qa_tenant_id   "${{ secrets.QA_TENANT_ID  || steps.sel.outputs.TENANT }}"
-          write_env TF_VAR_uat_tenant_id  "${{ secrets.UAT_TENANT_ID || steps.sel.outputs.TENANT }}"
-          write_env TF_VAR_prod_tenant_id "${{ secrets.PROD_TENANT_ID|| steps.sel.outputs.TENANT }}"
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: ${{ inputs.terraform_version }}
+          terraform_version: ${{ inputs.terraform_version || '1.13.3' }}
 
-      # 1) Login to SAME CLOUD, but the **STATE** (prod) subscription — for backend init
+      - name: Enable TF plugin cache
+        run: |
+          mkdir -p ~/.terraform.d/plugin-cache
+          echo 'plugin_cache_dir = "~/.terraform.d/plugin-cache"' > ~/.terraformrc
+
+      - name: Cache .terraform providers
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.terraform.d/plugin-cache
+            ./.terraform
+          key: ${{ runner.os }}-tf-${{ inputs.terraform_version || '1.13.3' }}-${{ hashFiles('**/.terraform.lock.hcl') }}
+
       - name: Azure Login (state subscription for backend)
         uses: azure/login@v2
         with:
@@ -216,7 +221,6 @@ jobs:
             -backend-config="key=${{ steps.paths.outputs.STATE_KEY }}" \
             -backend-config="use_azuread_auth=true"
 
-      # 2) Switch login to the **TARGET** subscription for providers (plan/apply)
       - name: Azure Login (target subscription for deploy)
         uses: azure/login@v2
         with:
@@ -232,23 +236,22 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
 
-      - name: Show effective TF_VAR_* (masked)
-        shell: bash
+      - name: TFLint
         run: |
-          mask() { v="$1"; echo "${v:0:8}...${v: -6}"; }
-          echo "dev sub:  $(mask "${TF_VAR_dev_subscription_id:-<unset>}")"
-          echo "qa  sub:  $(mask "${TF_VAR_qa_subscription_id:-<unset>}")"
-          echo "uat sub:  $(mask "${TF_VAR_uat_subscription_id:-<unset>}")"
-          echo "prod sub: $(mask "${TF_VAR_prod_subscription_id:-<unset>}")"
+          curl -sL https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+          tflint --recursive
 
-      - name: Terraform Plan
+      - name: Terraform Plan (detailed exit code)
         if: ${{ !inputs.destroy }}
+        id: plan
         run: |
+          set -e
           terraform plan -input=false -lock-timeout=5m \
             -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
             -var "product=${{ inputs.product }}" \
             -var "plane=${{ inputs.plane }}" \
-            -out=tfplan
+            -detailed-exitcode -out=tfplan || exitcode=$?
+          echo "exitcode=${exitcode:-0}" >> $GITHUB_OUTPUT
           terraform show -no-color tfplan > plan.txt
 
       - name: Upload plan
@@ -261,9 +264,27 @@ jobs:
             ${{ github.workspace }}/stacks/shared-network/tfplan
             ${{ github.workspace }}/stacks/shared-network/plan.txt
 
-      - name: Terraform Apply
-        if: ${{ inputs.apply && !inputs.destroy }}
-        run: terraform apply -parallelism=6 -auto-approve tfplan
+      - name: Fail if plan errored
+        if: steps.plan.outputs.exitcode == '1'
+        run: |
+          echo "Terraform plan returned exit code 1 (error)."
+          exit 1
+
+      - name: Require clean plan on prod branch
+        if: ${{ github.ref == 'refs/heads/prod' && steps.plan.outputs.exitcode != '0' && !inputs.apply }}
+        run: |
+          echo "Non-clean plan on prod branch. Manual approval/apply required."
+          exit 1
+
+      - name: Terraform Apply (gated via env approvals)
+        if: ${{ inputs.apply && !inputs.destroy && steps.plan.outputs.exitcode != '1' }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Guard prod destroy
+        if: ${{ inputs.destroy && inputs.plane == 'prod' }}
+        run: |
+          test "${{ inputs.confirm_destroy }}" = "I understand this will destroy production" || \
+            (echo "Missing/incorrect destroy confirmation" && exit 1)
 
       - name: Terraform Destroy (danger)
         if: ${{ inputs.destroy }}
