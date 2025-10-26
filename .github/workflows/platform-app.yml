@@ -5,9 +5,9 @@ on:
   workflow_dispatch:
     inputs:
       env:
-        description: "Environment (dev, qa, uat, prod) or plane (np, pr)"
+        description: "Environment (dev, qa, uat, prod)"
         type: choice
-        options: [dev, qa, uat, prod, np, pr]
+        options: [dev, qa, uat, prod]
         default: dev
       product:
         description: "Product (hrz = Azure Gov, pub = Azure Commercial)"
@@ -53,7 +53,7 @@ jobs:
   terraform:
     name: "Terraform (platform-app: ${{ inputs.env }}.${{ inputs.product }})"
     runs-on: ubuntu-latest
-    environment: ${{ (inputs.env == 'prod' || inputs.env == 'pr' || inputs.env == 'uat') && 'prod' || 'nonprod' }}
+    environment: ${{ (inputs.env == 'prod' || inputs.env == 'uat') && 'prod' || 'nonprod' }}
     defaults:
       run:
         working-directory: stacks/platform-app
