@@ -1,4 +1,4 @@
-name: 01-network-infra-deploy
+name: xy-network-infra-deploy
 run-name: ${{ format('{0}-{1}-{2} {3}', github.workflow, inputs.product, inputs.plane, inputs.destroy && 'destroy' || (inputs.apply && 'apply' || 'plan')) }}
 
 on:
