@@ -53,7 +53,7 @@ jobs:
   terraform:
     name: "Terraform (core: ${{ inputs.plane }}.${{ inputs.product }})"
     runs-on: ubuntu-latest
-    environment: ${{ env.PLANE_NORM }}
+    environment: ${{ inputs.plane == 'pr' && 'prod' || 'nonprod' }}
     defaults:
       run:
         working-directory: stacks/core
