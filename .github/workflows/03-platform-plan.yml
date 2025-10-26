@@ -1,0 +1,172 @@
+name: 03-platform-plan
+run-name: ${{ format('{0}-{1}-{2} plan', github.workflow, inputs.product, inputs.env) }}
+
+on:
+  push:
+    branches: [prod]
+    paths: ["stacks/platform-app/**", "modules/**"]
+  workflow_dispatch:
+    inputs:
+      env:     { description: "dev/qa/uat/prod (or np/pr)", type: choice, options: [dev, qa, uat, prod, np, pr], default: prod }
+      product: { description: "Product", type: choice, options: [hrz, pub], default: hrz }
+      terraform_version: { type: string, default: "1.13.3" }
+
+permissions:
+  id-token: write
+  contents: read
+  issues: write
+
+env:
+  ARM_USE_OIDC: true
+  TF_IN_AUTOMATION: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    environment: ${{ (inputs.env == 'prod' || inputs.env == 'pr' || inputs.env == 'uat') && 'prod' || 'nonprod' }}
+    defaults: { run: { working-directory: stacks/platform-app } }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select cloud + subscriptions
+        id: sel
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENV="${{ inputs.env || 'prod' }}"; PRODUCT="${{ inputs.product || 'hrz' }}"
+          case "$ENV" in dev|qa|np) PLANE="nonprod" ;; uat|prod|pr) PLANE="prod" ;; esac
+          if [ "$PRODUCT" = "hrz" ]; then
+            CLOUD_ENV="AzureUSGovernment"; ARM_ENV="usgovernment"
+            TENANT="${{ secrets.AZ_TENANT_HRZ }}"; CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
+            AUDIENCE="api://AzureADTokenExchangeUSGov"
+            STATE_SUB="${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}"
+            [ "$PLANE" = "prod" ] && TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}" || TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}"
+          else
+            CLOUD_ENV="AzureCloud"; ARM_ENV="public"
+            TENANT="${{ secrets.AZ_TENANT_PUB }}"; CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
+            AUDIENCE="api://AzureADTokenExchange"
+            STATE_SUB="${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}"
+            [ "$PLANE" = "prod" ] && TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}" || TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}"
+          fi
+          echo "CLOUD_ENV=$CLOUD_ENV"   >> $GITHUB_OUTPUT
+          echo "ARM_ENV=$ARM_ENV"       >> $GITHUB_OUTPUT
+          echo "TENANT=$TENANT"         >> $GITHUB_OUTPUT
+          echo "CLIENT_ID=$CLIENT_ID"   >> $GITHUB_OUTPUT
+          echo "AUDIENCE=$AUDIENCE"     >> $GITHUB_OUTPUT
+          echo "PLANE=$PLANE"           >> $GITHUB_OUTPUT
+          echo "STATE_SUB=$STATE_SUB"   >> $GITHUB_OUTPUT
+          echo "TARGET_SUB=$TARGET_SUB" >> $GITHUB_OUTPUT
+          {
+            echo "ARM_ENVIRONMENT=$ARM_ENV"
+            echo "ARM_TENANT_ID=$TENANT"
+            echo "ARM_CLIENT_ID=$CLIENT_ID"
+            echo "TF_VAR_tenant_id=$TENANT"
+            echo "TF_VAR_product=${PRODUCT}"
+            echo "TF_VAR_env=$ENV"
+            echo "TF_VAR_plane=$PLANE"
+            echo "TF_VAR_subscription_id=$TARGET_SUB"
+            echo "TF_VAR_hub_tenant_id=$TENANT"
+            echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
+          } >> $GITHUB_ENV
+
+      - name: Resolve tfvars & backend key
+        id: paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENV="${{ inputs.env || 'prod' }}"; PRODUCT="${{ inputs.product || 'hrz' }}"
+          TV1="${GITHUB_WORKSPACE}/stacks/platform-app/tfvars/${ENV}.${PRODUCT}.tfvars"
+          TV2="${GITHUB_WORKSPACE}/stacks/platform-app/tfvars/${ENV}.tfvars"
+          TFVARS_PATH="${TV1}"; [ -f "$TV1" ] || TFVARS_PATH="${TV2}"
+          [ -f "$TFVARS_PATH" ] || { echo "Missing tfvars"; exit 1; }
+          echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
+          echo "STATE_RG=rg-core-infra-state"               >> "$GITHUB_OUTPUT"
+          echo "STATE_SA=sacoretfstateinfra"               >> "$GITHUB_OUTPUT"
+          echo "STATE_CONTAINER=tfstate"                   >> "$GITHUB_OUTPUT"
+          echo "STATE_KEY=platform-app/${PRODUCT}/${ENV}/terraform.tfstate" >> "$GITHUB_OUTPUT"
+
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: ${{ inputs.terraform_version || '1.13.3' }} }
+
+      - name: Azure Login (state)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ steps.sel.outputs.CLIENT_ID }}
+          tenant-id:       ${{ steps.sel.outputs.TENANT }}
+          subscription-id: ${{ steps.sel.outputs.STATE_SUB }}
+          environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
+          audience:        ${{ steps.sel.outputs.AUDIENCE }}
+
+      - name: Terraform Init (backend)
+        env:
+          ARM_USE_OIDC: true
+          ARM_CLIENT_ID:       ${{ steps.sel.outputs.CLIENT_ID }}
+          ARM_TENANT_ID:       ${{ steps.sel.outputs.TENANT }}
+          ARM_SUBSCRIPTION_ID: ${{ steps.sel.outputs.STATE_SUB }}
+          ARM_ENVIRONMENT:     ${{ steps.sel.outputs.ARM_ENV }}
+        run: |
+          terraform init -input=false -reconfigure \
+            -backend-config="environment=${{ steps.sel.outputs.ARM_ENV }}" \
+            -backend-config="tenant_id=${{ steps.sel.outputs.TENANT }}" \
+            -backend-config="subscription_id=${{ steps.sel.outputs.STATE_SUB }}" \
+            -backend-config="resource_group_name=${{ steps.paths.outputs.STATE_RG }}" \
+            -backend-config="storage_account_name=${{ steps.paths.outputs.STATE_SA }}" \
+            -backend-config="container_name=${{ steps.paths.outputs.STATE_CONTAINER }}" \
+            -backend-config="key=${{ steps.paths.outputs.STATE_KEY }}" \
+            -backend-config="use_azuread_auth=true"
+
+      - name: Azure Login (target)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ steps.sel.outputs.CLIENT_ID }}
+          tenant-id:       ${{ steps.sel.outputs.TENANT }}
+          subscription-id: ${{ steps.sel.outputs.TARGET_SUB }}
+          environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
+          audience:        ${{ steps.sel.outputs.AUDIENCE }}
+
+      - name: Fmt & Validate
+        run: |
+          terraform fmt -recursive
+          terraform validate
+
+      - name: Plan (detailed exit code)
+        id: plan
+        run: |
+          terraform plan -input=false -lock-timeout=5m \
+            -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
+            -var "product=${{ inputs.product || 'hrz' }}" \
+            -var "env=${{ inputs.env || 'prod' }}" \
+            -detailed-exitcode -out=tfplan || ec=$?
+          echo "exitcode=${ec:-0}" >> $GITHUB_OUTPUT
+          terraform show -no-color tfplan > plan.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: platform-plan-${{ github.run_id }}
+          path: ${{ github.workspace }}/stacks/platform-app/plan.txt
+
+      - name: Open approval issue
+        if: ${{ steps.plan.outputs.exitcode != '1' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const env = `${{ inputs.env || 'prod' }}`;
+            const product = `${{ inputs.product || 'hrz' }}`;
+            const body = `
+            **Prod plan ready**
+            - Stack: platform-app
+            - Product: ${product}
+            - Env: ${env}
+            - Branch: ${context.ref}
+            - Commit: ${context.sha}
+            - Plan Run ID: ${context.runId}
+
+            **Approve by commenting:** \`/approve ${context.runId}\`
+            (or reject with \`/reject ${context.runId}\`)
+            `;
+            await github.rest.issues.create({
+              ...context.repo,
+              title: `APPROVAL: platform-app ${product} ${env} (run ${context.runId})`,
+              body
+            });
