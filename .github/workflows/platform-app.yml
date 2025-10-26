@@ -53,7 +53,7 @@ jobs:
   terraform:
     name: "Terraform (platform-app: ${{ inputs.env }}.${{ inputs.product }})"
     runs-on: ubuntu-latest
-    environment: ${{ env.PLANE == 'prod' && 'prod' || 'nonprod' }}
+    environment: ${{ (inputs.env == 'prod' || inputs.env == 'pr' || inputs.env == 'uat') && 'prod' || 'nonprod' }}
     defaults:
       run:
         working-directory: stacks/platform-app
