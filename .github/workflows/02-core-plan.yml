@@ -2,11 +2,11 @@ name: 02-core-plan
 run-name: ${{ format('{0} plan {1}-{2}', github.workflow, inputs.product, inputs.plane) }}
 
 on:
-  push:
-    branches: [prod]
-    paths:
-      - "stacks/core/**"
-      - "modules/**"
+  # push:
+  #   branches: [prod]
+  #   paths:
+  #     - "stacks/core/**"
+  #     - "modules/**"
   workflow_dispatch:
     inputs:
       plane:
