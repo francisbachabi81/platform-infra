@@ -1,0 +1,97 @@
+name: approval-listener
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: read
+  #workflows: write
+
+env:
+  APPROVERS_CSV: "user1,user2"  # <-- change to your GitHub usernames
+
+jobs:
+  gate:
+    if: ${{ startsWith(github.event.comment.body, '/approve ') || startsWith(github.event.comment.body, '/reject ') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse command & runId
+        id: parse
+        run: |
+          cmd="${{ github.event.comment.body }}"
+          action="${cmd%% *}"
+          runid="${cmd##* }"
+          echo "action=$action" >> $GITHUB_OUTPUT
+          echo "runid=$runid"   >> $GITHUB_OUTPUT
+
+      - name: Check approver is authorized
+        run: |
+          IFS=',' read -ra USERS <<< "${APPROVERS_CSV}"
+          ok=0; for u in "${USERS[@]}"; do [ "$u" = "${{ github.event.comment.user.login }}" ] && ok=1; done
+          [ $ok -eq 1 ] || { echo "Not authorized"; exit 1; }
+
+      - name: Extract stack/product/plane/env from issue title
+        id: meta
+        run: |
+          title='${{ github.event.issue.title }}'
+          # Formats we create below:
+          #   APPROVAL: shared-network hrz prod (run 123456789)
+          #   APPROVAL: core hrz pr (run 123456789)
+          #   APPROVAL: platform-app hrz prod (run 123456789)
+          stack=$(echo "$title" | awk '{print $2}')
+          product=$(echo "$title" | awk '{print $3}')
+          third=$(echo "$title" | awk '{print $4}')
+          echo "stack=$stack" >> $GITHUB_OUTPUT
+          echo "product=$product" >> $GITHUB_OUTPUT
+          echo "third=$third" >> $GITHUB_OUTPUT
+
+      - name: Dispatch stack-specific apply workflow
+        if: ${{ steps.parse.outputs.action == '/approve' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const stack = `${{ steps.meta.outputs.stack }}`;
+            const product = `${{ steps.meta.outputs.product }}`;
+            const third = `${{ steps.meta.outputs.third }}`;
+            const runid = `${{ steps.parse.outputs.runid }}`;
+
+            // Decide which workflow and inputs
+            let workflow_id, inputs;
+            if (stack === "shared-network") {
+              workflow_id = "01-network-apply.yml";
+              inputs = { product, plane: third, plan_run_id: runid };
+            } else if (stack === "core") {
+              workflow_id = "02-core-apply.yml";
+              inputs = { product, plane: third, plan_run_id: runid };
+            } else if (stack === "platform-app") {
+              workflow_id = "03-platform-apply.yml";
+              inputs = { product, env: third, plan_run_id: runid };
+            } else {
+              core.setFailed(`Unknown stack in issue title: ${stack}`);
+            }
+
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id,
+              ref: "prod",
+              inputs
+            });
+
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: `✅ Approved by @${context.actor}. Dispatched **${workflow_id}** (run ${runid}).`
+            });
+
+      - name: Record rejection
+        if: ${{ steps.parse.outputs.action == '/reject' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: `❌ Rejected by @${context.actor}.`
+            });
