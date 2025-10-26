@@ -2,9 +2,9 @@ name: 03-platform-plan
 run-name: ${{ format('{0}-{1}-{2} plan', github.workflow, inputs.product, inputs.env) }}
 
 on:
-  push:
-    branches: [prod]
-    paths: ["stacks/platform-app/**", "modules/**"]
+  # push:
+  #   branches: [prod]
+  #   paths: ["stacks/platform-app/**", "modules/**"]
   workflow_dispatch:
     inputs:
       env:     { description: "dev/qa/uat/prod (or np/pr)", type: choice, options: [dev, qa, uat, prod, np, pr], default: prod }
