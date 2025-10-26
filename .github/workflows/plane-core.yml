@@ -1,4 +1,4 @@
-name: 02-core-services-deploy
+name: xy-core-services-deploy
 run-name: ${{ format('{0}-{1}-{2} {3}', github.workflow, inputs.product, inputs.plane, (inputs.destroy && 'destroy' || (inputs.apply && 'apply' || 'plan'))) }}
 
 on:
