@@ -1,4 +1,4 @@
-name: \[platform-app\] plan
+name: platform-app-plan
 run-name: ${{ format('{0} plan {1}-{2}', github.workflow, inputs.product || 'hrz', inputs.env || 'dev') }}
 
 on:
