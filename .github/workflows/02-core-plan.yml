@@ -1,5 +1,9 @@
 name: 02-core-plan
-run-name: ${{ format('{0} plan {1}-{2}', github.workflow, inputs.product, inputs.plane) }}
+run-name: ${{ format('{0} plan {1}-{2}', github.workflow, inputs.product || 'hrz', inputs.plane || 'pr') }}
+
+env:
+  # Comma-separated GitHub usernames who can approve
+  APPROVERS_CSV: "francisbachabi81,user2"
 
 on:
   # push:
@@ -45,7 +49,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Pick TF version without using inline expressions that break on push
+      # Pick TF version without inline expressions that can break on push
       - name: Determine Terraform version
         id: tfver
         shell: bash
@@ -54,7 +58,7 @@ jobs:
           if [ -z "$TV" ]; then TV="1.13.3"; fi
           echo "version=$TV" >> "$GITHUB_OUTPUT"
 
-      # Decide cloud + audience + TENANT + subs (set safe defaults here)
+      # Decide cloud + audience + TENANT + SUBs (set defaults in bash, not YAML expr)
       - name: Select cloud + subscriptions
         id: sel
         shell: bash
@@ -62,7 +66,7 @@ jobs:
           set -euo pipefail
           PLANE="${{ inputs.plane }}"
           PRODUCT="${{ inputs.product }}"
-          # Defaults if triggered by push (inputs.* unset)
+          # Defaults when triggered by push (no inputs.*)
           if [ -z "${PLANE:-}" ]; then PLANE="pr"; fi
           if [ -z "${PRODUCT:-}" ]; then PRODUCT="hrz"; fi
 
@@ -122,13 +126,9 @@ jobs:
 
           TV1="${GITHUB_WORKSPACE}/stacks/core/tfvars/${PLANE}.${PRODUCT}.tfvars"
           TV2="${GITHUB_WORKSPACE}/stacks/core/tfvars/${PLANE}.tfvars"
-          if [ -f "$TV1" ]; then
-            TFVARS_PATH="$TV1"
-          elif [ -f "$TV2" ]; then
-            TFVARS_PATH="$TV2"
-          else
-            echo "❌ Missing tfvars: $TV1 (or $TV2)"; exit 1
-          fi
+          if [ -f "$TV1" ]; then TFVARS_PATH="$TV1";
+          elif [ -f "$TV2" ]; then TFVARS_PATH="$TV2";
+          else echo "❌ Missing tfvars: $TV1 (or $TV2)"; exit 1; fi
           echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
 
           echo "STATE_RG=rg-core-infra-state"     >> "$GITHUB_OUTPUT"
@@ -192,33 +192,76 @@ jobs:
           echo "exitcode=${ec:-0}" >> $GITHUB_OUTPUT
           terraform show -no-color tfplan > plan.txt
 
+      - name: Summarize plan
+        id: summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -qE "^(No changes|No changes\.)" plan.txt; then
+            SUM="No changes. Infrastructure is up-to-date."
+          else
+            SUM="$(grep -E '^Plan: ' plan.txt | tail -n1 || true)"
+            if [ -z "${SUM}" ]; then
+              SUM="(No 'Plan:' line found)"; echo "::group::Plan tail"; tail -n 10 plan.txt; echo "::endgroup::"
+            fi
+          fi
+          echo "summary=${SUM}" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Terraform plan summary"
+            echo
+            echo "${SUM}"
+            echo
+            echo "[View full run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+            echo
+            echo "Artifact: \`core-plan-${{ github.run_id }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload plan
         uses: actions/upload-artifact@v4
         with:
           name: core-plan-${{ github.run_id }}
-          path: ${{ github.workspace }}/stacks/core/plan.txt
+          if-no-files-found: error
+          path: |
+            ${{ github.workspace }}/stacks/core/tfplan
+            ${{ github.workspace }}/stacks/core/plan.txt
 
       - name: Open approval issue
         if: ${{ steps.plan.outputs.exitcode != '1' }}
         uses: actions/github-script@v7
+        env:
+          APPROVERS_CSV: ${{ env.APPROVERS_CSV }}
         with:
           script: |
             const plane = `${{ steps.sel.outputs.PLANE }}`;
             const product = `${{ steps.sel.outputs.PRODUCT }}`;
-            const body = `
-            **Prod plan ready**
-            - Stack: core
-            - Product: ${product}
-            - Plane: ${plane}
-            - Branch: ${context.ref}
-            - Commit: ${context.sha}
-            - Plan Run ID: ${context.runId}
+            const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            const planSummary = `${{ steps.summary.outputs.summary }}`;
 
-            **Approve by commenting:** \`/approve ${context.runId}\`
-            (or reject with \`/reject ${context.runId}\`)
+            const firstApprover = (process.env.APPROVERS_CSV || '')
+              .split(',')
+              .map(s => s.trim())
+              .filter(Boolean)[0];
+
+            const body = `
+            **Plan ready**
+            - **Stack:** core
+            - **Product:** ${product}
+            - **Plane:** ${plane}
+            - **Branch:** ${context.ref}
+            - **Commit:** ${context.sha}
+            - **Run:** ${runUrl}
+
+            **Summary:** ${planSummary}
+
+            **Artifact:** \`core-plan-${context.runId}\`
+
+            **Approve by commenting:** \`/approve ${context.runId}\`  
+            **Reject by commenting:** \`/reject ${context.runId}\`
             `;
+
             await github.rest.issues.create({
               ...context.repo,
               title: `APPROVAL: core ${product} ${plane} (run ${context.runId})`,
-              body
+              body,
+              assignees: firstApprover ? [firstApprover] : undefined
             });
