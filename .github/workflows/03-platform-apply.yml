@@ -3,8 +3,8 @@ on:
   workflow_dispatch:
     inputs:
       product:    { type: choice, options: [hrz, pub], required: true }
-      env:        { type: choice, options: [dev, qa, uat, prod, np, pr], required: true }
-      plan_run_id:{ type: string, required: true }
+      env:        { type: choice, options: [dev, qa, uat, prod], required: true }
+      plan_run_id: { type: string, required: true }
 
 permissions:
   id-token: write
