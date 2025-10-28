@@ -1,5 +1,5 @@
 name: shared-network-plan
-run-name: ${{ format('{0} plan {1}-{2}', github.workflow, inputs.product || 'hrz', inputs.plane || 'prod') }}
+run-name: ${{ format('{0} {1}-{2}', github.workflow, inputs.product || 'hrz', inputs.plane || 'prod') }}
 
 env:
   APPROVERS_CSV: "francisbachabi81,user2"
