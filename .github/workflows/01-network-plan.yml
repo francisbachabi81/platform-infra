@@ -34,7 +34,7 @@ jobs:
   plan:
     name: "Plan (shared-network)"
     runs-on: ubuntu-latest
-    environment: prod
+    environment: ${{ inputs.plane }}
     defaults:
       run:
         working-directory: stacks/shared-network
