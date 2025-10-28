@@ -5,8 +5,10 @@ on:
 
 permissions:
   contents: read
-  issues: read
-  #workflows: write
+  issues: write
+  actions: write
+  # workflows: write
+  id-token: write
 
 env:
   APPROVERS_CSV: "francisbachabi81,user2"
