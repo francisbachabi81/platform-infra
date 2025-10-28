@@ -96,7 +96,7 @@ jobs:
             const lower = third.toLowerCase();
             let ref = 'dev'; // default for safety
             if (['prod','pr'].includes(lower)) ref = 'main';
-            if (['nonprod','np','dev','qa','uat'].includes(lower)) ref = 'dev';
+            if (['nonprod','np','dev','qa','uat'].includes(lower)) ref = 'main';
             if (['main','dev'].includes(lower)) ref = lower; // explicit override if someone typed a branch
 
             // Dispatch apply workflow on chosen branch
