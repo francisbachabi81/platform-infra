@@ -150,26 +150,70 @@ jobs:
           environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
           audience:        ${{ steps.sel.outputs.AUDIENCE }}
 
-      - name: Safety plan
-        id: plan
-        run: |
-          terraform plan -input=false -lock-timeout=5m \
-            -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
-            -var "product=${{ inputs.product }}" \
-            -var "plane=${{ inputs.plane }}" \
-            -detailed-exitcode -out=tfplan || ec=$?
-          echo "exitcode=${ec:-0}" >> $GITHUB_OUTPUT
-          terraform show -no-color tfplan > plan.txt
-
-      - uses: actions/upload-artifact@v4
+      - name: Download approved plan artifact
+        uses: dawidd6/action-download-artifact@v6
         with:
-          name: shared-network-apply-plan-${{ github.run_id }}
-          path: ${{ github.workspace }}/stacks/shared-network/plan.txt
+          run_id: ${{ inputs.plan_run_id }}
+          name: shared-network-plan-${{ inputs.plan_run_id }}
+          path: ${{ github.workspace }}/stacks/shared-network
 
-      - name: Terraform Apply
-        if: ${{ steps.plan.outputs.exitcode == '2' }}
-        run: terraform apply -auto-approve tfplan
+      - name: Read plan metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -r '.commit'       plan.meta.json | tee /tmp/_commit.txt
+          jq -r '.backend_key'  plan.meta.json | tee /tmp/_backend.txt
+          jq -r '.tenant'       plan.meta.json | tee /tmp/_tenant.txt
+          jq -r '.target_sub'   plan.meta.json | tee /tmp/_target.txt
+          jq -r '.state_sub'    plan.meta.json | tee /tmp/_state.txt
+          echo "commit=$(cat /tmp/_commit.txt)"     >> "$GITHUB_OUTPUT"
+          echo "backend=$(cat /tmp/_backend.txt)"   >> "$GITHUB_OUTPUT"
+          echo "tenant=$(cat /tmp/_tenant.txt)"     >> "$GITHUB_OUTPUT"
+          echo "target=$(cat /tmp/_target.txt)"     >> "$GITHUB_OUTPUT"
+          echo "state=$(cat /tmp/_state.txt)"       >> "$GITHUB_OUTPUT"
 
-      - name: No changes to apply
-        if: ${{ steps.plan.outputs.exitcode == '0' }}
-        run: echo "Plan is clean. Nothing to apply."
+      - name: Checkout exact commit used for the plan
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.commit }}
+
+      - name: Use same Terraform version as plan
+        id: tfver
+        run: |
+          v=$(head -n1 tf.version.txt | awk '{print $2}')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ steps.tfver.outputs.version }}
+
+      # Re-auth as you already do (state + target); keep it identical to plan
+
+      - name: Terraform Init (same backend key as plan)
+        env:
+          ARM_USE_OIDC: true
+          ARM_CLIENT_ID:       ${{ steps.sel.outputs.CLIENT_ID }}
+          ARM_TENANT_ID:       ${{ steps.sel.outputs.TENANT }}
+          ARM_SUBSCRIPTION_ID: ${{ steps.sel.outputs.STATE_SUB }}
+          ARM_ENVIRONMENT:     ${{ steps.sel.outputs.ARM_ENV }}
+        run: |
+          terraform init -input=false -reconfigure \
+            -backend-config="environment=${{ steps.sel.outputs.ARM_ENV }}" \
+            -backend-config="tenant_id=${{ steps.meta.outputs.tenant }}" \
+            -backend-config="subscription_id=${{ steps.meta.outputs.state }}" \
+            -backend-config="resource_group_name=${{ steps.paths.outputs.STATE_RG }}" \
+            -backend-config="storage_account_name=${{ steps.paths.outputs.STATE_SA }}" \
+            -backend-config="container_name=${{ steps.paths.outputs.STATE_CONTAINER }}" \
+            -backend-config="key=${{ steps.meta.outputs.backend }}" \
+            -backend-config="use_azuread_auth=true"
+
+      - name: Sanity checks before apply
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f tfplan || { echo "Missing tfplan"; exit 1; }
+          # Make sure lockfile exists and matches providers we planned with
+          test -f .terraform.lock.hcl || { echo "Missing .terraform.lock.hcl"; exit 1; }
+
+      - name: Terraform Apply (re-using approved plan)
+        run: terraform apply -input=false -auto-approve tfplan
