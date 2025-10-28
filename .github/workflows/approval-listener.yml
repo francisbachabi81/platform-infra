@@ -11,11 +11,19 @@ permissions:
 
 env:
   APPROVERS_CSV: "francisbachabi81,user2"
+  # Hidden marker used to ignore system comments (prevents loops)
+  SYSTEM_MARKER: "<!-- system:approval-final -->"
 
 jobs:
   gate:
-    if: ${{ startsWith(github.event.comment.body, '/approve ') || startsWith(github.event.comment.body, '/reject ') }}
+    # Only run on open issues, for /approve or /reject, skip our own/system comments, and skip the Actions bot
+    if: >
+      github.event.issue.state == 'open' &&
+      (startsWith(github.event.comment.body, '/approve ') || startsWith(github.event.comment.body, '/reject ')) &&
+      !contains(github.event.comment.body, '<!-- system:approval-final -->') &&
+      github.event.comment.user.login != 'github-actions[bot]'
     runs-on: ubuntu-latest
+
     steps:
       - name: Parse command & runId
         id: parse
@@ -32,14 +40,14 @@ jobs:
           ok=0; for u in "${USERS[@]}"; do [ "$u" = "${{ github.event.comment.user.login }}" ] && ok=1; done
           [ $ok -eq 1 ] || { echo "Not authorized"; exit 1; }
 
-      - name: Extract stack/product/third from issue title
+      - name: Extract stack/product/plane/env from issue title
         id: meta
         run: |
           title='${{ github.event.issue.title }}'
-          # Formats you create from the plan step, e.g.:
-          #  APPROVAL: shared-network hrz nonprod (run 123456)
-          #  APPROVAL: core hrz prod (run 123456)
-          #  APPROVAL: platform-app hrz prod (run 123456)
+          # Title formats:
+          #   APPROVAL: shared-network hrz nonprod (run 123456789)
+          #   APPROVAL: core hrz pr (run 123456789)
+          #   APPROVAL: platform-app hrz prod (run 123456789)
           stack=$(echo "$title" | awk '{print $2}')
           product=$(echo "$title" | awk '{print $3}')
           third=$(echo "$title" | awk '{print $4}')
@@ -47,38 +55,16 @@ jobs:
           echo "product=$product" >> $GITHUB_OUTPUT
           echo "third=$third"     >> $GITHUB_OUTPUT
 
-      - name: Lookup original plan run (to get branch/ref)
-        id: run
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GH_PAT_WORKFLOW }}
-          script: |
-            const run_id = Number(`${{ steps.parse.outputs.runid }}`);
-            const { data: run } = await github.rest.actions.getWorkflowRun({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id
-            });
-            core.info(`Plan run branch: ${run.head_branch}`);
-            core.setOutput('head_branch', run.head_branch);
-            core.setOutput('workflow_id', run.workflow_id);
-            core.setOutput('event', run.event);
-            // Optional safety: block if the plan run is not from this repo
-            if (run.repository.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
-              core.setFailed('Plan run is from a different repository.');
-            }
-
-      - name: Dispatch stack-specific apply workflow (using plan branch)
+      - name: Dispatch stack-specific apply workflow (with PAT)
         if: ${{ steps.parse.outputs.action == '/approve' }}
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GH_PAT_WORKFLOW }}
           script: |
-            const stack   = `${{ steps.meta.outputs.stack }}`;
-            const product = `${{ steps.meta.outputs.product }}`;
-            const third   = `${{ steps.meta.outputs.third }}`; // plane for shared/core, env for platform-app
-            const runid   = `${{ steps.parse.outputs.runid }}`;
-            const ref     = `${{ steps.run.outputs.head_branch }}`; // dev or main, etc.
+            const stack  = `${{ steps.meta.outputs.stack }}`;
+            const product= `${{ steps.meta.outputs.product }}`;
+            const third  = `${{ steps.meta.outputs.third }}`;
+            const runid  = `${{ steps.parse.outputs.runid }}`;
 
             let workflow_id, inputs;
             if (stack === "shared-network") {
@@ -89,6 +75,7 @@ jobs:
               inputs = { product, plane: third, plan_run_id: runid };
             } else if (stack === "platform-app") {
               workflow_id = "03-platform-apply.yml";
+              // NOTE: for platform-app we used 'env' as the third token
               inputs = { product, env: third, plan_run_id: runid };
             } else {
               core.setFailed(`Unknown stack in issue title: ${stack}`);
@@ -96,28 +83,69 @@ jobs:
 
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
-              repo: context.repo.repo,
+              repo:  context.repo.repo,
               workflow_id,
-              ref,     // <- branch taken from the plan run (dev for nonprod, main for prod)
+              ref: "prod", // or "dev" for nonprod if you split—keep consistent with your apply workflow
               inputs
             });
 
+            // Build a deep link to the plan run and the apply workflow tab
+            const repoUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
+            const planRunUrl  = `${repoUrl}/actions/runs/${runid}`;
+            const applyTabUrl = `${repoUrl}/actions/workflows/${workflow_id}`;
+
+            const body = `${process.env.SYSTEM_MARKER}
+            ✅ **Approved** by @${context.actor}.
+            - Stack: \`${stack}\`
+            - Product: \`${product}\`
+            - Env/Plane: \`${third}\`
+            - **Plan run**: ${planRunUrl}
+            - **Apply workflow**: ${applyTabUrl}
+
+            This issue is now closed.`;
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
-              repo: context.repo.repo,
+              repo:  context.repo.repo,
               issue_number: context.issue.number,
-              body: `✅ Approved by @${context.actor}. Dispatched **${workflow_id}** on \`${ref}\` (plan run ${runid}).`
+              body
             });
 
-      - name: Record rejection
+            // Close (and optionally lock) the issue to prevent further comments
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: context.issue.number,
+              state: "closed"
+            });
+
+            // Optional: lock to prevent new comments; requires 'issues: write'
+            // await github.rest.issues.lock({
+            //   owner: context.repo.owner,
+            //   repo:  context.repo.repo,
+            //   issue_number: context.issue.number,
+            //   lock_reason: "resolved"
+            // });
+
+      - name: Record rejection & close
         if: ${{ steps.parse.outputs.action == '/reject' }}
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GH_PAT_WORKFLOW }}
           script: |
+            const body = `${process.env.SYSTEM_MARKER}
+            ❌ **Rejected** by @${context.actor}. This issue is now closed.`;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
-              repo: context.repo.repo,
+              repo:  context.repo.repo,
               issue_number: context.issue.number,
-              body: `❌ Rejected by @${context.actor}.`
+              body
             });
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: context.issue.number,
+              state: "closed"
+            });
+            // Optional lock:
+            // await github.rest.issues.lock({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, lock_reason: "resolved" });
