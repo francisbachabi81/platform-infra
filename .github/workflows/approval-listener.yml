@@ -13,7 +13,7 @@ permissions:
 env:
   APPROVERS_CSV: "francisbachabi81,user2"
   # GitHub username that owns the GH_PAT_WORKFLOW token (prevents self-loops)
-  PAT_ACTOR: "francisbachabi81"
+  # PAT_ACTOR: "francisbachabi81"
   # Hidden marker to identify our own final comments
   SYSTEM_MARKER: "<!-- system:approval-final -->"
 
@@ -25,8 +25,8 @@ jobs:
       github.event.issue.state == 'open' &&
       (startsWith(github.event.comment.body, '/approve ') || startsWith(github.event.comment.body, '/reject ')) &&
       !contains(github.event.comment.body, '<!-- system:approval-final -->') &&
-      github.event.comment.user.login != 'github-actions[bot]' &&
-      github.event.comment.user.login != env.PAT_ACTOR
+      github.event.comment.user.login != 'github-actions[bot]'
+      # github.event.comment.user.login != (vars.PAT_ACTOR != '' && vars.PAT_ACTOR || 'francisbachabi81')
     runs-on: ubuntu-latest
 
     steps:
