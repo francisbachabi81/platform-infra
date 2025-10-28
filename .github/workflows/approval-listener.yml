@@ -85,7 +85,7 @@ jobs:
               owner: context.repo.owner,
               repo:  context.repo.repo,
               workflow_id,
-              ref: "prod", // or "dev" for nonprod if you split—keep consistent with your apply workflow
+              ref,
               inputs
             });
 
