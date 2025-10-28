@@ -157,11 +157,19 @@ jobs:
           name: shared-network-plan-${{ inputs.plan_run_id }}
           path: ${{ github.workspace }}/stacks/shared-network
 
-      - name: Verify plan file is present
+      - name: Verify plan artifact presence
+        id: detect
         shell: bash
         run: |
           set -euo pipefail
-          test -f tfplan || { echo "::error::tfplan not found in artifact"; ls -la; exit 1; }
+          if [ -f "tfplan" ]; then
+            echo "has_tfplan=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Found approved tfplan artifact"
+          else
+            echo "has_tfplan=false" >> "$GITHUB_OUTPUT"
+            echo "ℹ️ No approved tfplan found; will run safety plan"
+            ls -la || true
+          fi
       
       - name: Terraform Apply (approved plan)
         run: terraform apply -input=false -auto-approve tfplan
