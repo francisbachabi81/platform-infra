@@ -17,7 +17,7 @@ env:
 jobs:
   apply:
     runs-on: ubuntu-latest
-    environment: prod
+    environment: ${{ inputs.plane }}
     defaults: { run: { working-directory: stacks/core } }
 
     steps:
