@@ -36,7 +36,7 @@ env:
 
 jobs:
   plan:
-    name: "Plan (platform-app)"
+    name: "Plan (platform-app: ${{ inputs.env }}.${{ inputs.product }})"
     runs-on: ubuntu-latest
     # Use env directly for GitHub Environments to avoid parse errors on push
     environment: ${{ inputs.env }}
