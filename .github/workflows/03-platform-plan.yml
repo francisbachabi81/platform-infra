@@ -13,7 +13,7 @@ on:
         description: "Environment (dev, qa, uat, prod) or plane (np, pr)"
         type: choice
         options: [dev, qa, uat, prod, np, pr]
-        default: prod
+        default: dev
       product:
         description: "Product (hrz = Azure Gov, pub = Azure Commercial)"
         type: choice
