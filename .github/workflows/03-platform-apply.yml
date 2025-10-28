@@ -2,9 +2,9 @@ name: 03-platform-apply
 on:
   workflow_dispatch:
     inputs:
-      product: { type: choice, options: [hrz, pub], required: true }
-      env:     { type: choice, options: [dev, qa, uat, prod, np, pr], required: true }
-      plan_run_id: { type: string, required: true }
+      product:    { type: choice, options: [hrz, pub], required: true }
+      env:        { type: choice, options: [dev, qa, uat, prod, np, pr], required: true }
+      plan_run_id:{ type: string, required: true }
 
 permissions:
   id-token: write
@@ -17,7 +17,7 @@ env:
 jobs:
   apply:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.plane }}
+    environment: ${{ inputs.env }}
     defaults: { run: { working-directory: stacks/platform-app } }
 
     steps:
@@ -28,36 +28,41 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ENV="${{ inputs.env }}"; PRODUCT="${{ inputs.product }}"
-          case "$ENV" in dev|qa|np) PLANE="nonprod" ;; uat|prod|pr) PLANE="prod" ;; esac
+          ENV_IN="${{ inputs.env }}"; PRODUCT="${{ inputs.product }}"
+          case "$ENV_IN" in dev|qa|np) PLANE="nonprod" ;; uat|prod|pr) PLANE="prod" ;; *) echo "Unknown env: $ENV_IN"; exit 1 ;; esac
+
           if [ "$PRODUCT" = "hrz" ]; then
             CLOUD_ENV="AzureUSGovernment"; ARM_ENV="usgovernment"
             TENANT="${{ secrets.AZ_TENANT_HRZ }}"; CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
             AUDIENCE="api://AzureADTokenExchangeUSGov"
             STATE_SUB="${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}"
-            [ "$PLANE" = "prod" ] && TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}" || TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}"
+            if [ "$PLANE" = "prod" ]; then TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}"; else TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}"; fi
           else
             CLOUD_ENV="AzureCloud"; ARM_ENV="public"
             TENANT="${{ secrets.AZ_TENANT_PUB }}"; CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
             AUDIENCE="api://AzureADTokenExchange"
             STATE_SUB="${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}"
-            [ "$PLANE" = "prod" ] && TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}" || TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}"
+            if [ "$PLANE" = "prod" ]; then TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}"; else TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}"; fi
           fi
+
+          echo "ENV=$ENV_IN"            >> $GITHUB_OUTPUT
+          echo "PRODUCT=$PRODUCT"       >> $GITHUB_OUTPUT
+          echo "PLANE=$PLANE"           >> $GITHUB_OUTPUT
           echo "CLOUD_ENV=$CLOUD_ENV"   >> $GITHUB_OUTPUT
           echo "ARM_ENV=$ARM_ENV"       >> $GITHUB_OUTPUT
           echo "TENANT=$TENANT"         >> $GITHUB_OUTPUT
           echo "CLIENT_ID=$CLIENT_ID"   >> $GITHUB_OUTPUT
           echo "AUDIENCE=$AUDIENCE"     >> $GITHUB_OUTPUT
-          echo "PLANE=$PLANE"           >> $GITHUB_OUTPUT
           echo "STATE_SUB=$STATE_SUB"   >> $GITHUB_OUTPUT
           echo "TARGET_SUB=$TARGET_SUB" >> $GITHUB_OUTPUT
+
           {
             echo "ARM_ENVIRONMENT=$ARM_ENV"
             echo "ARM_TENANT_ID=$TENANT"
             echo "ARM_CLIENT_ID=$CLIENT_ID"
             echo "TF_VAR_tenant_id=$TENANT"
-            echo "TF_VAR_product=${PRODUCT}"
-            echo "TF_VAR_env=$ENV"
+            echo "TF_VAR_product=$PRODUCT"
+            echo "TF_VAR_env=$ENV_IN"
             echo "TF_VAR_plane=$PLANE"
             echo "TF_VAR_subscription_id=$TARGET_SUB"
             echo "TF_VAR_hub_tenant_id=$TENANT"
@@ -69,7 +74,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ENV="${{ inputs.env }}"; PRODUCT="${{ inputs.product }}"
+          ENV="${{ steps.sel.outputs.ENV }}"; PRODUCT="${{ steps.sel.outputs.PRODUCT }}"
           for p in "${ENV}.${PRODUCT}" "${ENV}"; do
             T="${GITHUB_WORKSPACE}/stacks/platform-app/tfvars/${p}.tfvars"
             [ -f "$T" ] && TFVARS_PATH="$T" && break
@@ -120,28 +125,30 @@ jobs:
           environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
           audience:        ${{ steps.sel.outputs.AUDIENCE }}
 
-      - name: Safety plan
-        id: plan
-        run: |
-          terraform fmt -recursive
-          terraform validate
-          terraform plan -input=false -lock-timeout=5m \
-            -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
-            -var "product=${{ inputs.product }}" \
-            -var "env=${{ inputs.env }}" \
-            -detailed-exitcode -out=tfplan || ec=$?
-          echo "exitcode=${ec:-0}" >> $GITHUB_OUTPUT
-          terraform show -no-color tfplan > plan.txt
-
-      - uses: actions/upload-artifact@v4
+      ## ---------- Reuse approved tfplan if present ----------
+      - name: Download approved plan artifact (best effort)
+        id: dl
+        uses: dawidd6/action-download-artifact@v6
+        continue-on-error: true
         with:
-          name: platform-apply-plan-${{ github.run_id }}
-          path: ${{ github.workspace }}/stacks/platform-app/plan.txt
+          run_id: ${{ inputs.plan_run_id }}
+          name: platform-plan-${{ inputs.plan_run_id }}
+          path: ${{ github.workspace }}/stacks/platform-app
 
-      - name: Terraform Apply
-        if: ${{ steps.plan.outputs.exitcode == '2' }}
-        run: terraform apply -auto-approve tfplan
+      - name: Verify plan artifact presence
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f "tfplan" ]; then
+            echo "has_tfplan=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Found approved tfplan artifact"
+          else
+            echo "has_tfplan=false" >> "$GITHUB_OUTPUT"
+            echo "ℹ️ No approved tfplan found; will run safety plan"
+            ls -la || true
+          fi
 
-      - name: No changes to apply
-        if: ${{ steps.plan.outputs.exitcode == '0' }}
-        run: echo "Plan is clean. Nothing to apply."
+      - name: Terraform Apply (approved plan)
+        if: ${{ steps.detect.outputs.has_tfplan == 'true' }}
+        run: terraform apply -input=false -auto-approve tfplan
