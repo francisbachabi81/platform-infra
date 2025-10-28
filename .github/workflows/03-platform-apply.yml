@@ -1,4 +1,4 @@
-name: \[platform-app\] apply
+name: platform-app-apply
 on:
   workflow_dispatch:
     inputs:
