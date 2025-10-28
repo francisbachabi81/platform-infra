@@ -9,7 +9,7 @@ permissions:
   #workflows: write
 
 env:
-  APPROVERS_CSV: "user1,user2"  # <-- change to your GitHub usernames
+  APPROVERS_CSV: "francisbachabi81,user2"
 
 jobs:
   gate:
