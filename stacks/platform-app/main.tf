@@ -667,97 +667,97 @@ locals {
 }
 
 # Diagnostics (AKS → LA)
-locals {
-  env_norm   = lower(var.env)
-  plane_ovrd = var.plane_override == null ? null : lower(var.plane_override)
+# locals {
+#   env_norm   = lower(var.env)
+#   plane_ovrd = var.plane_override == null ? null : lower(var.plane_override)
 
-  # dev/qa ⇒ np, uat ⇒ uat, prod ⇒ pr (np/pr passthrough)
-  plane_from_env = lookup({
-    dev  = "np",
-    qa   = "np",
-    uat  = "uat",
-    prod = "pr",
-    np   = "np",
-    pr   = "pr",
-  }, local.env_norm, "np")
+#   # dev/qa ⇒ np, uat ⇒ uat, prod ⇒ pr (np/pr passthrough)
+#   plane_from_env = lookup({
+#     dev  = "np",
+#     qa   = "np",
+#     uat  = "uat",
+#     prod = "pr",
+#     np   = "np",
+#     pr   = "pr",
+#   }, local.env_norm, "np")
 
-  # Normalize override safely (avoid contains(null))
-  plane_override_norm = local.plane_ovrd == null ? null : lookup({
-    nonprod = "np", np  = "np",
-    prod    = "pr", pr  = "pr",
-    uat     = "uat",
-  }, local.plane_ovrd, null)
+#   # Normalize override safely (avoid contains(null))
+#   plane_override_norm = local.plane_ovrd == null ? null : lookup({
+#     nonprod = "np", np  = "np",
+#     prod    = "pr", pr  = "pr",
+#     uat     = "uat",
+#   }, local.plane_ovrd, null)
 
-  # Final plane code
-  plane_effective_code = coalesce(local.plane_override_norm, local.plane_from_env)
+#   # Final plane code
+#   plane_effective_code = coalesce(local.plane_override_norm, local.plane_from_env)
 
-  want_aks_diag = local.aks_enabled_env
+#   want_aks_diag = local.aks_enabled_env
 
-  # Name uses the normalized plane code (np | pr | uat)
-  diag_name = "diag-${var.product}-${local.plane_effective_code}-${var.region}"
+#   # Name uses the normalized plane code (np | pr | uat)
+#   diag_name = "diag-${var.product}-${local.plane_effective_code}-${var.region}"
 
-  # Pick the single diag resource by plane (dev/qa collapse to np)
-  aks_diag_id = local.want_aks_diag ? (
-    local.plane_effective_code == "np"  ? try(azurerm_monitor_diagnostic_setting.aks_shared_nonprod[0].id, null) :
-    local.plane_effective_code == "pr"  ? try(azurerm_monitor_diagnostic_setting.aks_prod[0].id,           null) :
-    local.plane_effective_code == "uat" ? try(azurerm_monitor_diagnostic_setting.aks_uat[0].id,            null) :
-                                          null
-  ) : null
-}
+#   # Pick the single diag resource by plane (dev/qa collapse to np)
+#   aks_diag_id = local.want_aks_diag ? (
+#     local.plane_effective_code == "np"  ? try(azurerm_monitor_diagnostic_setting.aks_shared_nonprod[0].id, null) :
+#     local.plane_effective_code == "pr"  ? try(azurerm_monitor_diagnostic_setting.aks_prod[0].id,           null) :
+#     local.plane_effective_code == "uat" ? try(azurerm_monitor_diagnostic_setting.aks_uat[0].id,            null) :
+#                                           null
+#   ) : null
+# }
 
-resource "azurerm_monitor_diagnostic_setting" "aks_shared_nonprod" {
-  count                      = local.want_aks_diag && var.env == "dev" ? 1 : 0
-  provider                   = azurerm.shared_nonprod
-  name                       = local.diag_name
-  target_resource_id         = local.aks_id
-  log_analytics_workspace_id = local.law_workspace_id
-  enabled_log { category = "kube-audit" }
-  enabled_log { category = "kube-audit-admin" }
-  enabled_log { category = "guard" }
+# resource "azurerm_monitor_diagnostic_setting" "aks_shared_nonprod" {
+#   count                      = local.want_aks_diag && var.env == "dev" ? 1 : 0
+#   provider                   = azurerm.shared_nonprod
+#   name                       = local.diag_name
+#   target_resource_id         = local.aks_id
+#   log_analytics_workspace_id = local.law_workspace_id
+#   enabled_log { category = "kube-audit" }
+#   enabled_log { category = "kube-audit-admin" }
+#   enabled_log { category = "guard" }
 
-  lifecycle {
-    precondition {
-      condition     = local.aks_id != null && local.law_workspace_id != null
-      error_message = "AKS diagnostics requires AKS id and Log Analytics workspace id."
-    }
-  }
-}
+#   lifecycle {
+#     precondition {
+#       condition     = local.aks_id != null && local.law_workspace_id != null
+#       error_message = "AKS diagnostics requires AKS id and Log Analytics workspace id."
+#     }
+#   }
+# }
 
-resource "azurerm_monitor_diagnostic_setting" "aks_prod" {
-  count                      = local.want_aks_diag && var.env == "prod" ? 1 : 0
-  provider                   = azurerm.prod
-  name                       = local.diag_name
-  target_resource_id         = local.aks_id
-  log_analytics_workspace_id = local.law_workspace_id
-  enabled_log { category = "kube-audit" }
-  enabled_log { category = "kube-audit-admin" }
-  enabled_log { category = "guard" }
+# resource "azurerm_monitor_diagnostic_setting" "aks_prod" {
+#   count                      = local.want_aks_diag && var.env == "prod" ? 1 : 0
+#   provider                   = azurerm.prod
+#   name                       = local.diag_name
+#   target_resource_id         = local.aks_id
+#   log_analytics_workspace_id = local.law_workspace_id
+#   enabled_log { category = "kube-audit" }
+#   enabled_log { category = "kube-audit-admin" }
+#   enabled_log { category = "guard" }
 
-  lifecycle {
-    precondition {
-      condition     = local.aks_id != null && local.law_workspace_id != null
-      error_message = "AKS diagnostics requires AKS id and Log Analytics workspace id."
-    }
-  }
-}
+#   lifecycle {
+#     precondition {
+#       condition     = local.aks_id != null && local.law_workspace_id != null
+#       error_message = "AKS diagnostics requires AKS id and Log Analytics workspace id."
+#     }
+#   }
+# }
 
-resource "azurerm_monitor_diagnostic_setting" "aks_uat" {
-  count                      = local.want_aks_diag && var.env == "uat" ? 1 : 0
-  provider                   = azurerm.uat
-  name                       = local.diag_name
-  target_resource_id         = local.aks_id
-  log_analytics_workspace_id = local.law_workspace_id
-  enabled_log { category = "kube-audit" }
-  enabled_log { category = "kube-audit-admin" }
-  enabled_log { category = "guard" }
+# resource "azurerm_monitor_diagnostic_setting" "aks_uat" {
+#   count                      = local.want_aks_diag && var.env == "uat" ? 1 : 0
+#   provider                   = azurerm.uat
+#   name                       = local.diag_name
+#   target_resource_id         = local.aks_id
+#   log_analytics_workspace_id = local.law_workspace_id
+#   enabled_log { category = "kube-audit" }
+#   enabled_log { category = "kube-audit-admin" }
+#   enabled_log { category = "guard" }
 
-  lifecycle {
-    precondition {
-      condition     = local.aks_id != null && local.law_workspace_id != null
-      error_message = "AKS diagnostics requires AKS id and Log Analytics workspace id."
-    }
-  }
-}
+#   lifecycle {
+#     precondition {
+#       condition     = local.aks_id != null && local.law_workspace_id != null
+#       error_message = "AKS diagnostics requires AKS id and Log Analytics workspace id."
+#     }
+#   }
+# }
 
 # Service Bus (env)
 locals { sb_is_premium = lower(var.servicebus_sku) == "premium" }

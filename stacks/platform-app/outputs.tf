@@ -42,13 +42,18 @@ output "ids" {
     cosmos1  = try(module.cosmos1[0].id, null)
     # pick the AKS id from the locals unified above
     aks1     = local.aks_id
+    aks      = local.aks_id
     sbns1    = try(module.sbns1[0].id, null)
     eventhub = try(module.eventhub[0].id, null)
     postgres = try(module.postgres[0].id, null)
     redis    = try(module.redis1[0].id, null)
     cdbpg1   = try(module.cdbpg1[0].id, null)
-    aks_diag = local.aks_diag_id
+    # aks_diag = try(local.aks_diag_id, null)
   }
+}
+
+output "aks_id" {
+  value = local.aks_enabled_env ? local.aks_id : null
 }
 
 output "names" {
@@ -84,8 +89,8 @@ output "observability" {
   value = {
     law_workspace_id       = local.law_workspace_id
     appi_connection_string = local.appi_connection_string
-    aks_diag_name          = local.diag_name
-    aks_diag_id            = local.aks_diag_id
+    # aks_diag_name          = local.diag_name
+    # aks_diag_id            = local.aks_diag_id
   }
 }
 
@@ -235,4 +240,11 @@ output "function_apps" {
       scm_host = "${module.funcapp2[0].name}.scm.${local._app_domain}"
     }, null)
   }
+}
+
+output "kubernetes" {
+  value = local.aks_enabled_env ? {
+    id   = local.aks_id
+    name = local.aks_name
+  } : null
 }
