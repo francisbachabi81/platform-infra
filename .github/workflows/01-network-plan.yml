@@ -220,7 +220,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: shared-network-plan-${{ github.run_id }}
-          path: ${{ github.workspace }}/stacks/shared-network/plan.txt
+          if-no-files-found: error
+          path: |
+            ${{ github.workspace }}/stacks/shared-network/tfplan
+            ${{ github.workspace }}/stacks/shared-network/plan.txt
 
       - name: Open approval issue
         if: ${{ steps.plan.outputs.exitcode != '1' }}
