@@ -1,6 +1,9 @@
 name: 01-network-plan
 run-name: ${{ format('{0} plan {1}-{2}', github.workflow, inputs.product || 'hrz', inputs.plane || 'prod') }}
 
+env:
+  APPROVERS_CSV: "francisbachabi81,user2"
+
 on:
   # push:
   #   branches: [prod]
@@ -228,12 +231,20 @@ jobs:
       - name: Open approval issue
         if: ${{ steps.plan.outputs.exitcode != '1' }}
         uses: actions/github-script@v7
+        env:
+          APPROVERS_CSV: ${{ env.APPROVERS_CSV }}
         with:
           script: |
             const plane = `${{ steps.sel.outputs.PLANE }}`;
             const product = `${{ steps.sel.outputs.PRODUCT }}`;
             const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
             const planSummary = `${{ steps.summary.outputs.summary }}`;
+
+            // first approver from CSV
+            const firstApprover = (process.env.APPROVERS_CSV || '')
+              .split(',')
+              .map(s => s.trim())
+              .filter(Boolean)[0];
 
             const body = `
             **Plan ready**
@@ -251,8 +262,10 @@ jobs:
             **Approve by commenting:** \`/approve ${context.runId}\`  
             **Reject by commenting:** \`/reject ${context.runId}\`
             `;
+
             await github.rest.issues.create({
               ...context.repo,
               title: `APPROVAL: shared-network ${product} ${plane} (run ${context.runId})`,
-              body
+              body,
+              assignees: firstApprover ? [firstApprover] : undefined
             });
