@@ -1,4 +1,4 @@
-name: infra-approval-listener
+name: approval-listener
 
 on:
   issue_comment:
