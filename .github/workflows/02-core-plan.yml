@@ -13,7 +13,7 @@ on:
         description: "Plane (np = dev/qa, pr = uat/prod)"
         type: choice
         options: [np, pr]
-        default: pr
+        default: np
       product:
         description: "Product (hrz = Azure Gov, pub = Azure Commercial)"
         type: choice
