@@ -1,4 +1,4 @@
-name: 02-core-apply
+name: [core] apply
 on:
   workflow_dispatch:
     inputs:
