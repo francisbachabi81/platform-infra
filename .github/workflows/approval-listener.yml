@@ -118,7 +118,7 @@ jobs:
             const repoUrl     = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
             const planRunUrl  = `${repoUrl}/actions/runs/${runid}`;
             const applyTabUrl = `${repoUrl}/actions/workflows/${workflow_id}`;
-            const body = `${process.env.SYSTEM_MARKER}
+            const body = `${SYSTEM_MARKER}
             ✅ **Approved** by @${context.actor}.
             - Stack: \`${stack}\`
             - Product: \`${product}\`
@@ -151,7 +151,7 @@ jobs:
               state: "closed"
             });
 
-            const body = `${process.env.SYSTEM_MARKER}
+            const body = `${SYSTEM_MARKER}
             ❌ **Rejected** by @${context.actor}.`;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
