@@ -38,7 +38,7 @@ jobs:
     name: "Plan (platform-app)"
     runs-on: ubuntu-latest
     # Using a literal here avoids parse-time errors when inputs.* is undefined on push
-    environment: prod
+    environment: ${{ inputs.plane }}
     defaults:
       run:
         working-directory: stacks/platform-app
