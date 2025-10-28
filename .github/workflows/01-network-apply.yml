@@ -18,7 +18,7 @@ jobs:
   apply:
     name: "Apply (shared-network: ${{ inputs.plane }}.${{ inputs.product }})"
     runs-on: ubuntu-latest
-    environment: prod
+    environment: ${{ inputs.plane }}
     defaults: { run: { working-directory: stacks/shared-network } }
 
     steps:
