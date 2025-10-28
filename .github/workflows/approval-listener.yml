@@ -26,7 +26,6 @@ jobs:
       (startsWith(github.event.comment.body, '/approve ') || startsWith(github.event.comment.body, '/reject ')) &&
       !contains(github.event.comment.body, '<!-- system:approval-final -->') &&
       github.event.comment.user.login != 'github-actions[bot]'
-      # github.event.comment.user.login != (vars.PAT_ACTOR != '' && vars.PAT_ACTOR || 'francisbachabi81')
     runs-on: ubuntu-latest
 
     steps:
