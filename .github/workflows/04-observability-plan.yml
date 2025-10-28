@@ -1,0 +1,280 @@
+name: observability-plan
+run-name: ${{ format('{0} {1}-{2}', github.workflow, inputs.product || 'hrz', inputs.plane || 'nonprod') }}
+
+env:
+  ARM_USE_OIDC: true
+  TF_IN_AUTOMATION: true
+  APPROVERS_CSV: "francisbachabi81,user2"
+
+on:
+  # push:
+  #   branches: [prod]
+  #   paths:
+  #     - "stacks/observability/**"
+  #     - "modules/**"
+  workflow_dispatch:
+    inputs:
+      plane:
+        description: "Plane"
+        type: choice
+        options: [nonprod, prod]
+        default: nonprod
+      product:
+        description: "Product"
+        type: choice
+        options: [hrz, pub]
+        default: hrz
+      terraform_version:
+        description: "Terraform version"
+        type: string
+        default: "1.13.3"
+
+permissions:
+  id-token: write
+  contents: read
+  issues: write
+
+jobs:
+  plan:
+    name: "Plan (observability: ${{ inputs.plane }}.${{ inputs.product }})"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.plane }}
+    defaults:
+      run:
+        working-directory: stacks/observability
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pick TF version without using expressions that can fail on push
+      - name: Determine Terraform version
+        id: tfver
+        shell: bash
+        run: |
+          TV="${{ inputs.terraform_version }}"
+          if [ -z "$TV" ]; then TV="1.13.3"; fi
+          echo "version=$TV" >> "$GITHUB_OUTPUT"
+
+      # Decide cloud + audience + TENANT + SUBs (set defaults in bash, not in YAML expr)
+      - name: Select cloud + subscriptions
+        id: sel
+        shell: bash
+        run: |
+          set -euo pipefail
+          PLANE="${{ inputs.plane }}"
+          PRODUCT="${{ inputs.product }}"
+          # Defaults when triggered by push (no inputs.*)
+          if [ -z "${PLANE:-}" ]; then PLANE="prod"; fi
+          if [ -z "${PRODUCT:-}" ]; then PRODUCT="hrz"; fi
+
+          if [ "$PRODUCT" = "hrz" ]; then
+            CLOUD_ENV="AzureUSGovernment"
+            ARM_ENV="usgovernment"
+            TENANT="${{ secrets.AZ_TENANT_HRZ }}"
+            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
+            AUDIENCE="api://AzureADTokenExchangeUSGov"
+            STATE_SUB="${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}"
+            case "$PLANE" in
+              nonprod) TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}";;
+              prod)    TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}";;
+              *) echo "Unknown plane: $PLANE"; exit 1;;
+            esac
+          else
+            CLOUD_ENV="AzureCloud"
+            ARM_ENV="public"
+            TENANT="${{ secrets.AZ_TENANT_PUB }}"
+            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
+            AUDIENCE="api://AzureADTokenExchange"
+            STATE_SUB="${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}"
+            case "$PLANE" in
+              nonprod) TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}";;
+              prod)    TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}";;
+              *) echo "Unknown plane: $PLANE"; exit 1;;
+            esac
+          fi
+
+          echo "PLANE=$PLANE"           >> $GITHUB_OUTPUT
+          echo "PRODUCT=$PRODUCT"       >> $GITHUB_OUTPUT
+          echo "CLOUD_ENV=$CLOUD_ENV"   >> $GITHUB_OUTPUT
+          echo "ARM_ENV=$ARM_ENV"       >> $GITHUB_OUTPUT
+          echo "TENANT=$TENANT"         >> $GITHUB_OUTPUT
+          echo "CLIENT_ID=$CLIENT_ID"   >> $GITHUB_OUTPUT
+          echo "AUDIENCE=$AUDIENCE"     >> $GITHUB_OUTPUT
+          echo "STATE_SUB=$STATE_SUB"   >> $GITHUB_OUTPUT
+          echo "TARGET_SUB=$TARGET_SUB" >> $GITHUB_OUTPUT
+
+          {
+            echo "ARM_ENVIRONMENT=$ARM_ENV"
+            echo "ARM_TENANT_ID=$TENANT"
+            echo "ARM_CLIENT_ID=$CLIENT_ID"
+            echo "TF_VAR_tenant_id=$TENANT"
+            echo "TF_VAR_product=$PRODUCT"
+            echo "TF_VAR_subscription_id=$TARGET_SUB"
+            echo "TF_VAR_hub_tenant_id=$TENANT"
+            echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
+          } >> $GITHUB_ENV
+
+      - name: Resolve tfvars & backend key
+        id: paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          PLANE="${{ steps.sel.outputs.PLANE }}"
+          PRODUCT="${{ steps.sel.outputs.PRODUCT }}"
+
+          TFVARS_DIR="${GITHUB_WORKSPACE}/stacks/observability/tfvars"
+          echo "🔎 Listing $TFVARS_DIR:"; ls -la "$TFVARS_DIR" || true
+
+          candidates=(
+            "${PLANE}.${PRODUCT}.tfvars"  # e.g., nonprod.hrz.tfvars
+            "${PLANE}.tfvars"             # e.g., nonprod.tfvars
+            "default.${PLANE}.tfvars"
+            "default.tfvars"
+          )
+
+          TFVARS_PATH=""
+          for f in "${candidates[@]}"; do
+            if [ -f "${TFVARS_DIR}/${f}" ]; then
+              TFVARS_PATH="${TFVARS_DIR}/${f}"
+              echo "✅ Using tfvars: ${f}"
+              break
+            fi
+          done
+
+          [ -n "${TFVARS_PATH}" ] || { echo "❌ Missing tfvars. Tried: ${candidates[*]}"; exit 1; }
+
+          echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
+          echo "STATE_RG=rg-core-infra-state"     >> "$GITHUB_OUTPUT"
+          echo "STATE_SA=sacoretfstateinfra"      >> "$GITHUB_OUTPUT"
+          echo "STATE_CONTAINER=tfstate"          >> "$GITHUB_OUTPUT"
+          echo "STATE_KEY=observability/${PRODUCT}/${PLANE}/terraform.tfstate" >> "$GITHUB_OUTPUT"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ steps.tfver.outputs.version }}
+
+      - name: Azure Login (state subscription for backend)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ steps.sel.outputs.CLIENT_ID }}
+          tenant-id:       ${{ steps.sel.outputs.TENANT }}
+          subscription-id: ${{ steps.sel.outputs.STATE_SUB }}
+          environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
+          audience:        ${{ steps.sel.outputs.AUDIENCE }}
+
+      - name: Terraform Init (backend in state/prod subscription)
+        env:
+          ARM_USE_OIDC: true
+          ARM_CLIENT_ID:       ${{ steps.sel.outputs.CLIENT_ID }}
+          ARM_TENANT_ID:       ${{ steps.sel.outputs.TENANT }}
+          ARM_SUBSCRIPTION_ID: ${{ steps.sel.outputs.STATE_SUB }}
+          ARM_ENVIRONMENT:     ${{ steps.sel.outputs.ARM_ENV }}
+        run: |
+          terraform init -input=false -reconfigure \
+            -backend-config="environment=${{ steps.sel.outputs.ARM_ENV }}" \
+            -backend-config="tenant_id=${{ steps.sel.outputs.TENANT }}" \
+            -backend-config="subscription_id=${{ steps.sel.outputs.STATE_SUB }}" \
+            -backend-config="resource_group_name=${{ steps.paths.outputs.STATE_RG }}" \
+            -backend-config="storage_account_name=${{ steps.paths.outputs.STATE_SA }}" \
+            -backend-config="container_name=${{ steps.paths.outputs.STATE_CONTAINER }}" \
+            -backend-config="key=${{ steps.paths.outputs.STATE_KEY }}" \
+            -backend-config="use_azuread_auth=true"
+
+      - name: Azure Login (target subscription for plan)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ steps.sel.outputs.CLIENT_ID }}
+          tenant-id:       ${{ steps.sel.outputs.TENANT }}
+          subscription-id: ${{ steps.sel.outputs.TARGET_SUB }}
+          environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
+          audience:        ${{ steps.sel.outputs.AUDIENCE }}
+
+      - name: Terraform Fmt & Validate
+        run: |
+          terraform fmt -recursive
+          terraform validate
+
+      - name: Plan (detailed exit code)
+        id: plan
+        run: |
+          terraform plan -input=false -lock-timeout=5m \
+            -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
+            -var "product=${{ steps.sel.outputs.PRODUCT }}" \
+            -var "plane=${{ steps.sel.outputs.PLANE }}" \
+            -detailed-exitcode -out=tfplan || ec=$?
+          echo "exitcode=${ec:-0}" >> $GITHUB_OUTPUT
+          terraform show -no-color tfplan > plan.txt
+
+      - name: Summarize plan
+        id: summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -qE "^(No changes|No changes\.)" plan.txt; then
+            SUM="No changes. Infrastructure is up-to-date."
+          else
+            SUM="$(grep -E '^Plan: ' plan.txt | tail -n1 || true)"
+            if [ -z "${SUM}" ]; then
+              SUM="(No 'Plan:' line found)"; echo "::group::Plan tail"; tail -n 10 plan.txt; echo "::endgroup::"
+            fi
+          fi
+          echo "summary=${SUM}" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Terraform plan summary"
+            echo
+            echo "${SUM}"
+            echo
+            echo "[View full run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+            echo
+            echo "Artifact: \`observability-plan-${{ github.run_id }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: observability-plan-${{ github.run_id }}
+          if-no-files-found: error
+          path: |
+            ${{ github.workspace }}/stacks/observability/tfplan
+            ${{ github.workspace }}/stacks/observability/plan.txt
+
+      - name: Open approval issue
+        if: ${{ steps.plan.outputs.exitcode != '1' }}
+        uses: actions/github-script@v7
+        env:
+          APPROVERS_CSV: ${{ env.APPROVERS_CSV }}
+        with:
+          script: |
+            const plane = `${{ steps.sel.outputs.PLANE }}`;
+            const product = `${{ steps.sel.outputs.PRODUCT }}`;
+            const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            const planSummary = `${{ steps.summary.outputs.summary }}`;
+
+            const firstApprover = (process.env.APPROVERS_CSV || '')
+              .split(',')
+              .map(s => s.trim())
+              .filter(Boolean)[0];
+
+            const body = `
+            **Plan ready**
+            - **Stack:** observability
+            - **Product:** ${product}
+            - **Plane/Env:** ${plane}
+            - **Branch:** ${context.ref}
+            - **Commit:** ${context.sha}
+            - **Run:** ${runUrl}
+
+            **Summary:** ${planSummary}
+
+            **Artifact:** \`observability-plan-${context.runId}\`
+
+            **Approve by commenting:** \`/approve ${context.runId}\`  
+            **Reject by commenting:** \`/reject ${context.runId}\`
+            `;
+
+            await github.rest.issues.create({
+              ...context.repo,
+              title: `APPROVAL: observability ${product} ${plane} (run ${context.runId})`,
+              body,
+              assignees: firstApprover ? [firstApprover] : undefined
+            })
