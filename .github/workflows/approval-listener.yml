@@ -29,37 +29,48 @@ jobs:
         id: guard
         shell: bash
         env:
-          BODY: ${{ github.event.comment.body }}
+          BODY:   ${{ github.event.comment.body }}
           AUTHOR: ${{ github.event.comment.user.login }}
-          STATE: ${{ github.event.issue.state }}
-          MARK:  ${{ env.SYSTEM_MARKER }}
-          # Prefer secret if present, else env fallback
-          PAT_OWNER: ${{ secrets.GH_PAT_ACTOR != '' && secrets.GH_PAT_ACTOR || env.PAT_ACTOR }}
+          STATE:  ${{ github.event.issue.state }}
+          MARK:   ${{ env.SYSTEM_MARKER }}
         run: |
           set -euo pipefail
           proceed=1
 
-          # must start with "/approve " or "/reject "
-          if [[ ! "$BODY" =~ ^/(approve|reject)\  ]]; then proceed=0; fi
+          echo "Author: $AUTHOR"
+          echo "State:  $STATE"
+          echo "Body:   $BODY"
+
+          # must start with "/approve " or "/reject " (allow any whitespace)
+          if [[ ! "$BODY" =~ ^/(approve|reject)[[:space:]]+ ]]; then
+            echo "Guard: not an approve/reject command"
+            proceed=0
+          fi
 
           # issue must be open
-          [[ "$STATE" == "open" ]] || proceed=0
+          if [[ "$STATE" != "open" ]]; then
+            echo "Guard: issue not open"
+            proceed=0
+          fi
 
           # ignore our own final/system comments (contain marker)
-          if grep -q "$MARK" <<<"$BODY"; then proceed=0; fi
-
-          # ignore comments authored by the PAT owner (prevents loop on our final comment)
-          if [[ -n "${PAT_OWNER:-}" && "$AUTHOR" == "$PAT_OWNER" ]]; then proceed=0; fi
+          if grep -q "$MARK" <<<"$BODY"; then
+            echo "Guard: system marker found (final comment), skipping"
+            proceed=0
+          fi
 
           echo "proceed=$proceed" >> "$GITHUB_OUTPUT"
 
       - name: Parse command & runId
         id: parse
         if: ${{ steps.guard.outputs.proceed == '1' }}
+        shell: bash
         run: |
           cmd="${{ github.event.comment.body }}"
+          cmd="$(echo "$cmd" | tr -d '\r')"   # strip CR if pasted
           action="${cmd%% *}"
-          runid="${cmd##* }"
+          runid="${cmd#* }"
+          runid="$(echo "$runid" | xargs)"    # trim
           echo "action=$action" >> $GITHUB_OUTPUT
           echo "runid=$runid"   >> $GITHUB_OUTPUT
 
