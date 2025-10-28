@@ -7,7 +7,6 @@ permissions:
   contents: read
   issues: write
   actions: write
-  # workflows: write
   id-token: write
 
 env:
@@ -33,32 +32,54 @@ jobs:
           ok=0; for u in "${USERS[@]}"; do [ "$u" = "${{ github.event.comment.user.login }}" ] && ok=1; done
           [ $ok -eq 1 ] || { echo "Not authorized"; exit 1; }
 
-      - name: Extract stack/product/plane/env from issue title
+      - name: Extract stack/product/third from issue title
         id: meta
         run: |
           title='${{ github.event.issue.title }}'
-          # Formats we create below:
-          #   APPROVAL: shared-network hrz prod (run 123456789)
-          #   APPROVAL: core hrz pr (run 123456789)
-          #   APPROVAL: platform-app hrz prod (run 123456789)
+          # Formats you create from the plan step, e.g.:
+          #  APPROVAL: shared-network hrz nonprod (run 123456)
+          #  APPROVAL: core hrz prod (run 123456)
+          #  APPROVAL: platform-app hrz prod (run 123456)
           stack=$(echo "$title" | awk '{print $2}')
           product=$(echo "$title" | awk '{print $3}')
           third=$(echo "$title" | awk '{print $4}')
-          echo "stack=$stack" >> $GITHUB_OUTPUT
+          echo "stack=$stack"     >> $GITHUB_OUTPUT
           echo "product=$product" >> $GITHUB_OUTPUT
-          echo "third=$third" >> $GITHUB_OUTPUT
+          echo "third=$third"     >> $GITHUB_OUTPUT
 
-      - name: Dispatch stack-specific apply workflow
+      - name: Lookup original plan run (to get branch/ref)
+        id: run
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GH_PAT_WORKFLOW }}
+          script: |
+            const run_id = Number(`${{ steps.parse.outputs.runid }}`);
+            const { data: run } = await github.rest.actions.getWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id
+            });
+            core.info(`Plan run branch: ${run.head_branch}`);
+            core.setOutput('head_branch', run.head_branch);
+            core.setOutput('workflow_id', run.workflow_id);
+            core.setOutput('event', run.event);
+            // Optional safety: block if the plan run is not from this repo
+            if (run.repository.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
+              core.setFailed('Plan run is from a different repository.');
+            }
+
+      - name: Dispatch stack-specific apply workflow (using plan branch)
         if: ${{ steps.parse.outputs.action == '/approve' }}
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GH_PAT_WORKFLOW }}
           script: |
-            const stack = `${{ steps.meta.outputs.stack }}`;
+            const stack   = `${{ steps.meta.outputs.stack }}`;
             const product = `${{ steps.meta.outputs.product }}`;
-            const third = `${{ steps.meta.outputs.third }}`;
-            const runid = `${{ steps.parse.outputs.runid }}`;
+            const third   = `${{ steps.meta.outputs.third }}`; // plane for shared/core, env for platform-app
+            const runid   = `${{ steps.parse.outputs.runid }}`;
+            const ref     = `${{ steps.run.outputs.head_branch }}`; // dev or main, etc.
 
-            // Decide which workflow and inputs
             let workflow_id, inputs;
             if (stack === "shared-network") {
               workflow_id = "01-network-apply.yml";
@@ -77,23 +98,26 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id,
-              ref: "prod",
+              ref,     // <- branch taken from the plan run (dev for nonprod, main for prod)
               inputs
             });
 
             await github.rest.issues.createComment({
-              ...context.repo,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `✅ Approved by @${context.actor}. Dispatched **${workflow_id}** (run ${runid}).`
+              body: `✅ Approved by @${context.actor}. Dispatched **${workflow_id}** on \`${ref}\` (plan run ${runid}).`
             });
 
       - name: Record rejection
         if: ${{ steps.parse.outputs.action == '/reject' }}
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GH_PAT_WORKFLOW }}
           script: |
             await github.rest.issues.createComment({
-              ...context.repo,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
               issue_number: context.issue.number,
               body: `❌ Rejected by @${context.actor}.`
             });
