@@ -157,6 +157,34 @@ jobs:
           echo "STATE_CONTAINER=tfstate"          >> "$GITHUB_OUTPUT"
           echo "STATE_KEY=platform-app/${PRODUCT}/${ENV}/terraform.tfstate" >> "$GITHUB_OUTPUT"
 
+      - name: Export optional per-env / hub overrides to TF_VAR_*
+        shell: bash
+        run: |
+          set -euo pipefail
+          write_env () {
+            local name="$1"; local value="$2"
+            if [ -n "$value" ]; then
+              {
+                echo "${name}<<EOF"
+                printf '%s\n' "$value"
+                echo "EOF"
+              } >> "$GITHUB_ENV"
+              echo "[export] set ${name}"
+            fi
+          }
+          PRODUCT="${{ inputs.product || 'hrz' }}"
+          if [ "$PRODUCT" = "hrz" ]; then
+            write_env TF_VAR_hub_subscription_id "${{ secrets.HUB_SUB_ID_HRZ }}"
+            write_env TF_VAR_hub_tenant_id       "${{ secrets.HUB_TENANT_ID_HRZ }}"
+          else
+            write_env TF_VAR_hub_subscription_id "${{ secrets.HUB_SUB_ID_PUB }}"
+            write_env TF_VAR_hub_tenant_id       "${{ secrets.HUB_TENANT_ID_PUB }}"
+          fi
+          [ -n "${{ secrets.PG_ADMIN_PASSWORD }}" ] && echo "::add-mask::${{ secrets.PG_ADMIN_PASSWORD }}"
+          [ -n "${{ secrets.CDBPG_ADMIN_PASSWORD }}" ] && echo "::add-mask::${{ secrets.CDBPG_ADMIN_PASSWORD }}"
+          write_env TF_VAR_pg_admin_password    "${{ secrets.PG_ADMIN_PASSWORD }}"
+          write_env TF_VAR_cdbpg_admin_password "${{ secrets.CDBPG_ADMIN_PASSWORD }}"
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ steps.tfver.outputs.version }}
