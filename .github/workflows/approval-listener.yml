@@ -68,6 +68,8 @@ jobs:
         with:
           github-token: ${{ secrets.GH_PAT_WORKFLOW }}
           script: |
+            const MARK = process.env.SYSTEM_MARKER || '<!-- system:approval-final -->';
+
             const stack   = `${{ steps.meta.outputs.stack }}`.trim();
             const product = `${{ steps.meta.outputs.product }}`.trim();
             const third   = `${{ steps.meta.outputs.third }}`.trim();   // plane or env
@@ -94,8 +96,8 @@ jobs:
             const lower = third.toLowerCase();
             let ref = 'dev'; // default for safety
             if (['prod','pr'].includes(lower)) ref = 'main';
-            if (['nonprod','np','dev','qa','uat'].includes(lower)) ref = 'main';
-            if (['main','dev'].includes(lower)) ref = lower; // explicit override if someone used a branch token
+            if (['nonprod','np','dev','qa','uat'].includes(lower)) ref = 'dev';
+            if (['main','dev'].includes(lower)) ref = lower; // explicit override if someone typed a branch
 
             // Dispatch apply workflow on chosen branch
             await github.rest.actions.createWorkflowDispatch({
@@ -118,7 +120,7 @@ jobs:
             const repoUrl     = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
             const planRunUrl  = `${repoUrl}/actions/runs/${runid}`;
             const applyTabUrl = `${repoUrl}/actions/workflows/${workflow_id}`;
-            const body = `${SYSTEM_MARKER}
+            const body = `${MARK}
             ✅ **Approved** by @${context.actor}.
             - Stack: \`${stack}\`
             - Product: \`${product}\`
@@ -143,6 +145,8 @@ jobs:
         with:
           github-token: ${{ secrets.GH_PAT_WORKFLOW }}
           script: |
+            const MARK = process.env.SYSTEM_MARKER || '<!-- system:approval-final -->';
+
             // CLOSE FIRST to prevent any new comment event from re-arming the job
             await github.rest.issues.update({
               owner: context.repo.owner,
@@ -151,7 +155,7 @@ jobs:
               state: "closed"
             });
 
-            const body = `${SYSTEM_MARKER}
+            const body = `${MARK}
             ❌ **Rejected** by @${context.actor}.`;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
