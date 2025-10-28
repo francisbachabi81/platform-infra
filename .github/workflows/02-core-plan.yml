@@ -38,7 +38,7 @@ jobs:
   plan:
     name: "Plan (core)"
     runs-on: ubuntu-latest
-    environment: ${{ inputs.plane }}
+    environment: ${{ inputs.plane == 'pr' && 'prod' || 'nonprod' }}
     defaults:
       run:
         working-directory: stacks/core
