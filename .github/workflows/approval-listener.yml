@@ -115,12 +115,12 @@ jobs:
             const MARK = process.env.SYSTEM_MARKER || '<!-- system:approval-final -->';
             const PAT_OWNER = process.env.GH_PAT_ACTOR || process.env.PAT_ACTOR || 'github-actions[bot]';
 
-            const stack   = `${{ steps.meta.outputs.stack }}`.trim();
-            const product = `${{ steps.meta.outputs.product }}`.trim();
-            const third   = `${{ steps.meta.outputs.third }}`.trim();   // plane or env
+            const stack     = `${{ steps.meta.outputs.stack }}`.trim();
+            const product   = `${{ steps.meta.outputs.product }}`.trim();
+            const third     = `${{ steps.meta.outputs.third }}`.trim();   // plane or env
             const planRunId = `${{ steps.parse.outputs.runid }}`.trim();
 
-            // Choose workflow + inputs
+            // Decide which apply workflow + inputs to call
             let workflow_id, inputs;
             if (stack === "shared-network") {
               workflow_id = "01-network-apply.yml";
@@ -136,13 +136,27 @@ jobs:
               return;
             }
 
-            // Map plane/env -> branch ref
-            const lower = third.toLowerCase();
-            let ref = 'main'; // default
-            if (['prod','pr'].includes(lower)) ref = 'main';
-            if (['main','dev'].includes(lower)) ref = 'main'; // explicit override ref = lower;
+            // 🔹 Dynamic branch ref from the original plan run
+            let ref = 'main';
+            try {
+              const run = await github.rest.actions.getWorkflowRun({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                run_id: Number(planRunId)
+              });
+              // head_branch is the branch name used by the plan run
+              if (run?.data?.head_branch) {
+                ref = run.data.head_branch;
+              } else if (context.ref?.startsWith('refs/heads/')) {
+                // fallback to current event's ref (usually the issue’s repo default)
+                ref = context.ref.replace('refs/heads/', '');
+              }
+            } catch (e) {
+              core.warning(`Could not resolve branch from plan run ${planRunId}: ${e.message}`);
+              // keep fallback 'main'
+            }
 
-            // Dispatch apply
+            // Dispatch the apply on that exact branch
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo:  context.repo.repo,
@@ -151,39 +165,39 @@ jobs:
               inputs
             });
 
-            // Try to resolve the *exact* run we just dispatched (best-effort)
-            // We'll poll up to ~20s total.
+            // (Optional) best-effort: find the new apply run URL for the comment
             const started = Date.now();
             const deadlineMs = 20000;
             const sleep = (ms) => new Promise(r => setTimeout(r, ms));
             let applyRunHtml = null;
 
-            while ((Date.now() - started) < deadlineMs && !applyRunHtml) {
-              // list runs for that workflow, constrained by branch + event
-              const runs = await github.rest.actions.listWorkflowRuns({
-                owner: context.repo.owner,
-                repo:  context.repo.repo,
-                workflow_id,
-                branch: ref,
-                event: 'workflow_dispatch',
-                per_page: 10
-              });
-
-              // Pick the most recent run matching the PAT actor and created very recently
-              const freshCutoff = new Date(Date.now() - 5 * 60 * 1000); // 5 minutes window
-              const found = (runs.data.workflow_runs || []).find(r =>
-                r.actor?.login?.toLowerCase() === PAT_OWNER.toLowerCase() &&
-                new Date(r.created_at) > freshCutoff
-              );
-
-              if (found?.html_url) {
-                applyRunHtml = found.html_url;
-                break;
+            try {
+              const patActor = PAT_OWNER.toLowerCase();
+              while ((Date.now() - started) < deadlineMs && !applyRunHtml) {
+                const runs = await github.rest.actions.listWorkflowRuns({
+                  owner: context.repo.owner,
+                  repo:  context.repo.repo,
+                  workflow_id,
+                  branch: ref,
+                  event: 'workflow_dispatch',
+                  per_page: 10
+                });
+                const freshCutoff = new Date(Date.now() - 5 * 60 * 1000);
+                const found = (runs.data.workflow_runs || []).find(r =>
+                  (r.actor?.login || '').toLowerCase() === patActor &&
+                  new Date(r.created_at) > freshCutoff
+                );
+                if (found?.html_url) {
+                  applyRunHtml = found.html_url;
+                  break;
+                }
+                await sleep(2000);
               }
-              await sleep(2000);
+            } catch (e) {
+              core.warning(`Could not locate apply run URL: ${e.message}`);
             }
 
-            // Close FIRST (prevents our final comment from re-triggering)
+            // Close FIRST to avoid a second trigger
             await github.rest.issues.update({
               owner: context.repo.owner,
               repo:  context.repo.repo,
@@ -191,7 +205,7 @@ jobs:
               state: "closed"
             });
 
-            // Final system-marked comment
+            // Final comment
             const repoUrl     = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
             const planRunUrl  = `${repoUrl}/actions/runs/${planRunId}`;
             const applyTabUrl = `${repoUrl}/actions/workflows/${workflow_id}`;
