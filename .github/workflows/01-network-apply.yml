@@ -1,4 +1,4 @@
-name: 01-network-apply
+name: [shared-network] plan
 on:
   workflow_dispatch:
     inputs:
