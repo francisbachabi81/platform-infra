@@ -61,11 +61,12 @@ jobs:
         with:
           github-token: ${{ secrets.GH_PAT_WORKFLOW }}
           script: |
-            const stack  = `${{ steps.meta.outputs.stack }}`;
-            const product= `${{ steps.meta.outputs.product }}`;
-            const third  = `${{ steps.meta.outputs.third }}`;
-            const runid  = `${{ steps.parse.outputs.runid }}`;
+            const stack   = `${{ steps.meta.outputs.stack }}`.trim();
+            const product = `${{ steps.meta.outputs.product }}`.trim();
+            const third   = `${{ steps.meta.outputs.third }}`.trim(); // plane or env
+            const runid   = `${{ steps.parse.outputs.runid }}`.trim();
 
+            // Decide workflow file + inputs shape
             let workflow_id, inputs;
             if (stack === "shared-network") {
               workflow_id = "01-network-apply.yml";
@@ -75,12 +76,30 @@ jobs:
               inputs = { product, plane: third, plan_run_id: runid };
             } else if (stack === "platform-app") {
               workflow_id = "03-platform-apply.yml";
-              // NOTE: for platform-app we used 'env' as the third token
+              // For platform-app the 3rd token is env (dev|qa|uat|prod)
               inputs = { product, env: third, plan_run_id: runid };
             } else {
               core.setFailed(`Unknown stack in issue title: ${stack}`);
+              return;
             }
 
+            // Map plane/env -> branch ref
+            // Rules:
+            // - nonprod plane (or env in {dev,qa,uat}) => 'dev'
+            // - prod plane (or env == prod)            => 'main'
+            const lower = third.toLowerCase();
+            const isNonProdPlane = ['nonprod','np'].includes(lower);
+            const isProdPlane    = ['prod','pr'].includes(lower);
+            const isNonProdEnv   = ['dev','qa','uat'].includes(lower);
+            const isProdEnv      = lower === 'prod';
+
+            let ref = 'dev'; // default safe
+            if (isProdPlane || isProdEnv) ref = 'main';
+            else if (isNonProdPlane || isNonProdEnv) ref = 'main';
+            // (Optional) allow explicit 'main'/'dev' pass-through
+            if (['main','dev'].includes(lower)) ref = lower;
+
+            // Kick off the apply workflow on the chosen branch
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo:  context.repo.repo,
@@ -89,8 +108,8 @@ jobs:
               inputs
             });
 
-            // Build a deep link to the plan run and the apply workflow tab
-            const repoUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
+            // Build links
+            const repoUrl     = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
             const planRunUrl  = `${repoUrl}/actions/runs/${runid}`;
             const applyTabUrl = `${repoUrl}/actions/workflows/${workflow_id}`;
 
@@ -99,6 +118,7 @@ jobs:
             - Stack: \`${stack}\`
             - Product: \`${product}\`
             - Env/Plane: \`${third}\`
+            - Branch ref: \`${ref}\`
             - **Plan run**: ${planRunUrl}
             - **Apply workflow**: ${applyTabUrl}
 
@@ -111,41 +131,10 @@ jobs:
               body
             });
 
-            // Close (and optionally lock) the issue to prevent further comments
+            // Close to prevent more approvals; avoids loops with the SYSTEM_MARKER too
             await github.rest.issues.update({
               owner: context.repo.owner,
               repo:  context.repo.repo,
               issue_number: context.issue.number,
               state: "closed"
             });
-
-            // Optional: lock to prevent new comments; requires 'issues: write'
-            // await github.rest.issues.lock({
-            //   owner: context.repo.owner,
-            //   repo:  context.repo.repo,
-            //   issue_number: context.issue.number,
-            //   lock_reason: "resolved"
-            // });
-
-      - name: Record rejection & close
-        if: ${{ steps.parse.outputs.action == '/reject' }}
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GH_PAT_WORKFLOW }}
-          script: |
-            const body = `${process.env.SYSTEM_MARKER}
-            ❌ **Rejected** by @${context.actor}. This issue is now closed.`;
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo:  context.repo.repo,
-              issue_number: context.issue.number,
-              body
-            });
-            await github.rest.issues.update({
-              owner: context.repo.owner,
-              repo:  context.repo.repo,
-              issue_number: context.issue.number,
-              state: "closed"
-            });
-            // Optional lock:
-            // await github.rest.issues.lock({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, lock_reason: "resolved" });
