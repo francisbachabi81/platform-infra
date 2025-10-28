@@ -1,4 +1,4 @@
-name: [shared-network] plan
+name: [shared-network] apply
 on:
   workflow_dispatch:
     inputs:
