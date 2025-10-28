@@ -59,6 +59,12 @@ jobs:
             proceed=0
           fi
 
+          # ignore comments authored by the PAT owner (prevents loop on our final comment)
+          # if [[ -n "${PAT_OWNER:-}" && "$AUTHOR" == "$PAT_OWNER" ]]; then
+          #   echo "Guard: comment authored by PAT owner (${PAT_OWNER}); skipping to avoid loop."
+          #   proceed=0
+          # fi
+
           echo "proceed=$proceed" >> "$GITHUB_OUTPUT"
 
       - name: Parse command & runId
