@@ -1,5 +1,9 @@
 name: 03-platform-plan
-run-name: 03-platform-plan
+run-name: ${{ format('{0} plan {1}-{2}', github.workflow, inputs.product || 'hrz', inputs.env || 'dev') }}
+
+env:
+  # Comma-separated GitHub usernames who can approve
+  APPROVERS_CSV: "francisbachabi81,user2"
 
 on:
   # push:
@@ -10,9 +14,9 @@ on:
   workflow_dispatch:
     inputs:
       env:
-        description: "Environment (dev, qa, uat, prod) or plane (np, pr)"
+        description: "Environment (dev, qa, uat, prod)"
         type: choice
-        options: [dev, qa, uat, prod, np, pr]
+        options: [dev, qa, uat, prod]
         default: dev
       product:
         description: "Product (hrz = Azure Gov, pub = Azure Commercial)"
@@ -37,8 +41,8 @@ jobs:
   plan:
     name: "Plan (platform-app)"
     runs-on: ubuntu-latest
-    # Using a literal here avoids parse-time errors when inputs.* is undefined on push
-    environment: ${{ inputs.plane }}
+    # Use env directly for GitHub Environments to avoid parse errors on push
+    environment: ${{ inputs.env }}
     defaults:
       run:
         working-directory: stacks/platform-app
@@ -61,12 +65,12 @@ jobs:
           set -euo pipefail
           ENV_IN="${{ inputs.env }}"
           PRODUCT_IN="${{ inputs.product }}"
-          # Defaults when triggered by push (no inputs on push)
+          # Defaults when triggered by push (inputs absent)
           if [ -z "${ENV_IN:-}" ]; then ENV_IN="prod"; fi
           if [ -z "${PRODUCT_IN:-}" ]; then PRODUCT_IN="hrz"; fi
 
           case "$ENV_IN" in
-            dev|qa|np) PLANE="nonprod" ;;
+            dev|qa|np)   PLANE="nonprod" ;;
             uat|prod|pr) PLANE="prod" ;;
             *) echo "Unknown env: $ENV_IN"; exit 1 ;;
           esac
@@ -129,17 +133,28 @@ jobs:
           ENV="${{ steps.sel.outputs.ENV }}"
           PRODUCT="${{ steps.sel.outputs.PRODUCT }}"
 
-          TV1="${GITHUB_WORKSPACE}/stacks/platform-app/tfvars/${ENV}.${PRODUCT}.tfvars"
-          TV2="${GITHUB_WORKSPACE}/stacks/platform-app/tfvars/${ENV}.tfvars"
-          if [ -f "$TV1" ]; then
-            TFVARS_PATH="$TV1"
-          elif [ -f "$TV2" ]; then
-            TFVARS_PATH="$TV2"
-          else
-            echo "❌ Missing tfvars: $TV1 (or $TV2)"; exit 1
-          fi
-          echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
+          TFVARS_DIR="${GITHUB_WORKSPACE}/stacks/platform-app/tfvars"
+          echo "🔎 Listing $TFVARS_DIR:"; ls -la "$TFVARS_DIR" || true
 
+          candidates=(
+            "${ENV}.${PRODUCT}.tfvars"  # dev.hrz.tfvars / prod.pub.tfvars, etc.
+            "${ENV}.tfvars"             # dev.tfvars / prod.tfvars
+            "default.${ENV}.tfvars"     # optional pattern
+            "default.tfvars"            # optional fallback
+          )
+
+          TFVARS_PATH=""
+          for f in "${candidates[@]}"; do
+            if [ -f "${TFVARS_DIR}/${f}" ]; then
+              TFVARS_PATH="${TFVARS_DIR}/${f}"
+              echo "✅ Using tfvars: ${f}"
+              break
+            fi
+          done
+
+          [ -n "${TFVARS_PATH}" ] || { echo "❌ Missing tfvars. Tried: ${candidates[*]}"; exit 1; }
+
+          echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
           echo "STATE_RG=rg-core-infra-state"     >> "$GITHUB_OUTPUT"
           echo "STATE_SA=sacoretfstateinfra"      >> "$GITHUB_OUTPUT"
           echo "STATE_CONTAINER=tfstate"          >> "$GITHUB_OUTPUT"
@@ -201,33 +216,76 @@ jobs:
           echo "exitcode=${ec:-0}" >> $GITHUB_OUTPUT
           terraform show -no-color tfplan > plan.txt
 
+      - name: Summarize plan
+        id: summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -qE "^(No changes|No changes\.)" plan.txt; then
+            SUM="No changes. Infrastructure is up-to-date."
+          else
+            SUM="$(grep -E '^Plan: ' plan.txt | tail -n1 || true)"
+            if [ -z "${SUM}" ]; then
+              SUM="(No 'Plan:' line found)"; echo "::group::Plan tail"; tail -n 10 plan.txt; echo "::endgroup::"
+            fi
+          fi
+          echo "summary=${SUM}" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Terraform plan summary"
+            echo
+            echo "${SUM}"
+            echo
+            echo "[View full run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+            echo
+            echo "Artifact: \`platform-plan-${{ github.run_id }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload plan
         uses: actions/upload-artifact@v4
         with:
           name: platform-plan-${{ github.run_id }}
-          path: ${{ github.workspace }}/stacks/platform-app/plan.txt
+          if-no-files-found: error
+          path: |
+            ${{ github.workspace }}/stacks/platform-app/tfplan
+            ${{ github.workspace }}/stacks/platform-app/plan.txt
 
       - name: Open approval issue
         if: ${{ steps.plan.outputs.exitcode != '1' }}
         uses: actions/github-script@v7
+        env:
+          APPROVERS_CSV: ${{ env.APPROVERS_CSV }}
         with:
           script: |
-            const env = `${{ steps.sel.outputs.ENV }}`;
+            const envVal = `${{ steps.sel.outputs.ENV }}`;
             const product = `${{ steps.sel.outputs.PRODUCT }}`;
-            const body = `
-            **Prod plan ready**
-            - Stack: platform-app
-            - Product: ${product}
-            - Env: ${env}
-            - Branch: ${context.ref}
-            - Commit: ${context.sha}
-            - Plan Run ID: ${context.runId}
+            const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            const planSummary = `${{ steps.summary.outputs.summary }}`;
 
-            **Approve by commenting:** \`/approve ${context.runId}\`
-            (or reject with \`/reject ${context.runId}\`)
+            const firstApprover = (process.env.APPROVERS_CSV || '')
+              .split(',')
+              .map(s => s.trim())
+              .filter(Boolean)[0];
+
+            const body = `
+            **Plan ready**
+            - **Stack:** platform-app
+            - **Product:** ${product}
+            - **Env:** ${envVal}
+            - **Branch:** ${context.ref}
+            - **Commit:** ${context.sha}
+            - **Run:** ${runUrl}
+
+            **Summary:** ${planSummary}
+
+            **Artifact:** \`platform-plan-${context.runId}\`
+
+            **Approve by commenting:** \`/approve ${context.runId}\`  
+            **Reject by commenting:** \`/reject ${context.runId}\`
             `;
+
             await github.rest.issues.create({
               ...context.repo,
-              title: `APPROVAL: platform-app ${product} ${env} (run ${context.runId})`,
-              body
+              title: `APPROVAL: platform-app ${product} ${envVal} (run ${context.runId})`,
+              body,
+              assignees: firstApprover ? [firstApprover] : undefined
             });
