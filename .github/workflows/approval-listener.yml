@@ -1,4 +1,5 @@
 name: approval-listener
+
 on:
   issue_comment:
     types: [created]
@@ -11,17 +12,21 @@ permissions:
 
 env:
   APPROVERS_CSV: "francisbachabi81,user2"
-  # Hidden marker used to ignore system comments (prevents loops)
+  # GitHub username that owns the GH_PAT_WORKFLOW token (prevents self-loops)
+  PAT_ACTOR: "francisbachabi81"
+  # Hidden marker to identify our own final comments
   SYSTEM_MARKER: "<!-- system:approval-final -->"
 
 jobs:
   gate:
-    # Only run on open issues, for /approve or /reject, skip our own/system comments, and skip the Actions bot
+    # Only run on OPEN issues, for explicit /approve or /reject,
+    # ignore our own final/system comments, the Actions bot, and the PAT actor.
     if: >
       github.event.issue.state == 'open' &&
       (startsWith(github.event.comment.body, '/approve ') || startsWith(github.event.comment.body, '/reject ')) &&
       !contains(github.event.comment.body, '<!-- system:approval-final -->') &&
-      github.event.comment.user.login != 'github-actions[bot]'
+      github.event.comment.user.login != 'github-actions[bot]' &&
+      github.event.comment.user.login != env.PAT_ACTOR
     runs-on: ubuntu-latest
 
     steps:
@@ -37,25 +42,28 @@ jobs:
       - name: Check approver is authorized
         run: |
           IFS=',' read -ra USERS <<< "${APPROVERS_CSV}"
-          ok=0; for u in "${USERS[@]}"; do [ "$u" = "${{ github.event.comment.user.login }}" ] && ok=1; done
+          ok=0
+          for u in "${USERS[@]}"; do
+            [ "$u" = "${{ github.event.comment.user.login }}" ] && ok=1
+          done
           [ $ok -eq 1 ] || { echo "Not authorized"; exit 1; }
 
-      - name: Extract stack/product/plane/env from issue title
+      - name: Extract stack/product/plane-or-env from issue title
         id: meta
         run: |
           title='${{ github.event.issue.title }}'
-          # Title formats:
+          # Title formats we emit:
           #   APPROVAL: shared-network hrz nonprod (run 123456789)
           #   APPROVAL: core hrz pr (run 123456789)
           #   APPROVAL: platform-app hrz prod (run 123456789)
-          stack=$(echo "$title" | awk '{print $2}')
-          product=$(echo "$title" | awk '{print $3}')
-          third=$(echo "$title" | awk '{print $4}')
+          stack=$(echo "$title"  | awk '{print $2}')
+          product=$(echo "$title"| awk '{print $3}')
+          third=$(echo "$title"  | awk '{print $4}') # plane or env token
           echo "stack=$stack"     >> $GITHUB_OUTPUT
           echo "product=$product" >> $GITHUB_OUTPUT
           echo "third=$third"     >> $GITHUB_OUTPUT
 
-      - name: Dispatch stack-specific apply workflow (with PAT)
+      - name: Approve → dispatch apply (with PAT), then close & final comment
         if: ${{ steps.parse.outputs.action == '/approve' }}
         uses: actions/github-script@v7
         with:
@@ -63,10 +71,10 @@ jobs:
           script: |
             const stack   = `${{ steps.meta.outputs.stack }}`.trim();
             const product = `${{ steps.meta.outputs.product }}`.trim();
-            const third   = `${{ steps.meta.outputs.third }}`.trim(); // plane or env
+            const third   = `${{ steps.meta.outputs.third }}`.trim();   // plane or env
             const runid   = `${{ steps.parse.outputs.runid }}`.trim();
 
-            // Decide workflow file + inputs shape
+            // Choose workflow + inputs
             let workflow_id, inputs;
             if (stack === "shared-network") {
               workflow_id = "01-network-apply.yml";
@@ -76,7 +84,7 @@ jobs:
               inputs = { product, plane: third, plan_run_id: runid };
             } else if (stack === "platform-app") {
               workflow_id = "03-platform-apply.yml";
-              // For platform-app the 3rd token is env (dev|qa|uat|prod)
+              // platform-app uses env (dev|qa|uat|prod)
               inputs = { product, env: third, plan_run_id: runid };
             } else {
               core.setFailed(`Unknown stack in issue title: ${stack}`);
@@ -84,22 +92,13 @@ jobs:
             }
 
             // Map plane/env -> branch ref
-            // Rules:
-            // - nonprod plane (or env in {dev,qa,uat}) => 'dev'
-            // - prod plane (or env == prod)            => 'main'
             const lower = third.toLowerCase();
-            const isNonProdPlane = ['nonprod','np'].includes(lower);
-            const isProdPlane    = ['prod','pr'].includes(lower);
-            const isNonProdEnv   = ['dev','qa','uat'].includes(lower);
-            const isProdEnv      = lower === 'prod';
+            let ref = 'dev'; // default for safety
+            if (['prod','pr'].includes(lower)) ref = 'main';
+            if (['nonprod','np','dev','qa','uat'].includes(lower)) ref = 'main';
+            if (['main','dev'].includes(lower)) ref = lower; // explicit override if someone used a branch token
 
-            let ref = 'dev'; // default safe
-            if (isProdPlane || isProdEnv) ref = 'main';
-            else if (isNonProdPlane || isNonProdEnv) ref = 'main';
-            // (Optional) allow explicit 'main'/'dev' pass-through
-            if (['main','dev'].includes(lower)) ref = lower;
-
-            // Kick off the apply workflow on the chosen branch
+            // Dispatch apply workflow on chosen branch
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo:  context.repo.repo,
@@ -108,11 +107,18 @@ jobs:
               inputs
             });
 
-            // Build links
+            // CLOSE FIRST (prevents our final comment from re-triggering)
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: context.issue.number,
+              state: "closed"
+            });
+
+            // Final system-marked comment with handy links
             const repoUrl     = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
             const planRunUrl  = `${repoUrl}/actions/runs/${runid}`;
             const applyTabUrl = `${repoUrl}/actions/workflows/${workflow_id}`;
-
             const body = `${process.env.SYSTEM_MARKER}
             ✅ **Approved** by @${context.actor}.
             - Stack: \`${stack}\`
@@ -120,9 +126,7 @@ jobs:
             - Env/Plane: \`${third}\`
             - Branch ref: \`${ref}\`
             - **Plan run**: ${planRunUrl}
-            - **Apply workflow**: ${applyTabUrl}
-
-            This issue is now closed.`;
+            - **Apply workflow**: ${applyTabUrl}`;
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
@@ -131,10 +135,31 @@ jobs:
               body
             });
 
-            // Close to prevent more approvals; avoids loops with the SYSTEM_MARKER too
+            // Optional: lock to stop further comments
+            // await github.rest.issues.lock({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, lock_reason: "resolved" });
+
+      - name: Reject → close, then final comment
+        if: ${{ steps.parse.outputs.action == '/reject' }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GH_PAT_WORKFLOW }}
+          script: |
+            // CLOSE FIRST to prevent any new comment event from re-arming the job
             await github.rest.issues.update({
               owner: context.repo.owner,
               repo:  context.repo.repo,
               issue_number: context.issue.number,
               state: "closed"
             });
+
+            const body = `${process.env.SYSTEM_MARKER}
+            ❌ **Rejected** by @${context.actor}.`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
+
+            // Optional: lock after rejection
+            // await github.rest.issues.lock({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, lock_reason: "resolved" });
