@@ -12,26 +12,50 @@ permissions:
 
 env:
   APPROVERS_CSV: "francisbachabi81,user2"
-  # GitHub username that owns the GH_PAT_WORKFLOW token (prevents self-loops)
+  # Fallback username; prefer setting a secret GH_PAT_ACTOR to the PAT owner login
   PAT_ACTOR: "francisbachabi81"
-  # Hidden marker to identify our own final comments
   SYSTEM_MARKER: "<!-- system:approval-final -->"
+
+concurrency:
+  group: approval-listener-${{ github.event.issue.id }}
+  cancel-in-progress: true
 
 jobs:
   gate:
-    # Only run on OPEN issues, for explicit /approve or /reject,
-    # ignore our own final/system comments, the Actions bot, and the PAT actor.
-    if: >
-      github.event.issue.state == 'open' &&
-      (startsWith(github.event.comment.body, '/approve ') || startsWith(github.event.comment.body, '/reject ')) &&
-      !contains(github.event.comment.body, '<!-- system:approval-final -->') &&
-      github.event.comment.user.login != 'github-actions[bot]'&&
-      github.event.comment.user.login != (vars.PAT_ACTOR != '' && vars.PAT_ACTOR || 'francisbachabi81')
     runs-on: ubuntu-latest
-
     steps:
+      # Decide whether to proceed; everything else is gated on this.
+      - name: Guard / short-circuit
+        id: guard
+        shell: bash
+        env:
+          BODY: ${{ github.event.comment.body }}
+          AUTHOR: ${{ github.event.comment.user.login }}
+          STATE: ${{ github.event.issue.state }}
+          MARK:  ${{ env.SYSTEM_MARKER }}
+          # Prefer secret if present, else env fallback
+          PAT_OWNER: ${{ secrets.GH_PAT_ACTOR != '' && secrets.GH_PAT_ACTOR || env.PAT_ACTOR }}
+        run: |
+          set -euo pipefail
+          proceed=1
+
+          # must start with "/approve " or "/reject "
+          if [[ ! "$BODY" =~ ^/(approve|reject)\  ]]; then proceed=0; fi
+
+          # issue must be open
+          [[ "$STATE" == "open" ]] || proceed=0
+
+          # ignore our own final/system comments (contain marker)
+          if grep -q "$MARK" <<<"$BODY"; then proceed=0; fi
+
+          # ignore comments authored by the PAT owner (prevents loop on our final comment)
+          if [[ -n "${PAT_OWNER:-}" && "$AUTHOR" == "$PAT_OWNER" ]]; then proceed=0; fi
+
+          echo "proceed=$proceed" >> "$GITHUB_OUTPUT"
+
       - name: Parse command & runId
         id: parse
+        if: ${{ steps.guard.outputs.proceed == '1' }}
         run: |
           cmd="${{ github.event.comment.body }}"
           action="${cmd%% *}"
@@ -40,6 +64,7 @@ jobs:
           echo "runid=$runid"   >> $GITHUB_OUTPUT
 
       - name: Check approver is authorized
+        if: ${{ steps.guard.outputs.proceed == '1' }}
         run: |
           IFS=',' read -ra USERS <<< "${APPROVERS_CSV}"
           ok=0
@@ -50,21 +75,22 @@ jobs:
 
       - name: Extract stack/product/plane-or-env from issue title
         id: meta
+        if: ${{ steps.guard.outputs.proceed == '1' }}
         run: |
           title='${{ github.event.issue.title }}'
-          # Title formats we emit:
+          # Formats:
           #   APPROVAL: shared-network hrz nonprod (run 123456789)
           #   APPROVAL: core hrz pr (run 123456789)
           #   APPROVAL: platform-app hrz prod (run 123456789)
           stack=$(echo "$title"  | awk '{print $2}')
           product=$(echo "$title"| awk '{print $3}')
-          third=$(echo "$title"  | awk '{print $4}') # plane or env token
+          third=$(echo "$title"  | awk '{print $4}') # plane or env
           echo "stack=$stack"     >> $GITHUB_OUTPUT
           echo "product=$product" >> $GITHUB_OUTPUT
           echo "third=$third"     >> $GITHUB_OUTPUT
 
-      - name: Approve → dispatch apply (with PAT), then close & final comment
-        if: ${{ steps.parse.outputs.action == '/approve' }}
+      - name: Approve → dispatch apply (with PAT), close, then final comment
+        if: ${{ steps.guard.outputs.proceed == '1' && steps.parse.outputs.action == '/approve' }}
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GH_PAT_WORKFLOW }}
@@ -86,8 +112,7 @@ jobs:
               inputs = { product, plane: third, plan_run_id: runid };
             } else if (stack === "platform-app") {
               workflow_id = "03-platform-apply.yml";
-              // platform-app uses env (dev|qa|uat|prod)
-              inputs = { product, env: third, plan_run_id: runid };
+              inputs = { product, env: third, plan_run_id: runid }; // platform-app uses env
             } else {
               core.setFailed(`Unknown stack in issue title: ${stack}`);
               return;
@@ -95,10 +120,9 @@ jobs:
 
             // Map plane/env -> branch ref
             const lower = third.toLowerCase();
-            let ref = 'dev'; // default for safety
-            if (['prod','pr'].includes(lower)) ref = 'main';
-            if (['nonprod','np','dev','qa','uat'].includes(lower)) ref = 'main';
-            if (['main','dev'].includes(lower)) ref = lower; // explicit override if someone typed a branch
+            let ref = 'main';                                 // default for nonprod/dev/qa/uat
+            if (['prod','pr'].includes(lower)) ref = 'main'; // prod → main
+            if (['main','dev'].includes(lower)) ref = lower; // explicit override if a branch token is used
 
             // Dispatch apply workflow on chosen branch
             await github.rest.actions.createWorkflowDispatch({
@@ -109,7 +133,7 @@ jobs:
               inputs
             });
 
-            // CLOSE FIRST (prevents our final comment from re-triggering)
+            // Close FIRST (prevents our final comment from re-triggering)
             await github.rest.issues.update({
               owner: context.repo.owner,
               repo:  context.repo.repo,
@@ -117,7 +141,7 @@ jobs:
               state: "closed"
             });
 
-            // Final system-marked comment with handy links
+            // Final system-marked comment
             const repoUrl     = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
             const planRunUrl  = `${repoUrl}/actions/runs/${runid}`;
             const applyTabUrl = `${repoUrl}/actions/workflows/${workflow_id}`;
@@ -137,18 +161,15 @@ jobs:
               body
             });
 
-            // Optional: lock to stop further comments
-            // await github.rest.issues.lock({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, lock_reason: "resolved" });
-
       - name: Reject → close, then final comment
-        if: ${{ steps.parse.outputs.action == '/reject' }}
+        if: ${{ steps.guard.outputs.proceed == '1' && steps.parse.outputs.action == '/reject' }}
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GH_PAT_WORKFLOW }}
           script: |
             const MARK = process.env.SYSTEM_MARKER || '<!-- system:approval-final -->';
 
-            // CLOSE FIRST to prevent any new comment event from re-arming the job
+            // Close FIRST
             await github.rest.issues.update({
               owner: context.repo.owner,
               repo:  context.repo.repo,
@@ -158,12 +179,10 @@ jobs:
 
             const body = `${MARK}
             ❌ **Rejected** by @${context.actor}.`;
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo:  context.repo.repo,
               issue_number: context.issue.number,
               body
             });
-
-            // Optional: lock after rejection
-            // await github.rest.issues.lock({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, lock_reason: "resolved" });
