@@ -1,4 +1,5 @@
 name: shared-network-apply
+run-name: ${{ format('{0} plan {1}-{2}', github.workflow, inputs.product || 'hrz', inputs.plane || 'prod') }}
 on:
   workflow_dispatch:
     inputs:
