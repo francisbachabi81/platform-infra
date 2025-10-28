@@ -140,7 +140,7 @@ jobs:
             const lower = third.toLowerCase();
             let ref = 'main'; // default
             if (['prod','pr'].includes(lower)) ref = 'main';
-            if (['main','dev'].includes(lower)) ref = lower; // explicit override
+            if (['main','dev'].includes(lower)) ref = 'main'; // explicit override ref = lower;
 
             // Dispatch apply
             await github.rest.actions.createWorkflowDispatch({
