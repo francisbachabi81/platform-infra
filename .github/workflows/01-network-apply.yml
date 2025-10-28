@@ -161,7 +161,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f plan.txt || { echo "::error::tfplan not found in artifact"; ls -la; exit 1; }
+          test -f tfplan || { echo "::error::tfplan not found in artifact"; ls -la; exit 1; }
       
       - name: Terraform Apply (approved plan)
-        run: terraform apply -input=false -auto-approve plan.txt
+        run: terraform apply -input=false -auto-approve tfplan
