@@ -74,13 +74,38 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PLANE="${{ inputs.plane }}"; PRODUCT="${{ inputs.product }}"
-          for p in "${PRODUCT}.${PLANE}" "${PLANE}"; do
-            T="${GITHUB_WORKSPACE}/stacks/shared-network/tfvars/${p}.tfvars"
-            [ -f "$T" ] && TFVARS_PATH="$T" && break
+          PLANE="${{ inputs.plane }}"
+          PRODUCT="${{ inputs.product }}"
+      
+          # If you set defaults.run.working-directory: stacks/shared-network,
+          # you can just use TFVARS_DIR="tfvars" here.
+          TFVARS_DIR="${GITHUB_WORKSPACE}/stacks/shared-network/tfvars"
+      
+          echo "🔎 Listing $TFVARS_DIR:"
+          ls -la "$TFVARS_DIR" || true
+      
+          # Try both orderings and a few fallbacks
+          candidates=(
+            "${PLANE}.${PRODUCT}.tfvars"  # e.g., nonprod.pub.tfvars (recommended)
+            "${PRODUCT}.${PLANE}.tfvars"  # e.g., pub.nonprod.tfvars
+            "${PLANE}.tfvars"             # e.g., nonprod.tfvars
+            "${PRODUCT}.tfvars"           # e.g., pub.tfvars
+            "default.${PLANE}.tfvars"     # optional pattern
+            "default.tfvars"              # optional catch-all
+          )
+      
+          TFVARS_PATH=""
+          for f in "${candidates[@]}"; do
+            if [ -f "${TFVARS_DIR}/${f}" ]; then
+              TFVARS_PATH="${TFVARS_DIR}/${f}"
+              echo "✅ Using tfvars: ${f}"
+              break
+            fi
           done
-          [ -f "${TFVARS_PATH:-}" ] || { echo "Missing tfvars"; exit 1; }
-          echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
+      
+          [ -n "${TFVARS_PATH}" ] || { echo "❌ Missing tfvars. Tried: ${candidates[*]}"; exit 1; }
+      
+          echo "TFVARS_PATH=${TFVARS_PATH}" >> "$GITHUB_OUTPUT"
           echo "STATE_RG=rg-core-infra-state"               >> "$GITHUB_OUTPUT"
           echo "STATE_SA=sacoretfstateinfra"               >> "$GITHUB_OUTPUT"
           echo "STATE_CONTAINER=tfstate"                   >> "$GITHUB_OUTPUT"
