@@ -23,6 +23,10 @@ on:
         description: "Terraform version"
         type: string
         default: "1.13.3"
+      approver_emails:
+        description: "Comma-separated list of approver emails to notify"
+        type: string
+        default: ""
 
 permissions:
   id-token: write
@@ -186,6 +190,36 @@ jobs:
           echo "exitcode=${ec:-0}" >> $GITHUB_OUTPUT
           terraform show -no-color tfplan > plan.txt
 
+      - name: Summarize plan
+        id: summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Extract a concise summary line
+          if grep -qE "^(No changes|No changes\.)" plan.txt; then
+            SUM="No changes. Infrastructure is up-to-date."
+          else
+            SUM="$(grep -E '^Plan: ' plan.txt | tail -n1 || true)"
+            if [ -z "${SUM}" ]; then
+              # Fallback: show last 10 lines if the usual line isn't present (unusual output)
+              SUM="(No 'Plan:' line found)"; echo "::group::Plan tail"; tail -n 10 plan.txt; echo "::endgroup::"
+            fi
+          fi
+
+          # Export as output
+          echo "summary=${SUM}" >> "$GITHUB_OUTPUT"
+
+          # Nice job summary in the Actions UI
+          {
+            echo "## Terraform plan summary"
+            echo
+            echo "${SUM}"
+            echo
+            echo "[View full run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+            echo
+            echo "Artifact: \`shared-network-plan-${{ github.run_id }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload plan
         uses: actions/upload-artifact@v4
         with:
@@ -199,17 +233,24 @@ jobs:
           script: |
             const plane = `${{ steps.sel.outputs.PLANE }}`;
             const product = `${{ steps.sel.outputs.PRODUCT }}`;
-            const body = `
-            **Prod plan ready**
-            - Stack: shared-network
-            - Product: ${product}
-            - Plane/Env: ${plane}
-            - Branch: ${context.ref}
-            - Commit: ${context.sha}
-            - Plan Run ID: ${context.runId}
+            const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            const planSummary = `${{ steps.summary.outputs.summary }}`;
 
-            **Approve by commenting:** \`/approve ${context.runId}\`
-            (or reject with \`/reject ${context.runId}\`)
+            const body = `
+            **Plan ready**
+            - **Stack:** shared-network
+            - **Product:** ${product}
+            - **Plane/Env:** ${plane}
+            - **Branch:** ${context.ref}
+            - **Commit:** ${context.sha}
+            - **Run:** ${runUrl}
+
+            **Summary:** ${planSummary}
+
+            **Artifact:** \`shared-network-plan-${context.runId}\`
+
+            **Approve by commenting:** \`/approve ${context.runId}\`  
+            **Reject by commenting:** \`/reject ${context.runId}\`
             `;
             await github.rest.issues.create({
               ...context.repo,
