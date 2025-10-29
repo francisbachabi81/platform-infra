@@ -285,11 +285,18 @@ jobs:
             const product = `${{ steps.sel.outputs.PRODUCT }}`;
             const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
             const planSummary = `${{ steps.summary.outputs.summary }}`;
+            const stateKey   = `${{ steps.paths.outputs.STATE_KEY }}`; 
 
             const firstApprover = (process.env.APPROVERS_CSV || '')
               .split(',')
               .map(s => s.trim())
               .filter(Boolean)[0];
+
+            const branch   = (context.ref || '').replace('refs/heads/', '') || 'detached';
+            const shortSha = (context.sha || '').slice(0, 7);
+            const runNum   = context.runNumber; // Actions run number
+
+            const title = `APPROVAL: platform-app | ${product}-${envVal} | ${branch} | #${runNum} | run ${context.runId} (${shortSha})`;
 
             const body = `
             **Plan ready**
@@ -299,6 +306,7 @@ jobs:
             - **Branch:** ${context.ref}
             - **Commit:** ${context.sha}
             - **Run:** ${runUrl}
+            - **State key:** \`${stateKey}\`
 
             **Summary:** ${planSummary}
 
@@ -308,9 +316,15 @@ jobs:
             **Reject by commenting:** \`/reject ${context.runId}\`
             `;
 
-            await github.rest.issues.create({
+            const { data: issue } = await github.rest.issues.create({
               ...context.repo,
-              title: `APPROVAL: platform-app ${product} ${envVal} (run ${context.runId})`,
+              title,
               body,
-              assignees: firstApprover ? [firstApprover] : undefined
+              assignees: firstApprover ? [firstApprover] : undefined,
+              labels: [
+                'stack:platform-app',
+                `product:${product}`,
+                `env:${envVal}`,
+                `branch:${branch}`
+              ]
             });
