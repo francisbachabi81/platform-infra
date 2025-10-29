@@ -270,7 +270,7 @@ jobs:
               body,
               assignees: firstApprover ? [firstApprover] : undefined,
               labels: [
-                'stack:platform-app',
+                'stack:core',
                 `product:${product}`,
                 `env:${envVal}`,
                 `branch:${branch}`
