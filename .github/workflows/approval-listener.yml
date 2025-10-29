@@ -17,7 +17,7 @@ env:
   SYSTEM_MARKER: "<!-- system:approval-final -->"
 
 concurrency:
-  group: approval-listener-${{ github.event.issue.id }}
+  group: approval-listener-${{ github.event.issue.id }}-${{ github.event.comment.id }}
   cancel-in-progress: true
 
 jobs:
@@ -206,7 +206,7 @@ jobs:
             });
 
             // Small delay to let the "closed" state propagate before we post our final comment
-            await new Promise(r => setTimeout(r, 10000));
+            await new Promise(r => setTimeout(r, 2000));
 
             // Final comment
             const repoUrl     = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
@@ -249,7 +249,7 @@ jobs:
             });
 
             // Let closure propagate before commenting
-            await new Promise(r => setTimeout(r, 10000));
+            await new Promise(r => setTimeout(r, 2000));
 
             const body = `${MARK}
             ❌ **Rejected** by @${context.actor}.`;
