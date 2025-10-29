@@ -205,6 +205,9 @@ jobs:
               state: "closed"
             });
 
+            // Small delay to let the "closed" state propagate before we post our final comment
+            await new Promise(r => setTimeout(r, 10000));
+
             // Final comment
             const repoUrl     = `https://github.com/${context.repo.owner}/${context.repo.repo}`;
             const planRunUrl  = `${repoUrl}/actions/runs/${planRunId}`;
@@ -244,6 +247,9 @@ jobs:
               issue_number: context.issue.number,
               state: "closed"
             });
+
+            // Let closure propagate before commenting
+            await new Promise(r => setTimeout(r, 10000));
 
             const body = `${MARK}
             ❌ **Rejected** by @${context.actor}.`;
