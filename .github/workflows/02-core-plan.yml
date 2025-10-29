@@ -1,5 +1,5 @@
 name: core-plan
-run-name: ${{ format('🧩 Plan | {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs.product, inputs.plane || inputs.env, github.ref_name, github.run_number) }}
+run-name: "${{ format('🧩 Plan | {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs.product, inputs.plane || inputs.env, github.ref_name, github.run_number) }}"
 
 on:
   # push:
