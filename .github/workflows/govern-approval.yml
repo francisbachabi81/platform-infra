@@ -123,14 +123,17 @@ jobs:
             // Decide which apply workflow + inputs to call
             let workflow_id, inputs;
             if (stack === "shared-network") {
-              workflow_id = "01-network-apply.yml";
+              workflow_id = "network-apply.yml";
               inputs = { product, plane: third, plan_run_id: planRunId };
             } else if (stack === "core") {
-              workflow_id = "02-core-apply.yml";
+              workflow_id = "core-apply.yml";
               inputs = { product, plane: third, plan_run_id: planRunId };
             } else if (stack === "platform-app") {
-              workflow_id = "03-platform-apply.yml";
+              workflow_id = "platform-apply.yml";
               inputs = { product, env: third, plan_run_id: planRunId }; // platform-app uses env
+            } else if (stack === "observability") {
+              workflow_id = "observability-apply.yml";
+              inputs = { product, plane: third, plan_run_id: planRunId };
             } else {
               core.setFailed(`Unknown stack in issue title: ${stack}`);
               return;
