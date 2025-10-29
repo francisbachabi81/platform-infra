@@ -1,5 +1,5 @@
-name: "🧩 Plan | Observability"
-run-name: "${{ format('{0} | {1}-{2} | {3} | #{4}', github.workflow, inputs.product, inputs.plane || inputs.env, github.ref_name, github.run_number) }}"
+name: "Plan | Observability"
+run-name: "${{ format('🧩 {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs.product, inputs.plane || inputs.env, github.ref_name, github.run_number) }}"
 
 env:
   ARM_USE_OIDC: true
