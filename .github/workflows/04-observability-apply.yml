@@ -1,4 +1,5 @@
 name: observability-apply
+run-name: ${{ format('🚀 Apply | {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs.product, inputs.plane || inputs.env, github.ref_name, github.run_number) }}
 
 on:
   workflow_dispatch:
