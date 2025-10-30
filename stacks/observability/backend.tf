@@ -1,8 +1,15 @@
-# terraform {
-#   required_version = ">= 1.6.5"
-#   required_providers {
-#     azurerm = { source = "hashicorp/azurerm", version = "~> 4.9.0" }
-#     random  = { source = "hashicorp/random",  version = "~> 3.6" }
-#   }
-#   backend "azurerm" {}
-# }
+# In the observability stack (root of that module)
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 4.9.0"
+    }
+    azapi = {
+      source  = "azure/azapi"
+      version = "~> 2.0"
+    }
+  }
+}
+
+provider "azapi" {}
