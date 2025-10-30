@@ -22,3 +22,5 @@ tags_extra = {
   purpose = "observability"
   layer   = "platform"
 }
+
+env_rg_name_override="rg-pub-dev-cus-01"
