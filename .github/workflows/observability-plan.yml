@@ -79,6 +79,13 @@ jobs:
             CORE_SUB="${{ secrets.AZ_SUB_PUB_CORE != '' && secrets.AZ_SUB_PUB_CORE || secrets.AZ_SUB_PUB_PROD }}"
           fi
 
+          # strip whitespace/newlines that cause 404/InvalidSubscriptionId
+          TENANT=$(printf "%s" "$TENANT_RAW" | tr -d '[:space:]')
+          CLIENT_ID=$(printf "%s" "$CLIENT_ID_RAW" | tr -d '[:space:]')
+          STATE_SUB=$(printf "%s" "$STATE_SUB_RAW" | tr -d '[:space:]')
+          CORE_SUB=$(printf "%s" "$CORE_SUB_RAW"   | tr -d '[:space:]')
+          TARGET_SUB=$(printf "%s" "$TARGET_SUB_RAW" | tr -d '[:space:]')
+
           echo "ENV=$ENV_IN"            >> $GITHUB_OUTPUT
           echo "PRODUCT=$PRODUCT"       >> $GITHUB_OUTPUT
           echo "CLOUD_ENV=$CLOUD_ENV"   >> $GITHUB_OUTPUT
@@ -110,6 +117,12 @@ jobs:
             echo "TF_VAR_hub_tenant_id=$TENANT"
             echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
           } >> $GITHUB_ENV
+
+      - name: Debug subs used by TF providers
+        run: |
+          echo "ENV sub:    $TF_VAR_env_subscription_id"
+          echo "CORE sub:   $TF_VAR_core_subscription_id"
+          echo "Tenant:     $TF_VAR_env_tenant_id"
 
       - name: Resolve tfvars & backend key (env-based)
         id: paths
