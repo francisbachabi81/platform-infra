@@ -681,7 +681,6 @@ resource "azapi_resource" "monitor_workbook_overview" {
   }
 
   lifecycle {
-    ignore_changes = [output]
     precondition {
       condition     = local.rg_core_name_resolved != null
       error_message = "Core RG not resolved; cannot create workbook."
