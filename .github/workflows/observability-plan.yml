@@ -49,9 +49,11 @@ jobs:
         id: tfver
         shell: bash
         run: |
+          set -euo pipefail
+          write_output() { printf '%s<<__OUT__\n%s\n__OUT__\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
           TV="${{ inputs.terraform_version }}"
-          if [ -z "$TV" ]; then TV="1.13.3"; fi
-          echo "version=$TV" >> "$GITHUB_OUTPUT"
+          if [ -z "${TV}" ]; then TV="1.13.3"; fi
+          write_output version "$TV"
 
       # Cache TF plugins for faster runs
       - name: Cache Terraform plugins
@@ -72,15 +74,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          # helpers
+          write_env()    { printf '%s<<__ENV__\n%s\n__ENV__\n' "$1" "$2" >> "$GITHUB_ENV"; }
+          write_output() { printf '%s<<__OUT__\n%s\n__OUT__\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
+          trim(){ printf "%s" "$1" | tr -d '[:space:]'; }
+
           ENV_IN="${{ inputs.env }}"
           PRODUCT="${{ inputs.product }}"
-      
+
           case "$ENV_IN" in
             dev|qa)   PLANE="nonprod" ;;
             uat|prod) PLANE="prod"    ;;
             *) echo "Unknown env: $ENV_IN"; exit 1 ;;
           esac
-      
+
           if [ "$PRODUCT" = "hrz" ]; then
             CLOUD_ENV="AzureUSGovernment"; ARM_ENV="usgovernment"
             TENANT_RAW='${{ secrets.AZ_TENANT_HRZ }}'
@@ -98,54 +106,61 @@ jobs:
             CORE_SUB_RAW='${{ secrets.AZ_SUB_PUB_CORE }}'
             TARGET_SUB_RAW=$([ "$PLANE" = "prod" ] && echo '${{ secrets.AZ_SUB_PUB_PROD }}' || echo '${{ secrets.AZ_SUB_PUB_NONPROD }}')
           fi
-      
-          # strip whitespace/newlines that cause 404/InvalidSubscriptionId
-          TENANT=$(printf "%s" "$TENANT_RAW" | tr -d '[:space:]')
-          CLIENT_ID=$(printf "%s" "$CLIENT_ID_RAW" | tr -d '[:space:]')
-          STATE_SUB=$(printf "%s" "$STATE_SUB_RAW" | tr -d '[:space:]')
-          CORE_SUB=$(printf "%s" "$CORE_SUB_RAW"   | tr -d '[:space:]')
-          TARGET_SUB=$(printf "%s" "$TARGET_SUB_RAW" | tr -d '[:space:]')
-      
-          echo "ENV=$ENV_IN"            >> $GITHUB_OUTPUT
-          echo "PRODUCT=$PRODUCT"       >> $GITHUB_OUTPUT
-          echo "PLANE=$PLANE"           >> $GITHUB_OUTPUT
-          echo "CLOUD_ENV=$CLOUD_ENV"   >> $GITHUB_OUTPUT
-          echo "ARM_ENV=$ARM_ENV"       >> $GITHUB_OUTPUT
-          echo "TENANT=$TENANT"         >> $GITHUB_OUTPUT
-          echo "CLIENT_ID=$CLIENT_ID"   >> $GITHUB_OUTPUT
-          echo "AUDIENCE=$AUDIENCE"     >> $GITHUB_OUTPUT
-          echo "STATE_SUB=$STATE_SUB"   >> $GITHUB_OUTPUT
-          echo "CORE_SUB=$CORE_SUB"     >> $GITHUB_OUTPUT
-          echo "TARGET_SUB=$TARGET_SUB" >> $GITHUB_OUTPUT
-      
-          {
-            echo "ARM_ENVIRONMENT=$ARM_ENV"
-            echo "ARM_TENANT_ID=$TENANT"
-            echo "ARM_CLIENT_ID=$CLIENT_ID"
-      
-            # Providers in TF read only these:
-            echo "TF_VAR_core_tenant_id=$TENANT"
-            echo "TF_VAR_core_subscription_id=$CORE_SUB"
-            echo "TF_VAR_env_tenant_id=$TENANT"
-            echo "TF_VAR_env_subscription_id=$TARGET_SUB"
-      
-            # module/locals convenience
-            echo "TF_VAR_product=$PRODUCT"
-            echo "TF_VAR_env=$ENV_IN"
-            echo "TF_VAR_plane=$PLANE"
-          } >> $GITHUB_ENV
+
+          TENANT=$(trim "$TENANT_RAW")
+          CLIENT_ID=$(trim "$CLIENT_ID_RAW")
+          STATE_SUB=$(trim "$STATE_SUB_RAW")
+          CORE_SUB=$(trim "$CORE_SUB_RAW")
+          TARGET_SUB=$(trim "$TARGET_SUB_RAW")
+
+          # step outputs
+          write_output ENV        "$ENV_IN"
+          write_output PRODUCT    "$PRODUCT"
+          write_output PLANE      "$PLANE"
+          write_output CLOUD_ENV  "$CLOUD_ENV"
+          write_output ARM_ENV    "$ARM_ENV"
+          write_output TENANT     "$TENANT"
+          write_output CLIENT_ID  "$CLIENT_ID"
+          write_output AUDIENCE   "$AUDIENCE"
+          write_output STATE_SUB  "$STATE_SUB"
+          write_output CORE_SUB   "$CORE_SUB"
+          write_output TARGET_SUB "$TARGET_SUB"
+
+          # env for following steps / terraform
+          write_env ARM_ENVIRONMENT "$ARM_ENV"
+          write_env ARM_TENANT_ID   "$TENANT"
+          write_env ARM_CLIENT_ID   "$CLIENT_ID"
+
+          # explicit aliases used by TF providers
+          write_env TF_VAR_core_tenant_id        "$TENANT"
+          write_env TF_VAR_core_subscription_id  "$CORE_SUB"
+          write_env TF_VAR_env_tenant_id         "$TENANT"
+          write_env TF_VAR_env_subscription_id   "$TARGET_SUB"
+
+          # base provider fallback (if platform meta.subscription is missing)
+          write_env TF_VAR_subscription_id       "$TARGET_SUB"
+          write_env TF_VAR_tenant_id             "$TENANT"
+
+          # module/locals convenience
+          write_env TF_VAR_product "$PRODUCT"
+          write_env TF_VAR_env     "$ENV_IN"
+          write_env TF_VAR_plane   "$PLANE"
 
       - name: Debug subs used by TF providers
+        shell: bash
         run: |
-          echo "ENV sub:    $TF_VAR_env_subscription_id"
-          echo "CORE sub:   $TF_VAR_core_subscription_id"
-          echo "Tenant:     $TF_VAR_env_tenant_id"
+          echo "Base sub:  $TF_VAR_subscription_id"
+          echo "ENV sub:   $TF_VAR_env_subscription_id"
+          echo "CORE sub:  $TF_VAR_core_subscription_id"
+          echo "Tenant:    $TF_VAR_env_tenant_id"
 
       - name: Resolve tfvars & backend key (env-based)
         id: paths
         shell: bash
         run: |
           set -euo pipefail
+          write_output() { printf '%s<<__OUT__\n%s\n__OUT__\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
+
           ENV="${{ steps.sel.outputs.ENV }}"
           PRODUCT="${{ steps.sel.outputs.PRODUCT }}"
 
@@ -170,18 +185,20 @@ jobs:
 
           [ -n "${TFVARS_PATH}" ] || { echo "❌ Missing tfvars. Tried: ${candidates[*]}"; exit 1; }
 
-          echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
-          echo "STATE_RG=rg-core-infra-state"     >> "$GITHUB_OUTPUT"
-          echo "STATE_SA=sacoretfstateinfra"      >> "$GITHUB_OUTPUT"
-          echo "STATE_CONTAINER=tfstate"          >> "$GITHUB_OUTPUT"
-          echo "STATE_KEY=observability/${PRODUCT}/${ENV}/terraform.tfstate" >> "$GITHUB_OUTPUT"
+          write_output TFVARS_PATH   "$TFVARS_PATH"
+          write_output STATE_RG      "rg-core-infra-state"
+          write_output STATE_SA      "sacoretfstateinfra"
+          write_output STATE_CONTAINER "tfstate"
+          write_output STATE_KEY     "observability/${PRODUCT}/${ENV}/terraform.tfstate"
 
       - name: Export remote-state vars to Terraform
         shell: bash
         run: |
-          echo "TF_VAR_state_rg=${{ steps.paths.outputs.STATE_RG }}" >> $GITHUB_ENV
-          echo "TF_VAR_state_sa=${{ steps.paths.outputs.STATE_SA }}" >> $GITHUB_ENV
-          echo "TF_VAR_state_container=${{ steps.paths.outputs.STATE_CONTAINER }}" >> $GITHUB_ENV
+          set -euo pipefail
+          write_env() { printf '%s<<__ENV__\n%s\n__ENV__\n' "$1" "$2" >> "$GITHUB_ENV"; }
+          write_env TF_VAR_state_rg        "${{ steps.paths.outputs.STATE_RG }}"
+          write_env TF_VAR_state_sa        "${{ steps.paths.outputs.STATE_SA }}"
+          write_env TF_VAR_state_container "${{ steps.paths.outputs.STATE_CONTAINER }}"
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -233,6 +250,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          write_output() { printf '%s<<__OUT__\n%s\n__OUT__\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
+
           set +e
           terraform plan -input=false -lock-timeout=5m \
             -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
@@ -242,7 +261,7 @@ jobs:
           ec=$?
           set -e
 
-          echo "exitcode=${ec}" >> "$GITHUB_OUTPUT"
+          write_output exitcode "${ec}"
           if [ "${ec}" -eq 1 ]; then
             echo "Terraform plan failed (exit 1). Failing the job."
             exit 1
@@ -264,7 +283,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -qE "^(No changes|No changes\.)" plan.txt; then
+          write_output() { printf '%s<<__OUT__\n%s\n__OUT__\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
+
+          if grep -qiE "^no changes(\.|)$" plan.txt; then
             SUM="No changes. Infrastructure is up-to-date."
           else
             SUM="$(grep -E '^Plan: ' plan.txt | tail -n1 || true)"
@@ -272,7 +293,8 @@ jobs:
               SUM="(No 'Plan:' line found)"; echo "::group::Plan tail"; tail -n 10 plan.txt; echo "::endgroup::"
             fi
           fi
-          echo "summary=${SUM}" >> "$GITHUB_OUTPUT"
+          write_output summary "${SUM}"
+
           {
             echo "## Terraform plan summary"
             echo
@@ -284,6 +306,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Show plan exit code & outputs
+        shell: bash
         run: |
           echo "exitcode='${{ steps.plan.outputs.exitcode }}'"
           echo "summary='${{ steps.summary.outputs.summary }}'"
@@ -294,19 +317,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          write_output() { printf '%s<<__OUT__\n%s\n__OUT__\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
+
           terraform show -json tfplan > plan.json
 
           # Count non-noop resource changes (add/update/destroy/replace)
           COUNT=$(jq '[.resource_changes[] | select((.change.actions | index("no-op")) | not)] | length' plan.json)
-          echo "changes_count=${COUNT}" >> "$GITHUB_OUTPUT"
+          write_output changes_count "${COUNT}"
 
           if [ "${COUNT}" -gt 0 ]; then
-            echo "has_changes=true"  >> "$GITHUB_OUTPUT"
+            write_output has_changes "true"
           else
-            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            write_output has_changes "false"
           fi
 
-          # Guardrail: if Terraform exitcode says 0 but we detected changes, force a “needs approval” path
+          # Guardrail: if Terraform exitcode says 0 but we detected changes, warn
           if [ "${COUNT}" -gt 0 ] && [ "${{ steps.plan.outputs.exitcode }}" = "0" ]; then
             echo "::warning::Detected changes from JSON but exitcode=0; will treat as changes."
           fi
@@ -394,15 +419,12 @@ jobs:
             } catch (e) {
               core.setFailed(`Failed to create issue: ${e.message}`);
             }
-      # - name: Guardrail - detect mismatch between exit code and JSON
-      #   if: ${{ steps.plan.outputs.exitcode == '0' && steps.parse.outputs.has_changes == 'true' }}
-      #   run: |
-      #     echo "::error::Terraform returned exitcode=0 (no changes) but plan.json shows changes. Please investigate."
-      #     exit 1
+
       - name: Guardrail - detect mismatch between exit code and JSON
         id: guard
         if: ${{ steps.plan.outputs.exitcode == '0' && steps.parse.outputs.has_changes == 'true' }}
         shell: bash
         run: |
-          echo "mismatch=true" >> "$GITHUB_OUTPUT"
+          write_output() { printf '%s<<__OUT__\n%s\n__OUT__\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
+          write_output mismatch "true"
           echo "::warning::Terraform returned exitcode=0 (no changes) but plan.json shows changes. Treating as 'changes present'."
