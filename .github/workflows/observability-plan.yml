@@ -118,6 +118,12 @@ jobs:
             echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
           } >> $GITHUB_ENV
 
+      - name: Debug subs used by TF providers
+        run: |
+          echo "ENV sub:    $TF_VAR_env_subscription_id"
+          echo "CORE sub:   $TF_VAR_core_subscription_id"
+          echo "Tenant:     $TF_VAR_env_tenant_id"
+
       - name: Resolve tfvars & backend key (env-based)
         id: paths
         shell: bash
