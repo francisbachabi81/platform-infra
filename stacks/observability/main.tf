@@ -1,35 +1,22 @@
-# In the observability stack (root of that module)
-terraform {
-  required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 4.9.0"
-    }
-    azapi = {
-      source  = "azure/azapi"
-      version = "~> 2.0"
-    }
-  }
-}
-
-provider "azapi" {}
-
+# dev/qa -> nonprod plane; uat/prod -> prod plane (unchanged)
 locals {
   plane_full = contains(["dev", "qa"], var.env) ? "nonprod" : "prod"
   plane_code = contains(["dev", "qa"], var.env) ? "np" : "pr"
 }
 
+# Prefer the Platform stack's subscription/tenant if it emitted them (covers dev AKS in core sub),
+# otherwise fall back to the workflow-injected TF_VAR_subscription_id / TF_VAR_tenant_id.
 provider "azurerm" {
   features {}
 
   subscription_id = coalesce(
-    var.subscription_id,
-    try(data.terraform_remote_state.platform.outputs.meta.subscription, null)
+    try(data.terraform_remote_state.platform.outputs.meta.subscription, null),
+    var.subscription_id
   )
 
   tenant_id = coalesce(
-    var.tenant_id,
-    try(data.terraform_remote_state.platform.outputs.meta.tenant, null)
+    try(data.terraform_remote_state.platform.outputs.meta.tenant, null),
+    var.tenant_id
   )
 
   environment = var.product == "hrz" ? "usgovernment" : "public"
