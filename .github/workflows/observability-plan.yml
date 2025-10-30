@@ -288,14 +288,31 @@ jobs:
           echo "exitcode='${{ steps.plan.outputs.exitcode }}'"
           echo "summary='${{ steps.summary.outputs.summary }}'"
 
-      - name: Ensure plan artifact exists when changes
-        if: ${{ (steps.plan.outputs.exitcode || '0') == '2' }}
+      - name: Parse plan JSON for changes
+        id: parse
+        if: ${{ steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2' }}
         shell: bash
         run: |
-          test -f tfplan && test -f plan.txt || { echo "Missing tfplan/plan.txt"; exit 1; }
+          set -euo pipefail
+          terraform show -json tfplan > plan.json
+
+          # Count non-noop resource changes (add/update/destroy/replace)
+          COUNT=$(jq '[.resource_changes[] | select((.change.actions | index("no-op")) | not)] | length' plan.json)
+          echo "changes_count=${COUNT}" >> "$GITHUB_OUTPUT"
+
+          if [ "${COUNT}" -gt 0 ]; then
+            echo "has_changes=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Guardrail: if Terraform exitcode says 0 but we detected changes, force a “needs approval” path
+          if [ "${COUNT}" -gt 0 ] && [ "${{ steps.plan.outputs.exitcode }}" = "0" ]; then
+            echo "::warning::Detected changes from JSON but exitcode=0; will treat as changes."
+          fi
 
       - name: Upload plan
-        if: ${{ steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2' }}
+        if: ${{ steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: observability-plan-${{ github.run_id }}
@@ -303,9 +320,20 @@ jobs:
           path: |
             ${{ github.workspace }}/stacks/observability/tfplan
             ${{ github.workspace }}/stacks/observability/plan.txt
+            ${{ github.workspace }}/stacks/observability/plan.json
+
+      - name: Verify issues are enabled
+        if: ${{ steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+            ${{ github.api_url }}/repos/${{ github.repository }} \
+            | jq -re '.has_issues' | grep -q true || \
+            { echo "::error::Issues are disabled on this repo"; exit 1; }
 
       - name: Open approval issue
-        if: ${{ (steps.plan.outputs.exitcode || '0') == '2' }}
+        if: ${{ steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true' }}
         uses: actions/github-script@v7
         env:
           APPROVERS_CSV: ${{ env.APPROVERS_CSV }}
@@ -344,6 +372,7 @@ jobs:
               **Summary:** ${planSummary}
 
               **Artifact:** \`observability-plan-${context.runId}\`
+              **JSON:** \`plan.json\`
 
               **Approve by commenting:** \`/approve ${context.runId}\`  
               **Reject by commenting:** \`/reject ${context.runId}\`
@@ -365,3 +394,8 @@ jobs:
             } catch (e) {
               core.setFailed(`Failed to create issue: ${e.message}`);
             }
+      - name: Guardrail - detect mismatch between exit code and JSON
+        if: ${{ steps.plan.outputs.exitcode == '0' && steps.parse.outputs.has_changes == 'true' }}
+        run: |
+          echo "::error::Terraform returned exitcode=0 (no changes) but plan.json shows changes. Please investigate."
+          exit 1
