@@ -125,14 +125,18 @@ locals {
   rg_core_name_resolved    = try(data.azurerm_resource_group.core_rg[0].name,    null)
 }
 
-data "azurerm_resource_group" "env_rg" {
-  provider = azurerm.env
-  count    = local.rg_app_name != null ? 1 : 0
-  name     = local.rg_app_name
-}
-
 locals {
-  rg_env_name_resolved = try(data.azurerm_resource_group.env_rg[0].name, null)
+  # Decide which RG name to use for ENV-scoped alert resources:
+  # Priority:
+  #  1) explicit override
+  #  2) platform app RG if it lives in the ENV subscription
+  #  3) core RG if ENV subscription == CORE subscription (dev often shares core)
+  #  4) null (will fail via precondition)
+  env_alert_rg_name = coalesce(
+    var.env_rg_name_override,
+    local.platform_sub != null && local.sub_env_resolved != null && local.platform_sub == local.sub_env_resolved && local.rg_app_name != null ? local.rg_app_name : null,
+    local.sub_core_resolved  != null && local.sub_env_resolved != null && local.sub_core_resolved  == local.sub_env_resolved && local.rg_core_name_resolved != null ? local.rg_core_name_resolved : null
+  )
 }
 
 # -------------------------
@@ -635,37 +639,37 @@ locals {
 
 # ENV alerts — use the ENV provider; resource group name is just the string (we preflight it in the workflow)
 resource "azurerm_monitor_activity_log_alert" "rg_changes_env" {
-  count               = local.ag_id_env != null && local.rg_env_name_resolved != null ? 1 : 0
+  count               = local.env_alert_rg_name != null && local.ag_id_env != null && local.sub_env_resolved != null ? 1 : 0
   provider            = azurerm.env
   name                = "rg-change-${var.product}-${local.env_effective}"
   location            = "Global"
-  resource_group_name = local.rg_env_name_resolved
-  scopes              = ["/subscriptions/${local.sub_env_resolved}/resourceGroups/${local.rg_env_name_resolved}"]
+  resource_group_name = local.env_alert_rg_name
+  scopes              = ["/subscriptions/${local.sub_env_resolved}/resourceGroups/${local.env_alert_rg_name}"]
   criteria { category = "Administrative" }
   action   { action_group_id = local.ag_id_env }
 
   lifecycle {
     precondition {
-      condition     = local.sub_env_resolved != null
-      error_message = "ENV subscription not resolved; cannot create env RG change alert."
+      condition     = local.env_alert_rg_name != null && local.sub_env_resolved != null
+      error_message = "ENV RG name/subscription not resolved for env RG change alert."
     }
   }
 }
 
 resource "azurerm_monitor_activity_log_alert" "service_health_env" {
-  count               = local.ag_id_env != null && local.rg_env_name_resolved != null ? 1 : 0
+  count               = local.env_alert_rg_name != null && local.ag_id_env != null && local.sub_env_resolved != null ? 1 : 0
   provider            = azurerm.env
   name                = "service-health-${var.product}-${local.env_effective}"
   location            = "Global"
-  resource_group_name = local.rg_env_name_resolved
+  resource_group_name = local.env_alert_rg_name
   scopes              = ["/subscriptions/${local.sub_env_resolved}"]
   criteria { category = "ServiceHealth" }
   action   { action_group_id = local.ag_id_env }
 
   lifecycle {
     precondition {
-      condition     = local.sub_env_resolved != null
-      error_message = "ENV subscription not resolved; cannot create env service health alert."
+      condition     = local.env_alert_rg_name != null && local.sub_env_resolved != null
+      error_message = "ENV subscription/RG not resolved for env service health alert."
     }
   }
 }

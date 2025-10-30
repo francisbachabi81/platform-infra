@@ -137,3 +137,9 @@ variable "env_tenant_id" {
   type    = string
   default = null
 }
+
+variable "env_rg_name_override" {
+  type        = string
+  description = "Explicit RG name to use for ENV-scoped alerts (if remote state doesn't match ENV subscription)"
+  default     = null
+}
