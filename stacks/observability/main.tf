@@ -119,7 +119,6 @@ data "azurerm_resource_group" "core_rg" {
   name     = local.rg_core_name
 }
 
-
 locals {
   sub_core_resolved        = try(data.azurerm_client_config.core.subscription_id, null)
   sub_env_resolved         = try(data.azurerm_client_config.env.subscription_id,  null)
