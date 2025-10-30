@@ -90,11 +90,11 @@ jobs:
             echo "TF_VAR_tenant_id=$TENANT"
 
             # env-scoped provider (aliased 'env' in TF)
-            echo "TF_VAR_env_subscription_id=$TARGET_SUB"
+            # echo "TF_VAR_env_subscription_id=$TARGET_SUB"
             echo "TF_VAR_env_tenant_id=$TENANT"
 
             # core-scoped provider (aliased 'core' in TF)
-            echo "TF_VAR_core_subscription_id=$CORE_SUB"
+            # echo "TF_VAR_core_subscription_id=$CORE_SUB"
             echo "TF_VAR_core_tenant_id=$TENANT"
 
             # (Optional) hub vars if your modules still expect them
