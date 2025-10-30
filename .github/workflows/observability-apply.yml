@@ -4,8 +4,8 @@ run-name: "${{ format('🚀 {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs
 on:
   workflow_dispatch:
     inputs:
-      product: { type: choice, options: [hrz, pub], required: true }
-      env:     { type: choice, options: [dev, qa, uat, prod], required: true }
+      product:     { type: choice, options: [hrz, pub],  required: true }
+      env:         { type: choice, options: [dev, qa, uat, prod], required: true }
       plan_run_id: { type: string, required: true }
 
 permissions:
@@ -21,12 +21,14 @@ jobs:
     name: "Apply (observability: ${{ inputs.env }}.${{ inputs.product }})"
     runs-on: ubuntu-latest
     environment: ${{ inputs.env }}
-    defaults: { run: { working-directory: stacks/observability } }
+    defaults:
+      run:
+        working-directory: stacks/observability
 
     steps:
       - uses: actions/checkout@v4
 
-      # Same cloud/sub selection as PLAN (env → plane)
+      # Decide cloud + subscriptions (env + core)
       - name: Select cloud + subscriptions
         id: sel
         shell: bash
@@ -35,6 +37,7 @@ jobs:
           ENV_IN="${{ inputs.env }}"
           PRODUCT="${{ inputs.product }}"
 
+          # Derive plane from env (only for state path decisions; not exported to TF)
           case "$ENV_IN" in
             dev|qa)   PLANE="nonprod" ;;
             uat|prod) PLANE="prod"    ;;
@@ -46,18 +49,25 @@ jobs:
             TENANT="${{ secrets.AZ_TENANT_HRZ }}"; CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
             AUDIENCE="api://AzureADTokenExchangeUSGov"
             STATE_SUB="${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}"
+
+            # env (target) sub
             if [ "$PLANE" = "prod" ]; then TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}"; else TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}"; fi
+            # core sub (separate from state; set a secret like AZ_SUB_HRZ_CORE)
+            CORE_SUB="${{ secrets.AZ_SUB_HRZ_CORE != '' && secrets.AZ_SUB_HRZ_CORE || secrets.AZ_SUB_HRZ_PROD }}"
           else
             CLOUD_ENV="AzureCloud"; ARM_ENV="public"
             TENANT="${{ secrets.AZ_TENANT_PUB }}"; CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
             AUDIENCE="api://AzureADTokenExchange"
             STATE_SUB="${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}"
+
+            # env (target) sub
             if [ "$PLANE" = "prod" ]; then TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}"; else TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}"; fi
+            # core sub (separate from state; set a secret like AZ_SUB_PUB_CORE)
+            CORE_SUB="${{ secrets.AZ_SUB_PUB_CORE != '' && secrets.AZ_SUB_PUB_CORE || secrets.AZ_SUB_PUB_PROD }}"
           fi
 
           echo "ENV=$ENV_IN"            >> $GITHUB_OUTPUT
           echo "PRODUCT=$PRODUCT"       >> $GITHUB_OUTPUT
-          echo "PLANE=$PLANE"           >> $GITHUB_OUTPUT
           echo "CLOUD_ENV=$CLOUD_ENV"   >> $GITHUB_OUTPUT
           echo "ARM_ENV=$ARM_ENV"       >> $GITHUB_OUTPUT
           echo "TENANT=$TENANT"         >> $GITHUB_OUTPUT
@@ -65,16 +75,29 @@ jobs:
           echo "AUDIENCE=$AUDIENCE"     >> $GITHUB_OUTPUT
           echo "STATE_SUB=$STATE_SUB"   >> $GITHUB_OUTPUT
           echo "TARGET_SUB=$TARGET_SUB" >> $GITHUB_OUTPUT
+          echo "CORE_SUB=$CORE_SUB"     >> $GITHUB_OUTPUT
 
           {
+            # Auth context
             echo "ARM_ENVIRONMENT=$ARM_ENV"
             echo "ARM_TENANT_ID=$TENANT"
             echo "ARM_CLIENT_ID=$CLIENT_ID"
-            echo "TF_VAR_tenant_id=$TENANT"
+
+            # Module inputs
             echo "TF_VAR_product=$PRODUCT"
             echo "TF_VAR_env=$ENV_IN"
-            echo "TF_VAR_plane=$PLANE"
             echo "TF_VAR_subscription_id=$TARGET_SUB"
+            echo "TF_VAR_tenant_id=$TENANT"
+
+            # env-scoped provider (aliased 'env' in TF)
+            echo "TF_VAR_env_subscription_id=$TARGET_SUB"
+            echo "TF_VAR_env_tenant_id=$TENANT"
+
+            # core-scoped provider (aliased 'core' in TF)
+            echo "TF_VAR_core_subscription_id=$CORE_SUB"
+            echo "TF_VAR_core_tenant_id=$TENANT"
+
+            # (Optional) hub vars if your modules still expect them
             echo "TF_VAR_hub_tenant_id=$TENANT"
             echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
           } >> $GITHUB_ENV
@@ -93,7 +116,8 @@ jobs:
           echo "STATE_KEY=observability/${PRODUCT}/${ENV}/terraform.tfstate" >> "$GITHUB_OUTPUT"
 
       - uses: hashicorp/setup-terraform@v3
-        with: { terraform_version: "1.13.3" }
+        with:
+          terraform_version: "1.13.3"
 
       - name: Azure Login (state subscription)
         uses: azure/login@v2
@@ -122,7 +146,7 @@ jobs:
             -backend-config="key=${{ steps.paths.outputs.STATE_KEY }}" \
             -backend-config="use_azuread_auth=true"
 
-      - name: Azure Login (target subscription)
+      - name: Azure Login (target ENV subscription)
         uses: azure/login@v2
         with:
           client-id:       ${{ steps.sel.outputs.CLIENT_ID }}
@@ -136,7 +160,7 @@ jobs:
         with:
           run_id: ${{ inputs.plan_run_id }}
           name: observability-plan-${{ inputs.plan_run_id }}
-          path: ${{ github.workspace }}/stacks/observability
+          path: ${{ github.workspace }}/stacks/observability }}
 
       - name: Verify plan file is present
         shell: bash
