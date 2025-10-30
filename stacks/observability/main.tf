@@ -115,6 +115,8 @@ data "azurerm_resource_group" "env_app" {
   provider = azurerm.env
   count    = local.rg_app_name != null ? 1 : 0
   name     = local.rg_app_name
+
+  depends_on = [data.terraform_remote_state.platform]
 }
 
 # (optional) core RG lookup
