@@ -177,6 +177,6 @@ variable "key_vault_ids" {
 
 variable "kv_log_categories" {
   type        = list(string)
-  default     = ["AuditEvent"]
+  default     = ["Audit Logs","Azure Policy Evaluation Details"]
   description = "Key Vault diagnostic log categories to enable."
 }
