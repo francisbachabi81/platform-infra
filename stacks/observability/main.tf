@@ -88,13 +88,6 @@ locals {
   env_tenant = trimspace(coalesce(var.env_tenant_id,       var.tenant_id))
 }
 
-provider "azurerm" {
-  features {}
-  subscription_id = local.env_sub
-  tenant_id       = local.env_tenant
-  environment     = local.product_env
-}
-
 # Explicit ENV alias
 provider "azurerm" {
   alias           = "env"
