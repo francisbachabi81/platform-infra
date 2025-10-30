@@ -23,4 +23,4 @@ tags_extra = {
   layer   = "platform"
 }
 
-env_rg_name_override="rg-pub-dev-cus-01"
+env_rg_name="rg-pub-dev-cus-01"

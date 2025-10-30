@@ -138,8 +138,8 @@ variable "env_tenant_id" {
   default = null
 }
 
-variable "env_rg_name_override" {
+variable "env_rg_name" {
   type        = string
-  description = "Explicit RG name to use for ENV-scoped alerts (if remote state doesn't match ENV subscription)"
   default     = null
+  description = "ENV subscription resource group name (overrides remote-state value)."
 }

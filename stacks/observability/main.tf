@@ -80,14 +80,12 @@ data "terraform_remote_state" "platform" {
 
 # Subscriptions resolved once
 locals {
-  product_env = var.product == "hrz" ? "usgovernment" : "public"
-
-  core_sub    = trimspace(coalesce(var.core_subscription_id, var.subscription_id))
-  core_tenant = trimspace(coalesce(var.core_tenant_id,     var.tenant_id))
-
-  # ⬇️ DO NOT coalesce to platform/core anymore.
-  env_sub     = trimspace(coalesce(var.env_subscription_id, ""))
-  env_tenant  = trimspace(coalesce(var.env_tenant_id, var.tenant_id))
+  # enforce ENV sub; avoid falling back to platform/core
+  product_env  = var.product == "hrz" ? "usgovernment" : "public"
+  core_sub     = trimspace(coalesce(var.core_subscription_id, var.subscription_id))
+  core_tenant  = trimspace(coalesce(var.core_tenant_id,     var.tenant_id))
+  env_sub      = trimspace(var.env_subscription_id)  
+  env_tenant   = trimspace(coalesce(var.env_tenant_id, var.tenant_id))
 }
 
 locals {
@@ -122,17 +120,18 @@ data "azurerm_resource_group" "core_rg" {
   name     = local.rg_core_name
 }
 
-locals {
-  sub_core_resolved        = try(data.azurerm_client_config.core.subscription_id, null)
-  sub_env_resolved         = try(data.azurerm_client_config.env.subscription_id,  null)
-  rg_core_name_resolved    = try(data.azurerm_resource_group.core_rg[0].name,    null)
+data "azurerm_resource_group" "env_rg" {
+  provider = azurerm.env
+  count    = local.rg_app_name != null ? 1 : 0
+  name     = local.rg_app_name
 }
 
 locals {
-  env_alert_rg_name = coalesce(
-    var.env_rg_name_override,
-    local.rg_app_name
-  )
+  sub_core_resolved        = try(data.azurerm_client_config.core.subscription_id, null)
+  sub_env_resolved      = try(data.azurerm_client_config.env.subscription_id, null)
+  rg_env_name_resolved  = try(data.azurerm_resource_group.env_rg[0].name,    null)
+  rg_env_id_resolved    = try(data.azurerm_resource_group.env_rg[0].id,      null)
+  rg_core_name_resolved    = try(data.azurerm_resource_group.core_rg[0].name,    null)
 }
 
 # -------------------------
@@ -152,7 +151,10 @@ locals {
   net_vpng     = try(data.terraform_remote_state.network.outputs.vpn_gateway.id, null)
 
   rg_core_name = try(data.terraform_remote_state.core.outputs.meta.rg_core_name, null)
-  rg_app_name  = try(data.terraform_remote_state.platform.outputs.meta.rg_name, null)
+  rg_app_name = coalesce(
+    var.env_rg_name,
+    try(data.terraform_remote_state.platform.outputs.meta.rg_name, null)
+  )
 
   # Per-type ID lists (skip nulls)
   ids_kv    = compact([try(local.platform_ids.kv1, null)])
@@ -635,37 +637,37 @@ locals {
 
 # ENV alerts — use the ENV provider; resource group name is just the string (we preflight it in the workflow)
 resource "azurerm_monitor_activity_log_alert" "rg_changes_env" {
-  count               = local.want_env_alerts ? 1 : 0
+  count               = (local.rg_env_name_resolved != null) ? 1 : 0
   provider            = azurerm.env
   name                = "rg-change-${var.product}-${local.env_effective}"
   location            = "Global"
-  resource_group_name = local.env_alert_rg_name
-  scopes              = ["/subscriptions/${local.env_sub}/resourceGroups/${local.env_alert_rg_name}"]
+  resource_group_name = local.rg_env_name_resolved
+  scopes              = [local.rg_env_id_resolved]   # exact RG id in ENV
   criteria { category = "Administrative" }
   action   { action_group_id = local.ag_id_env }
 
   lifecycle {
     precondition {
-      condition     = length(local.env_sub) > 0 && data.azurerm_client_config.env.subscription_id == local.env_sub
-      error_message = "ENV provider is not authenticated to the requested ENV subscription."
+      condition     = local.sub_env_resolved != null && local.rg_env_name_resolved != null
+      error_message = "ENV RG not found in ENV subscription. Set var.env_rg_name or fix platform outputs."
     }
   }
 }
 
 resource "azurerm_monitor_activity_log_alert" "service_health_env" {
-  count               = local.want_env_alerts ? 1 : 0
+  count               = (local.rg_env_name_resolved != null) ? 1 : 0
   provider            = azurerm.env
   name                = "service-health-${var.product}-${local.env_effective}"
   location            = "Global"
-  resource_group_name = local.env_alert_rg_name
-  scopes              = ["/subscriptions/${local.env_sub}"]
+  resource_group_name = local.rg_env_name_resolved
+  scopes              = ["/subscriptions/${local.sub_env_resolved}"]
   criteria { category = "ServiceHealth" }
   action   { action_group_id = local.ag_id_env }
 
   lifecycle {
     precondition {
-      condition     = length(local.env_sub) > 0 && data.azurerm_client_config.env.subscription_id == local.env_sub
-      error_message = "ENV provider is not authenticated to the requested ENV subscription."
+      condition     = local.sub_env_resolved != null && local.rg_env_name_resolved != null
+      error_message = "ENV RG not found in ENV subscription. Set var.env_rg_name or fix platform outputs."
     }
   }
 }
