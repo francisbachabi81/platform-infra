@@ -18,3 +18,7 @@ terraform {
 
 # AzAPI provider (needed for workbook via AzAPI)
 provider "azapi" {}
+
+provider "azapi" {
+  alias            = "core"
+}

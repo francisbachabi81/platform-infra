@@ -110,16 +110,6 @@ provider "azurerm" {
 data "azurerm_client_config" "core" { provider = azurerm.core }
 data "azurerm_client_config" "env"  { provider = azurerm.env  }
 
-# Look up the platform RG in the ENV subscription (this is the one that failed)
-# data "azurerm_resource_group" "env_app" {
-#   provider = azurerm.env
-#   count    = local.rg_app_name != null ? 1 : 0
-#   name     = local.rg_app_name
-
-#   depends_on = [data.terraform_remote_state.platform]
-# }
-
-# (optional) core RG lookup
 data "azurerm_resource_group" "core_rg" {
   provider = azurerm.core
   count    = local.rg_core_name != null ? 1 : 0
@@ -127,10 +117,7 @@ data "azurerm_resource_group" "core_rg" {
 }
 
 locals {
-  sub_core_resolved = try(data.azurerm_client_config.core.subscription_id, null)
-  sub_env_resolved  = try(data.azurerm_client_config.env.subscription_id,  null)
-
-  # rg_app_name_resolved  = try(data.azurerm_resource_group.env_app[0].name,  null)
+  sub_core_resolved  = try(data.azurerm_client_config.core.subscription_id, null)
   rg_core_name_resolved = try(data.azurerm_resource_group.core_rg[0].name, null)
 }
 
@@ -688,17 +675,18 @@ resource "azurerm_monitor_activity_log_alert" "rg_changes_core" {
 resource "random_uuid" "wk_overview" {}
 
 resource "azapi_resource" "monitor_workbook_overview" {
-  count     = local.rg_core_name != null ? 1 : 0
+  count     = local.rg_core_name_resolved != null ? 1 : 0
   type      = "Microsoft.Insights/workbooks@2022-04-01"
   name      = random_uuid.wk_overview.result
-  parent_id = "/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}/resourceGroups/${local.rg_core_name}"
+  # ⬇️ Use the RG ID resolved via the CORE provider → guarantees the CORE subscription
+  parent_id = data.azurerm_resource_group.core_rg[0].id
   location  = var.location
 
   body = {
     properties = {
       displayName    = "Observability Overview (${var.product}-${local.env_effective})"
       version        = "1.0"
-      sourceId       = "/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}"
+      sourceId       = "/subscriptions/${local.sub_core_resolved}"
       category       = "workbook"
       serializedData = jsonencode({
         version = "Notebook/1.0",
@@ -719,6 +707,13 @@ resource "azapi_resource" "monitor_workbook_overview" {
       })
     }
     kind = "shared"
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.rg_core_name_resolved != null
+      error_message = "Core RG not resolved; cannot create workbook."
+    }
   }
 }
 

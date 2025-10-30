@@ -22,6 +22,3 @@ tags_extra = {
   purpose = "observability"
   layer   = "platform"
 }
-
-core_subscription_id = "ee8a4693-54d4-4de8-842b-b6f35fc0674d"
-env_subscription_id = "57f8aa30-981c-4764-94f6-6691c4d5c01c"
