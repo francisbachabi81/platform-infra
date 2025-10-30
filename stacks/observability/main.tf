@@ -1,3 +1,13 @@
+# --- providers (add if missing in THIS module) ---
+terraform {
+  required_providers {
+    azurerm = { source = "hashicorp/azurerm", version = "~> 4.9.0" }
+    azapi   = { source = "azure/azapi",       version = "~> 2.0"   }
+  }
+}
+
+provider "azapi" {}
+
 locals {
   plane_full = contains(["dev", "qa"], var.env) ? "nonprod" : "prod"
   plane_code = contains(["dev", "qa"], var.env) ? "np" : "pr"
@@ -61,6 +71,7 @@ data "terraform_remote_state" "platform" {
 locals {
   law_id = coalesce(
     var.law_workspace_id_override,
+    try(data.terraform_remote_state.core.outputs.observability.law_workspace_id, null),
     try(data.terraform_remote_state.core.outputs.ids.law, null),
     try(data.terraform_remote_state.platform.outputs.observability.law_workspace_id, null)
   )
@@ -564,7 +575,6 @@ resource "azurerm_monitor_activity_log_alert" "service_health" {
 resource "azapi_resource" "monitor_workbook_overview" {
   count = local.rg_core_name != null ? 1 : 0
 
-  # /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Insights/workbooks/{name}
   type      = "Microsoft.Insights/workbooks@2022-04-01"
   name      = "wk-${var.product}-${var.env}-overview-${random_string.sfx.result}"
   parent_id = "/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}/resourceGroups/${local.rg_core_name}"
@@ -573,21 +583,21 @@ resource "azapi_resource" "monitor_workbook_overview" {
   body = jsonencode({
     location   = var.location
     properties = {
-      displayName = "Observability Overview (${var.product}-${var.env})"
-      version     = "1.0"
-      sourceId    = "/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}"
-      category    = "workbook"
+      displayName    = "Observability Overview (${var.product}-${var.env})"
+      version        = "1.0"
+      sourceId       = "/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}"
+      category       = "workbook"
       serializedData = jsonencode({
         version = "Notebook/1.0",
         items = [{
           type = 1,
           content = {
             json = {
-              query         = "AppRequests | where TimeGenerated > ago(1h) | summarize Requests = count()",
-              size          = 0,
-              queryType     = 0,
-              resourceType  = "microsoft.operationalinsights/workspaces",
-              visualization = "tile",
+              query         = "AppRequests | where TimeGenerated > ago(1h) | summarize Requests = count()"
+              size          = 0
+              queryType     = 0
+              resourceType  = "microsoft.operationalinsights/workspaces"
+              visualization = "tile"
               tileSettings  = { title = "Requests (1h)", subtitle = "" }
             }
           }
@@ -595,39 +605,41 @@ resource "azapi_resource" "monitor_workbook_overview" {
         isLocked = false
       })
     }
-    kind = "shared" # or "user" if you want private
+    kind = "shared"
   })
 }
 
-
-# Which envs have AKS?
+# -------------------------
+# AKS IDs: always read from platform outputs (even for dev)
+# dev AKS lives in core subscription, but platform-app still outputs the id, so this is consistent.
+# qa has none → compact() will just return [] and we won't create resources.
+# -------------------------
 locals {
-  aks_env_enabled = contains(["dev", "uat", "prod"], var.env)
+  aks_ids = compact([
+    try(data.terraform_remote_state.platform.outputs.ids.aks, null),
+    try(data.terraform_remote_state.platform.outputs.aks_id, null),
+    try(data.terraform_remote_state.platform.outputs.kubernetes.id, null),
+  ])
+
+  aks_map = { for id in local.aks_ids : id => id }
 }
 
-# Pull the AKS id(s) from the right state depending on env
-# - dev   → core state (rg-pub-np-cus-core-01 / hrz equivalent)
-# - qa    → none
-# - uat   → platform state (uat sub)
-# - prod  → platform state (prod sub)
-locals {
-  aks_ids_by_env = (
-    var.env == "dev"  ? compact([
-      try(data.terraform_remote_state.core.outputs.ids.aks, null),
-      try(data.terraform_remote_state.core.outputs.aks.id, null)
-    ]) :
-    contains(["uat","prod"], var.env) ? compact([
-      try(data.terraform_remote_state.platform.outputs.ids.aks, null),
-      try(data.terraform_remote_state.platform.outputs.aks.id, null),
-      try(data.terraform_remote_state.platform.outputs.kubernetes.id, null)
-    ]) :
-    [] # qa
-  )
-
-  aks_map = { for id in local.aks_ids_by_env : id => id }
+data "azurerm_monitor_diagnostic_categories" "aks" {
+  for_each    = local.aks_map
+  resource_id = each.value
 }
 
-# Use BOTH the env gate and the manual switch
+# optional flag remains
+variable "enable_aks_diagnostics" {
+  type    = bool
+  default = true
+}
+
+locals {
+  # Gate by env if you want to hard-disable for qa:
+  aks_env_enabled = contains(["dev","uat","prod"], var.env)
+}
+
 resource "azurerm_monitor_diagnostic_setting" "aks" {
   for_each                   = (var.enable_aks_diagnostics && local.aks_env_enabled) ? local.aks_map : {}
   name                       = var.diag_name
@@ -638,12 +650,13 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
     for_each = toset(try(data.azurerm_monitor_diagnostic_categories.aks[each.key].logs, []))
     content { category = enabled_log.value }
   }
+
   dynamic "metric" {
     for_each = toset(try(data.azurerm_monitor_diagnostic_categories.aks[each.key].metrics, []))
     content { 
-      category = metric.value
+      category = metric.value 
       enabled = true 
-      }
+    }
   }
 
   lifecycle {
@@ -652,9 +665,4 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
       error_message = "LAW workspace ID could not be resolved for AKS diagnostics."
     }
   }
-}
-
-data "azurerm_monitor_diagnostic_categories" "aks" {
-  for_each    = local.aks_map
-  resource_id = each.value
 }
