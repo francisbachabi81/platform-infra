@@ -582,22 +582,18 @@ resource "azurerm_monitor_diagnostic_setting" "cosmos" {
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
-  # Only enable categories that actually exist on this account
-  dynamic "enabled_log" {
-    for_each = toset([
-      for c in var.cosmos_log_categories :
-      c if contains(try(each.value.logs, []), c)
-    ])
-    content { category = enabled_log.value }
-  }
+  # dynamic "enabled_log" {
+  #   for_each = toset([
+  #     for c in var.cosmos_log_categories :
+  #     c if contains(try(each.value.logs, []), c)
+  #   ])
+  #   content { category = enabled_log.value }
+  # }
 
-  dynamic "metric" {
-    for_each = toset(try(each.value.metrics, []))
-    content { 
-      category = metric.value 
-      enabled = true 
-    }
-  }
+  enabled_log { category = "DataPlaneRequests" }
+  enabled_log { category = "QueryRuntimeStatistics" }
+  enabled_log { category = "PartitionKeyRUConsumption" }
+  enabled_log { category = "ControlPlaneRequests" }
 
   lifecycle {
     precondition {
