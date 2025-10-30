@@ -591,15 +591,13 @@ resource "azurerm_monitor_activity_log_alert" "service_health" {
 }
 
 resource "azapi_resource" "monitor_workbook_overview" {
-  count = local.rg_core_name != null ? 1 : 0
-
+  count     = local.rg_core_name != null ? 1 : 0
   type      = "Microsoft.Insights/workbooks@2022-04-01"
   name      = "wk-${var.product}-${local.env_effective}-overview-${random_string.sfx.result}"
   parent_id = "/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}/resourceGroups/${local.rg_core_name}"
   location  = var.location
 
-  body = jsonencode({
-    location   = var.location
+  body = {
     properties = {
       displayName    = "Observability Overview (${var.product}-${local.env_effective})"
       version        = "1.0"
@@ -624,7 +622,7 @@ resource "azapi_resource" "monitor_workbook_overview" {
       })
     }
     kind = "shared"
-  })
+  }
 }
 
 # -------------------------
@@ -633,11 +631,11 @@ resource "azapi_resource" "monitor_workbook_overview" {
 # qa has none → compact() will just return [] and we won't create resources.
 # -------------------------
 locals {
-  aks_ids = compact([
-    try(data.terraform_remote_state.platform.outputs.ids.aks, null),
-    try(data.terraform_remote_state.platform.outputs.aks_id, null),
-    try(data.terraform_remote_state.platform.outputs.kubernetes.id, null),
-  ])
+  aks_ids = toset(compact([
+    try(data.terraform_remote_state.platform.outputs.ids.aks,        null),
+    try(data.terraform_remote_state.platform.outputs.aks_id,         null),
+    try(data.terraform_remote_state.platform.outputs.kubernetes.id,  null),
+  ]))
 
   aks_map = { for id in local.aks_ids : id => id }
 }

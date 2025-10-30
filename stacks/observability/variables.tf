@@ -116,34 +116,3 @@ variable "tags_extra" {
   default     = {}
   description = "Additional tags to apply to supported resources (e.g., Action Group)."
 }
-
-# remote state 
-variable "state_rg_name" {
-  description = "remote state resource group"
-  type        = string
-  default     = null
-  validation {
-    condition     = var.shared_state_enabled ? length(trimspace(coalesce(var.state_rg_name, ""))) > 0 : true
-    error_message = "state_rg_name is required when shared_state_enabled is true."
-  }
-}
-
-variable "state_sa_name" {
-  description = "remote state storage account"
-  type        = string
-  default     = null
-  validation {
-    condition     = var.shared_state_enabled ? length(trimspace(coalesce(var.state_sa_name, ""))) > 0 : true
-    error_message = "state_sa_name is required when shared_state_enabled is true."
-  }
-}
-
-variable "state_container_name" {
-  description = "remote state blob container"
-  type        = string
-  default     = null
-  validation {
-    condition     = var.shared_state_enabled ? length(trimspace(coalesce(var.state_container_name, ""))) > 0 : true
-    error_message = "state_container_name is required when shared_state_enabled is true."
-  }
-}

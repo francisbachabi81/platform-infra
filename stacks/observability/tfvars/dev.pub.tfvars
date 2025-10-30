@@ -22,7 +22,3 @@ tags_extra = {
   purpose = "observability"
   layer   = "platform"
 }
-
-state_rg_name        = "rg-core-infra-state"
-state_sa_name        = "sacoretfstateinfra"
-state_container_name = "tfstate"
