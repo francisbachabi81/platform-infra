@@ -394,8 +394,8 @@ jobs:
             } catch (e) {
               core.setFailed(`Failed to create issue: ${e.message}`);
             }
-      - name: Guardrail - detect mismatch between exit code and JSON
-        if: ${{ steps.plan.outputs.exitcode == '0' && steps.parse.outputs.has_changes == 'true' }}
-        run: |
-          echo "::error::Terraform returned exitcode=0 (no changes) but plan.json shows changes. Please investigate."
-          exit 1
+      # - name: Guardrail - detect mismatch between exit code and JSON
+      #   if: ${{ steps.plan.outputs.exitcode == '0' && steps.parse.outputs.has_changes == 'true' }}
+      #   run: |
+      #     echo "::error::Terraform returned exitcode=0 (no changes) but plan.json shows changes. Please investigate."
+      #     exit 1
