@@ -116,3 +116,24 @@ variable "tags_extra" {
   default     = {}
   description = "Additional tags to apply to supported resources (e.g., Action Group)."
 }
+
+# --- provider scoping ---
+variable "core_subscription_id" {
+  type    = string
+  default = null
+}
+
+variable "core_tenant_id" {
+  type    = string
+  default = null
+}
+
+variable "env_subscription_id" {
+  type    = string
+  default = null
+}
+
+variable "env_tenant_id" {
+  type    = string
+  default = null
+}

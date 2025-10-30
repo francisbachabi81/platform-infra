@@ -85,52 +85,47 @@ locals {
 }
 
 # Core subscription provider (for core-scoped resources)
+# Core subscription (e.g., core plane / shared RGs)
 provider "azurerm" {
-  alias           = "core"
-  features        {}
-  subscription_id = local.sub_core
-  tenant_id       = coalesce(var.tenant_id, try(data.terraform_remote_state.core.outputs.meta.tenant, null))
+  alias   = "core"
+  features {}
+  subscription_id = coalesce(var.core_subscription_id, var.subscription_id)
+  tenant_id       = coalesce(var.core_tenant_id,       var.tenant_id)
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
-# Env subscription provider (for env-scoped resources)
+# Env subscription (dev/qa/uat/prod)
 provider "azurerm" {
-  alias           = "env"
-  features        {}
-  subscription_id = local.sub_env
-  tenant_id       = coalesce(var.tenant_id, try(data.terraform_remote_state.platform.outputs.meta.tenant, null))
+  alias   = "env"
+  features {}
+  subscription_id = coalesce(var.env_subscription_id, var.subscription_id)
+  tenant_id       = coalesce(var.env_tenant_id,       var.tenant_id)
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
 # Who am I (subscription/tenant) on each provider?
-data "azurerm_client_config" "core" {
-  provider = azurerm.core
-}
+data "azurerm_client_config" "core" { provider = azurerm.core }
+data "azurerm_client_config" "env"  { provider = azurerm.env  }
 
-data "azurerm_client_config" "env" {
-  provider = azurerm.env
-}
-
-# Resolve the env RG from the env subscription to prove it exists
+# Look up the platform RG in the ENV subscription (this is the one that failed)
 data "azurerm_resource_group" "env_app" {
   provider = azurerm.env
   count    = local.rg_app_name != null ? 1 : 0
   name     = local.rg_app_name
 }
 
-# Resolve the core RG from the core subscription to prove it exists (optional)
+# (optional) core RG lookup
 data "azurerm_resource_group" "core_rg" {
   provider = azurerm.core
   count    = local.rg_core_name != null ? 1 : 0
   name     = local.rg_core_name
 }
 
-# Use the subscription ids from the providers (authoritative) and the resolved RG names
 locals {
   sub_core_resolved = try(data.azurerm_client_config.core.subscription_id, null)
-  sub_env_resolved  = try(data.azurerm_client_config.env.subscription_id, null)
+  sub_env_resolved  = try(data.azurerm_client_config.env.subscription_id,  null)
 
-  rg_app_name_resolved  = try(data.azurerm_resource_group.env_app[0].name, null)
+  rg_app_name_resolved  = try(data.azurerm_resource_group.env_app[0].name,  null)
   rg_core_name_resolved = try(data.azurerm_resource_group.core_rg[0].name, null)
 }
 
@@ -638,10 +633,15 @@ resource "azurerm_monitor_activity_log_alert" "rg_changes_env" {
   name                = "rg-change-${var.product}-${var.env}"
   location            = local.activity_alert_location
   resource_group_name = local.rg_app_name_resolved
-  scopes              = ["/subscriptions/${local.sub_env_resolved}/resourceGroups/${local.rg_app_name_resolved}"]
-  description         = "Alert on administrative operations in platform RG (env subscription)"
-  criteria { category = "Administrative" }
-  action   { action_group_id = local.ag_id_env }
+
+  # IMPORTANT: scope must be in *same* subscription as this rule (env)
+  scopes = [
+    "/subscriptions/${local.sub_env_resolved}/resourceGroups/${local.rg_app_name_resolved}"
+  ]
+
+  description = "Administrative operations in platform RG (env subscription)"
+  criteria    { category = "Administrative" }
+  action      { action_group_id = local.ag_id_env }
 
   lifecycle {
     precondition {
@@ -657,17 +657,12 @@ resource "azurerm_monitor_activity_log_alert" "service_health_env" {
   name                = "service-health-${var.product}-${var.env}"
   location            = local.activity_alert_location
   resource_group_name = coalesce(local.rg_app_name_resolved, local.rg_core_name_resolved)
-  scopes              = ["/subscriptions/${local.sub_env_resolved}"]
-  description         = "Service Health incidents (env subscription)"
-  criteria { category = "ServiceHealth" }
-  action   { action_group_id = local.ag_id_env }
 
-  lifecycle {
-    precondition {
-      condition     = local.sub_env_resolved != null
-      error_message = "Env provider not authenticated / missing subscription."
-    }
-  }
+  scopes = ["/subscriptions/${local.sub_env_resolved}"]
+
+  description = "Service Health incidents (env subscription)"
+  criteria    { category = "ServiceHealth" }
+  action      { action_group_id = local.ag_id_env }
 }
 
 resource "azurerm_monitor_activity_log_alert" "service_health_core" {
