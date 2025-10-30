@@ -145,6 +145,13 @@ jobs:
           echo "STATE_CONTAINER=tfstate"          >> "$GITHUB_OUTPUT"
           echo "STATE_KEY=observability/${PRODUCT}/${ENV}/terraform.tfstate" >> "$GITHUB_OUTPUT"
 
+      - name: Export remote-state vars to Terraform
+        shell: bash
+        run: |
+          echo "TF_VAR_state_rg=${{ steps.paths.outputs.STATE_RG }}" >> $GITHUB_ENV
+          echo "TF_VAR_state_sa=${{ steps.paths.outputs.STATE_SA }}" >> $GITHUB_ENV
+          echo "TF_VAR_state_container=${{ steps.paths.outputs.STATE_CONTAINER }}" >> $GITHUB_ENV
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ steps.tfver.outputs.version }}
