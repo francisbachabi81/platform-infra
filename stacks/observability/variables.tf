@@ -132,3 +132,51 @@ variable "env_rg_name" {
   default     = null
   description = "ENV subscription resource group name (overrides remote-state value)."
 }
+
+variable "enable_cosmos_diagnostics" {
+  type        = bool
+  default     = true
+  description = "Enable Cosmos DB diagnostic settings when account IDs are discovered or provided."
+}
+
+variable "cosmos_account_ids" {
+  type        = list(string)
+  default     = []
+  description = "Explicit Cosmos DB account resource IDs to enable diagnostics on."
+}
+
+variable "cosmos_log_categories" {
+  type = list(string)
+  default = [
+    "DataPlaneRequests",
+    "DataPlaneRequests - Aggregated 5 Min",
+    "DataPlaneRequests - Aggregated 15 Min",
+    "MongoRequests",
+    "QueryRuntimeStatistics",
+    "PartitionKeyStatistics",
+    "PartitionKeyRUConsumption",
+    "ControlPlaneRequests",
+    "CassandraRequests",
+    "GremlinRequests",
+    "TableApiRequests"
+  ]
+  description = "Cosmos DB diagnostic log categories to enable."
+}
+
+variable "enable_kv_diagnostics" {
+  type        = bool
+  default     = true
+  description = "Enable Key Vault diagnostic settings when vault IDs are discovered or provided."
+}
+
+variable "key_vault_ids" {
+  type        = list(string)
+  default     = []
+  description = "Explicit Key Vault resource IDs to enable diagnostics on."
+}
+
+variable "kv_log_categories" {
+  type        = list(string)
+  default     = ["AuditEvent"]
+  description = "Key Vault diagnostic log categories to enable."
+}

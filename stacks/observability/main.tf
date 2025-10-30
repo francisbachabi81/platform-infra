@@ -142,7 +142,14 @@ locals {
     try(data.terraform_remote_state.platform.outputs.meta.rg_name, null)
   )
 
-  ids_kv    = compact([try(local.platform_ids.kv1, null)])
+  ids_kv = compact(concat(
+    [
+      try(local.platform_ids.kv1, null),
+      try(data.terraform_remote_state.platform.outputs.ids.kv, null),
+      try(data.terraform_remote_state.platform.outputs.keyvault.id, null)
+    ],
+    var.key_vault_ids
+  ))
   ids_sa    = compact([try(local.platform_ids.sa1, null)])
   ids_sbns  = compact([try(local.platform_ids.sbns1, null)])
   ids_ehns  = compact([try(data.terraform_remote_state.platform.outputs.eventhub.namespace_id, null)])
@@ -151,6 +158,17 @@ locals {
   ids_rsv   = compact([try(local.core_ids.rsv, null)])
   ids_appi  = compact([try(local.core_ids.appi, null)])
   ids_vpng  = compact([local.net_vpng])
+  ids_cosmos = compact(concat(
+    [
+      try(local.platform_ids.cosmos,                       null),
+      try(local.platform_ids.cosmos1,                      null),
+      try(local.platform_ids.cdb1,                         null),
+      try(data.terraform_remote_state.platform.outputs.ids.cosmosdb,          null),
+      try(data.terraform_remote_state.platform.outputs.cosmos.account_id,     null),
+      try(data.terraform_remote_state.platform.outputs.cosmosdb.account_id,   null)
+    ],
+    var.cosmos_account_ids
+  ))
 
   ids_aks = compact([
     try(data.terraform_remote_state.platform.outputs.aks.id, null),
@@ -190,6 +208,7 @@ locals {
   rsv_map   = { for id in local.ids_rsv   : id => id }
   appi_map  = { for id in local.ids_appi  : id => id }
   vpng_map  = { for id in local.ids_vpng  : id => id }
+  cosmos_map = { for id in local.ids_cosmos : id => id }
 
   fa_map     = { for id in local.ids_funcapps  : id => id }
   web_map    = { for id in local.ids_webapps   : id => id }
@@ -263,6 +282,11 @@ data "azurerm_monitor_diagnostic_categories" "afd" {
   resource_id = each.value
 }
 
+data "azurerm_monitor_diagnostic_categories" "cosmos" {
+  for_each    = local.cosmos_map
+  resource_id = each.value
+}
+
 # Diagnostic settings (to LAW)
 locals {
   sub_env_target_id = local.sub_env_resolved != null ? "/subscriptions/${local.sub_env_resolved}" : null
@@ -294,20 +318,32 @@ resource "azurerm_monitor_diagnostic_setting" "sub_env" {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "kv" {
-  for_each                   = data.azurerm_monitor_diagnostic_categories.kv
+  for_each                   = var.enable_kv_diagnostics ? data.azurerm_monitor_diagnostic_categories.kv : {}
   name                       = var.diag_name
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
+  # Explicit log categories (no category groups)
   dynamic "enabled_log" {
-    for_each = toset(try(each.value.logs, []))
+    for_each = toset([
+      for c in var.kv_log_categories :
+      c if contains(try(each.value.logs, []), c)
+    ])
     content { category = enabled_log.value }
   }
+
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
-    content {
-      category = metric.value
-      enabled  = true
+    content { 
+      category = metric.value 
+      enabled = true 
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null
+      error_message = "LAW workspace ID could not be resolved for Key Vault diagnostics."
     }
   }
 }
@@ -536,6 +572,37 @@ resource "azurerm_monitor_diagnostic_setting" "afd" {
     content {
       category = metric.value
       enabled  = true
+    }
+  }
+}
+
+resource "azurerm_monitor_diagnostic_setting" "cosmos" {
+  for_each                   = var.enable_cosmos_diagnostics ? data.azurerm_monitor_diagnostic_categories.cosmos : {}
+  name                       = var.diag_name
+  target_resource_id         = each.key
+  log_analytics_workspace_id = local.law_id
+
+  # Only enable categories that actually exist on this account
+  dynamic "enabled_log" {
+    for_each = toset([
+      for c in var.cosmos_log_categories :
+      c if contains(try(each.value.logs, []), c)
+    ])
+    content { category = enabled_log.value }
+  }
+
+  dynamic "metric" {
+    for_each = toset(try(each.value.metrics, []))
+    content { 
+      category = metric.value 
+      enabled = true 
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null
+      error_message = "LAW workspace ID could not be resolved for Cosmos diagnostics."
     }
   }
 }
