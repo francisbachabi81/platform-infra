@@ -80,12 +80,15 @@ data "terraform_remote_state" "platform" {
 
 # Subscriptions resolved once
 locals {
-  product_env = var.product == "hrz" ? "usgovernment" : "public"
+  product_env  = var.product == "hrz" ? "usgovernment" : "public"
+  platform_sub = try(data.terraform_remote_state.platform.outputs.meta.subscription, null)
 
-  core_sub   = trimspace(coalesce(var.core_subscription_id, var.subscription_id))
-  core_tenant= trimspace(coalesce(var.core_tenant_id,     var.tenant_id))
-  env_sub    = trimspace(coalesce(var.env_subscription_id, var.subscription_id))
-  env_tenant = trimspace(coalesce(var.env_tenant_id,       var.tenant_id))
+  core_sub    = trimspace(coalesce(var.core_subscription_id, var.subscription_id))
+  core_tenant = trimspace(coalesce(var.core_tenant_id,     var.tenant_id))
+
+  # If platform emitted the app/env subscription (e.g., dev resources live in core), prefer it for the env provider
+  env_sub     = trimspace(coalesce(var.env_subscription_id, local.platform_sub, var.subscription_id))
+  env_tenant  = trimspace(coalesce(var.env_tenant_id,       var.tenant_id))
 }
 
 # Explicit ENV alias
@@ -121,6 +124,16 @@ locals {
   sub_core_resolved        = try(data.azurerm_client_config.core.subscription_id, null)
   sub_env_resolved         = try(data.azurerm_client_config.env.subscription_id,  null)
   rg_core_name_resolved    = try(data.azurerm_resource_group.core_rg[0].name,    null)
+}
+
+data "azurerm_resource_group" "env_rg" {
+  provider = azurerm.env
+  count    = local.rg_app_name != null ? 1 : 0
+  name     = local.rg_app_name
+}
+
+locals {
+  rg_env_name_resolved = try(data.azurerm_resource_group.env_rg[0].name, null)
 }
 
 # -------------------------
@@ -623,29 +636,29 @@ locals {
 
 # ENV alerts — use the ENV provider; resource group name is just the string (we preflight it in the workflow)
 resource "azurerm_monitor_activity_log_alert" "rg_changes_env" {
-  count               = local.rg_app_name != null && local.ag_id_env != null ? 1 : 0
+  count               = local.ag_id_env != null && local.rg_env_name_resolved != null ? 1 : 0
   provider            = azurerm.env
   name                = "rg-change-${var.product}-${local.env_effective}"
-  location            = "global"
-  resource_group_name = local.rg_app_name
-  scopes              = ["/subscriptions/${local.sub_env_resolved}/resourceGroups/${local.rg_app_name}"]
+  location            = "Global"
+  resource_group_name = local.rg_env_name_resolved
+  scopes              = ["/subscriptions/${local.sub_env_resolved}/resourceGroups/${local.rg_env_name_resolved}"]
   criteria { category = "Administrative" }
   action   { action_group_id = local.ag_id_env }
 
   lifecycle {
     precondition {
-      condition     = local.sub_env_resolved != null && local.rg_app_name != null
-      error_message = "ENV subscription/RG not resolved; cannot create env RG change alert."
+      condition     = local.sub_env_resolved != null
+      error_message = "ENV subscription not resolved; cannot create env RG change alert."
     }
   }
 }
 
 resource "azurerm_monitor_activity_log_alert" "service_health_env" {
-  count               = local.ag_id_env != null ? 1 : 0
+  count               = local.ag_id_env != null && local.rg_env_name_resolved != null ? 1 : 0
   provider            = azurerm.env
   name                = "service-health-${var.product}-${local.env_effective}"
-  location            = "global"
-  resource_group_name = coalesce(local.rg_app_name, local.rg_core_name)
+  location            = "Global"
+  resource_group_name = local.rg_env_name_resolved
   scopes              = ["/subscriptions/${local.sub_env_resolved}"]
   criteria { category = "ServiceHealth" }
   action   { action_group_id = local.ag_id_env }
