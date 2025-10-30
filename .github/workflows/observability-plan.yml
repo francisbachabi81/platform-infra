@@ -200,14 +200,38 @@ jobs:
 
       - name: Plan (detailed exit code)
         id: plan
+        shell: bash
         run: |
+          set -euo pipefail
+          set +e
           terraform plan -input=false -lock-timeout=5m \
             -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
             -var "product=${{ steps.sel.outputs.PRODUCT }}" \
             -var "env=${{ steps.sel.outputs.ENV }}" \
-            -detailed-exitcode -out=tfplan || ec=$?
-          echo "exitcode=${ec:-0}" >> $GITHUB_OUTPUT
+            -detailed-exitcode -out=tfplan
+          ec=$?
+          set -e
+
+          # Record the code for later steps
+          echo "exitcode=${ec}" >> "$GITHUB_OUTPUT"
+
+          # If Terraform errored, fail the job immediately
+          if [ "${ec}" -eq 1 ]; then
+            echo "Terraform plan failed (exit 1). Failing the job."
+            exit 1
+          fi
+
+          # Only try to show/save a plan if tfplan exists (ec 0 or 2)
           terraform show -no-color tfplan > plan.txt
+
+      - name: Sanity check plan output (no embedded errors)
+        if: ${{ steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2' }}
+        shell: bash
+        run: |
+          if grep -q '^Error:' plan.txt; then
+            echo "Found 'Error:' lines in plan.txt; failing."
+            exit 1
+          fi
 
       - name: Summarize plan
         id: summary
@@ -234,6 +258,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload plan
+        if: ${{ steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2' }}
         uses: actions/upload-artifact@v4
         with:
           name: observability-plan-${{ github.run_id }}
@@ -243,7 +268,7 @@ jobs:
             ${{ github.workspace }}/stacks/observability/plan.txt
 
       - name: Open approval issue
-        if: ${{ steps.plan.outputs.exitcode != '1' }}
+        if: ${{ steps.plan.outputs.exitcode == '2' }}
         uses: actions/github-script@v7
         env:
           APPROVERS_CSV: ${{ env.APPROVERS_CSV }}
