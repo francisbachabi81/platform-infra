@@ -42,6 +42,18 @@ provider "azurerm" {
   environment = var.product == "hrz" ? "usgovernment" : "public"
 }
 
+# Provider to operate in the CORE subscription (if present)
+provider "azurerm" {
+  alias           = "core"
+  features        {}
+  subscription_id = try(data.terraform_remote_state.core.outputs.meta.subscription, null)
+  tenant_id       = coalesce(
+    try(data.terraform_remote_state.core.outputs.meta.tenant, null),
+    var.tenant_id
+  )
+  environment     = var.product == "hrz" ? "usgovernment" : "public"
+}
+
 # -------------------------
 # Remote state lookups
 # -------------------------
@@ -563,7 +575,11 @@ resource "azurerm_monitor_activity_log_alert" "rg_changes" {
   name                = "rg-change-${var.product}-${var.env}"
   location            = local.activity_alert_location
   resource_group_name = local.rg_app_name
-  scopes              = ["/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}/resourceGroups/${local.rg_app_name}"]
+
+  scopes = [
+    "/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}/resourceGroups/${local.rg_app_name}"
+  ]
+
   description         = "Alert on administrative operations in platform RG"
 
   criteria { category = "Administrative" }
@@ -576,7 +592,11 @@ resource "azurerm_monitor_activity_log_alert" "service_health" {
   name                = "service-health-${var.product}-${var.env}"
   location            = local.activity_alert_location
   resource_group_name = coalesce(local.rg_core_name, local.rg_app_name)
-  scopes              = ["/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}"]
+
+  scopes = [
+    "/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}"
+  ]
+  
   description         = "Service Health incidents in this subscription"
 
   criteria { category = "ServiceHealth" }
