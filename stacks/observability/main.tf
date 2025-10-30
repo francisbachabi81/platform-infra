@@ -566,15 +566,66 @@ resource "azurerm_monitor_action_group" "fallback" {
   }
 }
 
+resource "azurerm_monitor_action_group" "fallback_env" {
+  count               = (local.rg_app_name != null && local.action_group_id == null) ? 1 : 0
+  name                = "ag-${var.product}-${var.env}-env-${random_string.sfx.result}"
+  resource_group_name = local.rg_app_name
+  short_name          = "obs${random_string.sfx.result}"
+  location            = var.location
+
+  dynamic "email_receiver" {
+    for_each = toset(var.alert_emails)
+    content {
+      name          = "email-${replace(email_receiver.value, "@", "_")}"
+      email_address = email_receiver.value
+    }
+  }
+}
+
 locals {
   ag_id = coalesce(local.action_group_id, try(azurerm_monitor_action_group.fallback[0].id, null))
+  ag_id_env  = coalesce(try(azurerm_monitor_action_group.fallback_env[0].id, null), local.ag_id) # prefer env AG if created
+  ag_id_core = local.ag_id
+}
+
+# ── ENV subscription: admin ops within the platform RG ────────────────────────
+resource "azurerm_monitor_activity_log_alert" "rg_changes_env" {
+  count               = local.rg_app_name != null && local.ag_id_env != null ? 1 : 0
+  name                = "rg-change-${var.product}-${var.env}"
+  location            = "global"
+  resource_group_name = local.rg_app_name
+
+  # Scope MUST be the same subscription as this resource (env subscription)
+  scopes = [
+    "/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}/resourceGroups/${local.rg_app_name}"
+  ]
+
+  description = "Alert on administrative operations in platform RG (env subscription)"
+  criteria { category = "Administrative" }
+  action   { action_group_id = local.ag_id_env }
+}
+
+# ── ENV subscription: service health ──────────────────────────────────────────
+resource "azurerm_monitor_activity_log_alert" "service_health_env" {
+  count               = local.ag_id_env != null ? 1 : 0
+  name                = "service-health-${var.product}-${var.env}"
+  location            = "global"
+  resource_group_name = coalesce(local.rg_app_name, local.rg_core_name)
+
+  scopes = [
+    "/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}"
+  ]
+
+  description = "Service Health incidents (env subscription)"
+  criteria    { category = "ServiceHealth" }
+  action      { action_group_id = local.ag_id_env }
 }
 
 # Core subscription: service health
 resource "azurerm_monitor_activity_log_alert" "service_health_core" {
-  count               = local.rg_core_name != null && local.ag_id != null && try(data.terraform_remote_state.core.outputs.meta.subscription, null) != null ? 1 : 0
+  count               = local.rg_core_name != null && local.ag_id_core != null && try(data.terraform_remote_state.core.outputs.meta.subscription, null) != null ? 1 : 0
   provider            = azurerm.core
-  name                = "service-health-${var.product}-${local.env_effective}-core"
+  name                = "service-health-${var.product}-${local.plane_code}-core"
   location            = local.activity_alert_location
   resource_group_name = local.rg_core_name
 
@@ -584,14 +635,14 @@ resource "azurerm_monitor_activity_log_alert" "service_health_core" {
 
   description = "Service Health incidents in the core subscription"
   criteria    { category = "ServiceHealth" }
-  action      { action_group_id = local.ag_id }
+  action      { action_group_id = local.ag_id_core }
 }
 
 # Core subscription: admin ops within the core RG
 resource "azurerm_monitor_activity_log_alert" "rg_changes_core" {
-  count               = local.rg_core_name != null && local.ag_id != null && try(data.terraform_remote_state.core.outputs.meta.subscription, null) != null ? 1 : 0
+  count               = local.rg_core_name != null && local.ag_id_core != null && try(data.terraform_remote_state.core.outputs.meta.subscription, null) != null ? 1 : 0
   provider            = azurerm.core
-  name                = "rg-change-${var.product}-${local.env_effective}-core"
+  name                = "rg-change-${var.product}-${local.plane_code}-core"
   location            = local.activity_alert_location
   resource_group_name = local.rg_core_name
 
@@ -601,7 +652,7 @@ resource "azurerm_monitor_activity_log_alert" "rg_changes_core" {
 
   description = "Alert on administrative operations in core RG"
   criteria    { category = "Administrative" }
-  action      { action_group_id = local.ag_id }
+  action      { action_group_id = local.ag_id_core }
 }
 
 resource "random_uuid" "wk_overview" {}
