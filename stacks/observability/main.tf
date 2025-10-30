@@ -323,15 +323,9 @@ resource "azurerm_monitor_diagnostic_setting" "kv" {
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
-  # Explicit log categories (no category groups)
-  dynamic "enabled_log" {
-    for_each = toset([
-      for c in var.kv_log_categories :
-      c if contains(try(each.value.logs, []), c)
-    ])
-    content { category = enabled_log.value }
-  }
-
+  enabled_log { category = "AuditLogs" }
+  enabled_log { category = "AzurePolicyEvaluationDetails" }
+  
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
     content { 
