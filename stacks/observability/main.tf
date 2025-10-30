@@ -102,6 +102,38 @@ provider "azurerm" {
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
+# Who am I (subscription/tenant) on each provider?
+data "azurerm_client_config" "core" {
+  provider = azurerm.core
+}
+
+data "azurerm_client_config" "env" {
+  provider = azurerm.env
+}
+
+# Resolve the env RG from the env subscription to prove it exists
+data "azurerm_resource_group" "env_app" {
+  provider = azurerm.env
+  count    = local.rg_app_name != null ? 1 : 0
+  name     = local.rg_app_name
+}
+
+# Resolve the core RG from the core subscription to prove it exists (optional)
+data "azurerm_resource_group" "core_rg" {
+  provider = azurerm.core
+  count    = local.rg_core_name != null ? 1 : 0
+  name     = local.rg_core_name
+}
+
+# Use the subscription ids from the providers (authoritative) and the resolved RG names
+locals {
+  sub_core_resolved = try(data.azurerm_client_config.core.subscription_id, null)
+  sub_env_resolved  = try(data.azurerm_client_config.env.subscription_id, null)
+
+  rg_app_name_resolved  = try(data.azurerm_resource_group.env_app[0].name, null)
+  rg_core_name_resolved = try(data.azurerm_resource_group.core_rg[0].name, null)
+}
+
 # -------------------------
 # Gather IDs and RGs
 # -------------------------
@@ -601,48 +633,69 @@ locals {
 }
 
 resource "azurerm_monitor_activity_log_alert" "rg_changes_env" {
-  count               = local.rg_app_name != null && local.ag_id_env != null && local.sub_env != null ? 1 : 0
+  count               = local.rg_app_name_resolved != null && local.ag_id_env != null && local.sub_env_resolved != null ? 1 : 0
   provider            = azurerm.env
   name                = "rg-change-${var.product}-${var.env}"
-  location            = "global"
-  resource_group_name = local.rg_app_name
-  scopes              = ["/subscriptions/${local.sub_env}/resourceGroups/${local.rg_app_name}"]
+  location            = local.activity_alert_location
+  resource_group_name = local.rg_app_name_resolved
+  scopes              = ["/subscriptions/${local.sub_env_resolved}/resourceGroups/${local.rg_app_name_resolved}"]
   description         = "Alert on administrative operations in platform RG (env subscription)"
   criteria { category = "Administrative" }
   action   { action_group_id = local.ag_id_env }
+
+  lifecycle {
+    precondition {
+      condition     = local.sub_env_resolved != null
+      error_message = "Env provider not authenticated / missing subscription."
+    }
+  }
 }
 
 resource "azurerm_monitor_activity_log_alert" "service_health_env" {
-  count               = local.ag_id_env != null && local.sub_env != null ? 1 : 0
+  count               = local.ag_id_env != null && local.sub_env_resolved != null ? 1 : 0
   provider            = azurerm.env
   name                = "service-health-${var.product}-${var.env}"
-  location            = "global"
-  resource_group_name = coalesce(local.rg_app_name, local.rg_core_name)
-  scopes              = ["/subscriptions/${local.sub_env}"]
+  location            = local.activity_alert_location
+  resource_group_name = coalesce(local.rg_app_name_resolved, local.rg_core_name_resolved)
+  scopes              = ["/subscriptions/${local.sub_env_resolved}"]
   description         = "Service Health incidents (env subscription)"
   criteria { category = "ServiceHealth" }
   action   { action_group_id = local.ag_id_env }
+
+  lifecycle {
+    precondition {
+      condition     = local.sub_env_resolved != null
+      error_message = "Env provider not authenticated / missing subscription."
+    }
+  }
 }
 
 resource "azurerm_monitor_activity_log_alert" "service_health_core" {
-  count               = local.rg_core_name != null && local.ag_id != null && local.sub_core != null ? 1 : 0
+  count               = local.rg_core_name_resolved != null && local.ag_id_core != null && local.sub_core_resolved != null ? 1 : 0
   provider            = azurerm.core
   name                = "service-health-${var.product}-${local.env_effective}-core"
-  location            = "global"
-  resource_group_name = local.rg_core_name
-  scopes              = ["/subscriptions/${local.sub_core}"]
+  location            = local.activity_alert_location
+  resource_group_name = local.rg_core_name_resolved
+  scopes              = ["/subscriptions/${local.sub_core_resolved}"]
   description         = "Service Health incidents in the core subscription"
   criteria { category = "ServiceHealth" }
   action   { action_group_id = local.ag_id_core }
+
+  lifecycle {
+    precondition {
+      condition     = local.sub_core_resolved != null
+      error_message = "Core provider not authenticated / missing subscription."
+    }
+  }
 }
 
 resource "azurerm_monitor_activity_log_alert" "rg_changes_core" {
-  count               = local.rg_core_name != null && local.ag_id != null && local.sub_core != null ? 1 : 0
+  count               = local.rg_core_name_resolved != null && local.ag_id_core != null && local.sub_core_resolved != null ? 1 : 0
   provider            = azurerm.core
   name                = "rg-change-${var.product}-${local.env_effective}-core"
-  location            = "global"
-  resource_group_name = local.rg_core_name
-  scopes              = ["/subscriptions/${local.sub_core}/resourceGroups/${local.rg_core_name}"]
+  location            = local.activity_alert_location
+  resource_group_name = local.rg_core_name_resolved
+  scopes              = ["/subscriptions/${local.sub_core_resolved}/resourceGroups/${local.rg_core_name_resolved}"]
   description         = "Alert on administrative operations in core RG"
   criteria { category = "Administrative" }
   action   { action_group_id = local.ag_id_core }
