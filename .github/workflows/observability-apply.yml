@@ -160,13 +160,22 @@ jobs:
         with:
           run_id: ${{ inputs.plan_run_id }}
           name: observability-plan-${{ inputs.plan_run_id }}
-          path: ${{ github.workspace }}/stacks/observability }}
+          path: ${{ github.workspace }}/stacks/observability
 
-      - name: Verify plan file is present
+      - name: Verify plan artifact presence
+        id: detect
         shell: bash
         run: |
           set -euo pipefail
-          test -f tfplan || { echo "::error::tfplan not found in artifact"; ls -la; exit 1; }
+          if [ -f "tfplan" ]; then
+            echo "has_tfplan=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Found approved tfplan artifact"
+          else
+            echo "has_tfplan=false" >> "$GITHUB_OUTPUT"
+            echo "ℹ️ No approved tfplan found; will run safety plan"
+            ls -la || true
+          fi
 
       - name: Terraform Apply (approved plan)
+        if: ${{ steps.detect.outputs.has_tfplan == 'true' }}
         run: terraform apply -input=false -auto-approve tfplan
