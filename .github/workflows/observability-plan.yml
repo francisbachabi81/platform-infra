@@ -351,16 +351,6 @@ jobs:
             ${{ github.workspace }}/stacks/observability/plan.txt
             ${{ github.workspace }}/stacks/observability/plan.json
 
-      - name: Verify issues are enabled
-        if: ${{ steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
-            ${{ github.api_url }}/repos/${{ github.repository }} \
-            | jq -re '.has_issues' | grep -q true || \
-            { echo "::error::Issues are disabled on this repo"; exit 1; }
-
       - name: Open approval issue
         if: ${{ steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true' }}
         uses: actions/github-script@v7
