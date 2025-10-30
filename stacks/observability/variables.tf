@@ -149,8 +149,8 @@ variable "cosmos_log_categories" {
   type = list(string)
   default = [
     "DataPlaneRequests",
-    "DataPlaneRequests - Aggregated 5 Min",
-    "DataPlaneRequests - Aggregated 15 Min",
+    "DataPlaneRequests5M",
+    "DataPlaneRequests15M",
     "MongoRequests",
     "QueryRuntimeStatistics",
     "PartitionKeyStatistics",
@@ -177,6 +177,6 @@ variable "key_vault_ids" {
 
 variable "kv_log_categories" {
   type        = list(string)
-  default     = ["Audit Logs","Azure Policy Evaluation Details"]
+  default     = ["AuditEvent","AzurePolicyEvaluationDetails"]
   description = "Key Vault diagnostic log categories to enable."
 }
