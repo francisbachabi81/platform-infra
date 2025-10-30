@@ -79,6 +79,13 @@ jobs:
             CORE_SUB="${{ secrets.AZ_SUB_PUB_CORE != '' && secrets.AZ_SUB_PUB_CORE || secrets.AZ_SUB_PUB_PROD }}"
           fi
 
+          # strip whitespace/newlines that cause 404/InvalidSubscriptionId
+          TENANT=$(printf "%s" "$TENANT_RAW" | tr -d '[:space:]')
+          CLIENT_ID=$(printf "%s" "$CLIENT_ID_RAW" | tr -d '[:space:]')
+          STATE_SUB=$(printf "%s" "$STATE_SUB_RAW" | tr -d '[:space:]')
+          CORE_SUB=$(printf "%s" "$CORE_SUB_RAW"   | tr -d '[:space:]')
+          TARGET_SUB=$(printf "%s" "$TARGET_SUB_RAW" | tr -d '[:space:]')
+
           echo "ENV=$ENV_IN"            >> $GITHUB_OUTPUT
           echo "PRODUCT=$PRODUCT"       >> $GITHUB_OUTPUT
           echo "CLOUD_ENV=$CLOUD_ENV"   >> $GITHUB_OUTPUT
