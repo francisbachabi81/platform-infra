@@ -131,7 +131,7 @@ locals {
   appgw_map  = { for id in local.ids_appgws    : id => id }
   afd_map    = { for id in local.ids_frontdoor : id => id }
 
-  aks_map = { for id in local.ids_aks : id => id }
+  # aks_map = { for id in local.ids_aks : id => id }
 }
 
 # -------------------------
@@ -627,12 +627,6 @@ locals {
   aks_map = { for id in local.aks_ids_by_env : id => id }
 }
 
-# Gate the resource creation
-variable "enable_aks_diagnostics" {
-  type    = bool
-  default = true
-}
-
 # Use BOTH the env gate and the manual switch
 resource "azurerm_monitor_diagnostic_setting" "aks" {
   for_each                   = (var.enable_aks_diagnostics && local.aks_env_enabled) ? local.aks_map : {}
@@ -649,7 +643,7 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
     content { 
       category = metric.value
       enabled = true 
-    }
+      }
   }
 
   lifecycle {
