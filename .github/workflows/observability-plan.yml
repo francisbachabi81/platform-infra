@@ -1,6 +1,10 @@
 name: "Plan | Observability"
 run-name: "${{ format('🧩 {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs.product, inputs.env, github.ref_name, github.run_number) }}"
 
+concurrency:
+  group: plan-observability-${{ inputs.product }}-${{ inputs.env }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   ARM_USE_OIDC: true
   TF_IN_AUTOMATION: true
@@ -48,6 +52,20 @@ jobs:
           TV="${{ inputs.terraform_version }}"
           if [ -z "$TV" ]; then TV="1.13.3"; fi
           echo "version=$TV" >> "$GITHUB_OUTPUT"
+
+      # Cache TF plugins for faster runs
+      - name: Cache Terraform plugins
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.terraform.d/plugin-cache
+          key: tf-${{ runner.os }}-${{ steps.tfver.outputs.version }}
+
+      - name: Configure Terraform plugin cache dir
+        shell: bash
+        run: |
+          mkdir -p ~/.terraform.d/plugin-cache
+          echo 'plugin_cache_dir="~/.terraform.d/plugin-cache"' > ~/.terraformrc
 
       - name: Select cloud + subscriptions
         id: sel
@@ -224,22 +242,13 @@ jobs:
           ec=$?
           set -e
 
-          # Record the code for later steps
           echo "exitcode=${ec}" >> "$GITHUB_OUTPUT"
-
-          # If Terraform errored, fail the job immediately
           if [ "${ec}" -eq 1 ]; then
             echo "Terraform plan failed (exit 1). Failing the job."
             exit 1
           fi
 
-          # Only try to show/save a plan if tfplan exists (ec 0 or 2)
           terraform show -no-color tfplan > plan.txt
-
-      - name: Show plan exit code & outputs
-        run: |
-          echo "exitcode='${{ steps.plan.outputs.exitcode }}'"
-          echo "summary='${{ steps.summary.outputs.summary }}'"
 
       - name: Sanity check plan output (no embedded errors)
         if: ${{ steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2' }}
@@ -274,6 +283,11 @@ jobs:
             echo "Artifact: \`observability-plan-${{ github.run_id }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Show plan exit code & outputs
+        run: |
+          echo "exitcode='${{ steps.plan.outputs.exitcode }}'"
+          echo "summary='${{ steps.summary.outputs.summary }}'"
+
       - name: Ensure plan artifact exists when changes
         if: ${{ (steps.plan.outputs.exitcode || '0') == '2' }}
         shell: bash
@@ -295,7 +309,9 @@ jobs:
         uses: actions/github-script@v7
         env:
           APPROVERS_CSV: ${{ env.APPROVERS_CSV }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             try {
               const envVal = `${{ steps.sel.outputs.ENV }}`;
