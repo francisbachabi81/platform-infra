@@ -111,13 +111,13 @@ data "azurerm_client_config" "core" { provider = azurerm.core }
 data "azurerm_client_config" "env"  { provider = azurerm.env  }
 
 # Look up the platform RG in the ENV subscription (this is the one that failed)
-data "azurerm_resource_group" "env_app" {
-  provider = azurerm.env
-  count    = local.rg_app_name != null ? 1 : 0
-  name     = local.rg_app_name
+# data "azurerm_resource_group" "env_app" {
+#   provider = azurerm.env
+#   count    = local.rg_app_name != null ? 1 : 0
+#   name     = local.rg_app_name
 
-  depends_on = [data.terraform_remote_state.platform]
-}
+#   depends_on = [data.terraform_remote_state.platform]
+# }
 
 # (optional) core RG lookup
 data "azurerm_resource_group" "core_rg" {
@@ -130,7 +130,7 @@ locals {
   sub_core_resolved = try(data.azurerm_client_config.core.subscription_id, null)
   sub_env_resolved  = try(data.azurerm_client_config.env.subscription_id,  null)
 
-  rg_app_name_resolved  = try(data.azurerm_resource_group.env_app[0].name,  null)
+  # rg_app_name_resolved  = try(data.azurerm_resource_group.env_app[0].name,  null)
   rg_core_name_resolved = try(data.azurerm_resource_group.core_rg[0].name, null)
 }
 
