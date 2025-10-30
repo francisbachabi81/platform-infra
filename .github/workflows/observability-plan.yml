@@ -7,11 +7,6 @@ env:
   APPROVERS_CSV: "francisbachabi81,user2"
 
 on:
-  # push:
-  #   branches: [prod]
-  #   paths:
-  #     - "stacks/observability/**"
-  #     - "modules/**"
   workflow_dispatch:
     inputs:
       env:
@@ -69,26 +64,23 @@ jobs:
           esac
 
           if [ "$PRODUCT" = "hrz" ]; then
-            CLOUD_ENV="AzureUSGovernment"
-            ARM_ENV="usgovernment"
-            TENANT="${{ secrets.AZ_TENANT_HRZ }}"
-            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
+            CLOUD_ENV="AzureUSGovernment"; ARM_ENV="usgovernment"
+            TENANT="${{ secrets.AZ_TENANT_HRZ }}"; CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
             AUDIENCE="api://AzureADTokenExchangeUSGov"
             STATE_SUB="${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}"
-            if [ "$PLANE" = "prod" ]; then TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}"; else TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}"; fi
+            TARGET_SUB=$([ "$PLANE" = "prod" ] && echo "${{ secrets.AZ_SUB_HRZ_PROD }}" || echo "${{ secrets.AZ_SUB_HRZ_NONPROD }}")
+            CORE_SUB="${{ secrets.AZ_SUB_HRZ_CORE != '' && secrets.AZ_SUB_HRZ_CORE || secrets.AZ_SUB_HRZ_PROD }}"
           else
-            CLOUD_ENV="AzureCloud"
-            ARM_ENV="public"
-            TENANT="${{ secrets.AZ_TENANT_PUB }}"
-            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
+            CLOUD_ENV="AzureCloud"; ARM_ENV="public"
+            TENANT="${{ secrets.AZ_TENANT_PUB }}"; CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
             AUDIENCE="api://AzureADTokenExchange"
             STATE_SUB="${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}"
-            if [ "$PLANE" = "prod" ]; then TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}"; else TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}"; fi
+            TARGET_SUB=$([ "$PLANE" = "prod" ] && echo "${{ secrets.AZ_SUB_PUB_PROD }}" || echo "${{ secrets.AZ_SUB_PUB_NONPROD }}")
+            CORE_SUB="${{ secrets.AZ_SUB_PUB_CORE != '' && secrets.AZ_SUB_PUB_CORE || secrets.AZ_SUB_PUB_PROD }}"
           fi
 
           echo "ENV=$ENV_IN"            >> $GITHUB_OUTPUT
           echo "PRODUCT=$PRODUCT"       >> $GITHUB_OUTPUT
-          echo "PLANE=$PLANE"           >> $GITHUB_OUTPUT
           echo "CLOUD_ENV=$CLOUD_ENV"   >> $GITHUB_OUTPUT
           echo "ARM_ENV=$ARM_ENV"       >> $GITHUB_OUTPUT
           echo "TENANT=$TENANT"         >> $GITHUB_OUTPUT
@@ -96,16 +88,25 @@ jobs:
           echo "AUDIENCE=$AUDIENCE"     >> $GITHUB_OUTPUT
           echo "STATE_SUB=$STATE_SUB"   >> $GITHUB_OUTPUT
           echo "TARGET_SUB=$TARGET_SUB" >> $GITHUB_OUTPUT
+          echo "CORE_SUB=$CORE_SUB"     >> $GITHUB_OUTPUT
 
           {
+            # Auth context
             echo "ARM_ENVIRONMENT=$ARM_ENV"
             echo "ARM_TENANT_ID=$TENANT"
             echo "ARM_CLIENT_ID=$CLIENT_ID"
-            echo "TF_VAR_tenant_id=$TENANT"
+
+            # Module inputs (env + core)
             echo "TF_VAR_product=$PRODUCT"
             echo "TF_VAR_env=$ENV_IN"
-            echo "TF_VAR_plane=$PLANE"
             echo "TF_VAR_subscription_id=$TARGET_SUB"
+            echo "TF_VAR_tenant_id=$TENANT"
+            echo "TF_VAR_env_subscription_id=$TARGET_SUB"
+            echo "TF_VAR_env_tenant_id=$TENANT"
+            echo "TF_VAR_core_subscription_id=$CORE_SUB"
+            echo "TF_VAR_core_tenant_id=$TENANT"
+
+            # Optional legacy hub inputs if modules expect them
             echo "TF_VAR_hub_tenant_id=$TENANT"
             echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
           } >> $GITHUB_ENV
@@ -123,9 +124,9 @@ jobs:
 
           candidates=(
             "${ENV}.${PRODUCT}.tfvars"  # e.g., dev.hrz.tfvars
-            "${ENV}.tfvars"             # optional
-            "default.${ENV}.tfvars"     # optional
-            "default.tfvars"            # optional
+            "${ENV}.tfvars"
+            "default.${ENV}.tfvars"
+            "default.tfvars"
           )
 
           TFVARS_PATH=""
@@ -199,15 +200,38 @@ jobs:
 
       - name: Plan (detailed exit code)
         id: plan
+        shell: bash
         run: |
+          set -euo pipefail
+          set +e
           terraform plan -input=false -lock-timeout=5m \
             -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
             -var "product=${{ steps.sel.outputs.PRODUCT }}" \
             -var "env=${{ steps.sel.outputs.ENV }}" \
-            -var "plane=${{ steps.sel.outputs.PLANE }}" \
-            -detailed-exitcode -out=tfplan || ec=$?
-          echo "exitcode=${ec:-0}" >> $GITHUB_OUTPUT
+            -detailed-exitcode -out=tfplan
+          ec=$?
+          set -e
+
+          # Record the code for later steps
+          echo "exitcode=${ec}" >> "$GITHUB_OUTPUT"
+
+          # If Terraform errored, fail the job immediately
+          if [ "${ec}" -eq 1 ]; then
+            echo "Terraform plan failed (exit 1). Failing the job."
+            exit 1
+          fi
+
+          # Only try to show/save a plan if tfplan exists (ec 0 or 2)
           terraform show -no-color tfplan > plan.txt
+
+      - name: Sanity check plan output (no embedded errors)
+        if: ${{ steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2' }}
+        shell: bash
+        run: |
+          if grep -q '^Error:' plan.txt; then
+            echo "Found 'Error:' lines in plan.txt; failing."
+            exit 1
+          fi
 
       - name: Summarize plan
         id: summary
@@ -234,6 +258,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload plan
+        if: ${{ steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2' }}
         uses: actions/upload-artifact@v4
         with:
           name: observability-plan-${{ github.run_id }}
@@ -243,7 +268,7 @@ jobs:
             ${{ github.workspace }}/stacks/observability/plan.txt
 
       - name: Open approval issue
-        if: ${{ steps.plan.outputs.exitcode != '1' }}
+        if: ${{ steps.plan.outputs.exitcode == '2' }}
         uses: actions/github-script@v7
         env:
           APPROVERS_CSV: ${{ env.APPROVERS_CSV }}
