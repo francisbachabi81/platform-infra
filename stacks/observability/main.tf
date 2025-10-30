@@ -37,8 +37,6 @@ provider "azurerm" {
   environment = var.product == "hrz" ? "usgovernment" : "public"
 }
 
-provider "azapi" {}
-
 # Remote state lookups
 data "terraform_remote_state" "network" {
   backend = "azurerm"
