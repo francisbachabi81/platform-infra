@@ -146,13 +146,17 @@ jobs:
           write_env TF_VAR_env     "$ENV_IN"
           write_env TF_VAR_plane   "$PLANE"
 
-      - name: Debug subs used by TF providers
+      - name: Debug - subscriptions (partial + hash)
         shell: bash
         run: |
-          echo "Base sub:  $TF_VAR_subscription_id"
-          echo "ENV sub:   $TF_VAR_env_subscription_id"
-          echo "CORE sub:  $TF_VAR_core_subscription_id"
-          echo "Tenant:    $TF_VAR_env_tenant_id"
+          set -euo pipefail
+          maskless() { v="$(printf '%s' "$1" | tr -d '[:space:]')"; printf '%s…%s' "${v:0:8}" "${v: -6}"; }
+          shortsha() { printf '%s' "$1" | tr -d '[:space:]' | shasum -a 256 | cut -c1-12; }
+      
+          echo "BASE sub:  $(maskless "$TF_VAR_subscription_id")   (sha12: $(shortsha "$TF_VAR_subscription_id"))"
+          echo "ENV  sub:  $(maskless "$TF_VAR_env_subscription_id")   (sha12: $(shortsha "$TF_VAR_env_subscription_id"))"
+          echo "CORE sub:  $(maskless "$TF_VAR_core_subscription_id")  (sha12: $(shortsha "$TF_VAR_core_subscription_id"))"
+          echo "Tenant:    $(maskless "$TF_VAR_env_tenant_id")         (sha12: $(shortsha "$TF_VAR_env_tenant_id"))"
 
       - name: Resolve tfvars & backend key (env-based)
         id: paths
