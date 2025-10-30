@@ -1,12 +1,11 @@
 name: "Plan | Platform App"
-run-name: "${{ format('🧩 {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs.product, inputs.plane || inputs.env, github.ref_name, github.run_number) }}"
+run-name: "${{ format('🧩 {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs.product, inputs.env, github.ref_name, github.run_number) }}"
+
+concurrency:
+  group: plan-platform-app-${{ inputs.product }}-${{ inputs.env }}-${{ github.ref }}
+  cancel-in-progress: true
 
 on:
-  # push:
-  #   branches: [prod]
-  #   paths:
-  #     - "stacks/platform-app/**"
-  #     - "modules/**"
   workflow_dispatch:
     inputs:
       env:
@@ -38,7 +37,6 @@ jobs:
   plan:
     name: "Plan (platform-app: ${{ inputs.env }}.${{ inputs.product }})"
     runs-on: ubuntu-latest
-    # Use env directly for GitHub Environments to avoid parse errors on push
     environment: ${{ inputs.env }}
     defaults:
       run:
@@ -51,9 +49,23 @@ jobs:
         id: tfver
         shell: bash
         run: |
+          set -euo pipefail
           TV="${{ inputs.terraform_version }}"
           if [ -z "$TV" ]; then TV="1.13.3"; fi
           echo "version=$TV" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Terraform plugins
+        uses: actions/cache@v4
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: tf-${{ runner.os }}-${{ steps.tfver.outputs.version }}
+
+      - name: Configure Terraform plugin cache dir
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.terraform.d/plugin-cache
+          echo 'plugin_cache_dir="~/.terraform.d/plugin-cache"' > ~/.terraformrc
 
       - name: Select cloud + subscriptions
         id: sel
@@ -62,7 +74,6 @@ jobs:
           set -euo pipefail
           ENV_IN="${{ inputs.env }}"
           PRODUCT_IN="${{ inputs.product }}"
-          # Defaults when triggered by push (inputs absent)
           if [ -z "${ENV_IN:-}" ]; then ENV_IN="prod"; fi
           if [ -z "${PRODUCT_IN:-}" ]; then PRODUCT_IN="hrz"; fi
 
@@ -73,41 +84,31 @@ jobs:
           esac
 
           if [ "$PRODUCT_IN" = "hrz" ]; then
-            CLOUD_ENV="AzureUSGovernment"
-            ARM_ENV="usgovernment"
-            TENANT="${{ secrets.AZ_TENANT_HRZ }}"
-            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
+            CLOUD_ENV="AzureUSGovernment"; ARM_ENV="usgovernment"
+            TENANT='${{ secrets.AZ_TENANT_HRZ }}'
+            CLIENT_ID='${{ secrets.AZURE_CLIENT_ID_HRZ }}'
             AUDIENCE="api://AzureADTokenExchangeUSGov"
-            STATE_SUB="${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}"
-            if [ "$PLANE" = "prod" ]; then
-              TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}"
-            else
-              TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}"
-            fi
+            STATE_SUB='${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}'
+            if [ "$PLANE" = "prod" ]; then TARGET_SUB='${{ secrets.AZ_SUB_HRZ_PROD }}'; else TARGET_SUB='${{ secrets.AZ_SUB_HRZ_NONPROD }}'; fi
           else
-            CLOUD_ENV="AzureCloud"
-            ARM_ENV="public"
-            TENANT="${{ secrets.AZ_TENANT_PUB }}"
-            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
+            CLOUD_ENV="AzureCloud"; ARM_ENV="public"
+            TENANT='${{ secrets.AZ_TENANT_PUB }}'
+            CLIENT_ID='${{ secrets.AZURE_CLIENT_ID_PUB }}'
             AUDIENCE="api://AzureADTokenExchange"
-            STATE_SUB="${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}"
-            if [ "$PLANE" = "prod" ]; then
-              TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}"
-            else
-              TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}"
-            fi
+            STATE_SUB='${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}'
+            if [ "$PLANE" = "prod" ]; then TARGET_SUB='${{ secrets.AZ_SUB_PUB_PROD }}'; else TARGET_SUB='${{ secrets.AZ_SUB_PUB_NONPROD }}'; fi
           fi
 
-          echo "ENV=$ENV_IN"            >> $GITHUB_OUTPUT
-          echo "PRODUCT=$PRODUCT_IN"     >> $GITHUB_OUTPUT
-          echo "PLANE=$PLANE"            >> $GITHUB_OUTPUT
-          echo "CLOUD_ENV=$CLOUD_ENV"    >> $GITHUB_OUTPUT
-          echo "ARM_ENV=$ARM_ENV"        >> $GITHUB_OUTPUT
-          echo "TENANT=$TENANT"          >> $GITHUB_OUTPUT
-          echo "CLIENT_ID=$CLIENT_ID"    >> $GITHUB_OUTPUT
-          echo "AUDIENCE=$AUDIENCE"      >> $GITHUB_OUTPUT
-          echo "STATE_SUB=$STATE_SUB"    >> $GITHUB_OUTPUT
-          echo "TARGET_SUB=$TARGET_SUB"  >> $GITHUB_OUTPUT
+          echo "ENV=$ENV_IN"            >> "$GITHUB_OUTPUT"
+          echo "PRODUCT=$PRODUCT_IN"     >> "$GITHUB_OUTPUT"
+          echo "PLANE=$PLANE"            >> "$GITHUB_OUTPUT"
+          echo "CLOUD_ENV=$CLOUD_ENV"    >> "$GITHUB_OUTPUT"
+          echo "ARM_ENV=$ARM_ENV"        >> "$GITHUB_OUTPUT"
+          echo "TENANT=$TENANT"          >> "$GITHUB_OUTPUT"
+          echo "CLIENT_ID=$CLIENT_ID"    >> "$GITHUB_OUTPUT"
+          echo "AUDIENCE=$AUDIENCE"      >> "$GITHUB_OUTPUT"
+          echo "STATE_SUB=$STATE_SUB"    >> "$GITHUB_OUTPUT"
+          echo "TARGET_SUB=$TARGET_SUB"  >> "$GITHUB_OUTPUT"
 
           {
             echo "ARM_ENVIRONMENT=$ARM_ENV"
@@ -120,7 +121,17 @@ jobs:
             echo "TF_VAR_subscription_id=$TARGET_SUB"
             echo "TF_VAR_hub_tenant_id=$TENANT"
             echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
-          } >> $GITHUB_ENV
+          } >> "$GITHUB_ENV"
+
+      - name: Debug - subscriptions (partial + hash)
+        shell: bash
+        run: |
+          set -euo pipefail
+          maskless() { v="$(printf '%s' "$1" | tr -d '[:space:]')"; printf '%s…%s' "${v:0:8}" "${v: -6}"; }
+          shortsha() { printf '%s' "$1" | tr -d '[:space:]' | shasum -a 256 | cut -c1-12; }
+          echo "BASE sub:  $(maskless "$TF_VAR_subscription_id") (sha12: $(shortsha "$TF_VAR_subscription_id"))"
+          echo "STATE sub: $(maskless "${{ steps.sel.outputs.STATE_SUB }}") (sha12: $(shortsha "${{ steps.sel.outputs.STATE_SUB }}"))"
+          echo "Tenant:    $(maskless "$TF_VAR_tenant_id")       (sha12: $(shortsha "$TF_VAR_tenant_id"))"
 
       - name: Resolve tfvars & backend key
         id: paths
@@ -134,10 +145,10 @@ jobs:
           echo "🔎 Listing $TFVARS_DIR:"; ls -la "$TFVARS_DIR" || true
 
           candidates=(
-            "${ENV}.${PRODUCT}.tfvars"  # dev.hrz.tfvars / prod.pub.tfvars, etc.
-            "${ENV}.tfvars"             # dev.tfvars / prod.tfvars
-            "default.${ENV}.tfvars"     # optional pattern
-            "default.tfvars"            # optional fallback
+            "${ENV}.${PRODUCT}.tfvars"
+            "${ENV}.tfvars"
+            "default.${ENV}.tfvars"
+            "default.tfvars"
           )
 
           TFVARS_PATH=""
@@ -148,7 +159,6 @@ jobs:
               break
             fi
           done
-
           [ -n "${TFVARS_PATH}" ] || { echo "❌ Missing tfvars. Tried: ${candidates[*]}"; exit 1; }
 
           echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
@@ -156,34 +166,6 @@ jobs:
           echo "STATE_SA=sacoretfstateinfra"      >> "$GITHUB_OUTPUT"
           echo "STATE_CONTAINER=tfstate"          >> "$GITHUB_OUTPUT"
           echo "STATE_KEY=platform-app/${PRODUCT}/${ENV}/terraform.tfstate" >> "$GITHUB_OUTPUT"
-
-      - name: Export optional per-env / hub overrides to TF_VAR_*
-        shell: bash
-        run: |
-          set -euo pipefail
-          write_env () {
-            local name="$1"; local value="$2"
-            if [ -n "$value" ]; then
-              {
-                echo "${name}<<EOF"
-                printf '%s\n' "$value"
-                echo "EOF"
-              } >> "$GITHUB_ENV"
-              echo "[export] set ${name}"
-            fi
-          }
-          PRODUCT="${{ inputs.product || 'hrz' }}"
-          if [ "$PRODUCT" = "hrz" ]; then
-            write_env TF_VAR_hub_subscription_id "${{ secrets.HUB_SUB_ID_HRZ }}"
-            write_env TF_VAR_hub_tenant_id       "${{ secrets.HUB_TENANT_ID_HRZ }}"
-          else
-            write_env TF_VAR_hub_subscription_id "${{ secrets.HUB_SUB_ID_PUB }}"
-            write_env TF_VAR_hub_tenant_id       "${{ secrets.HUB_TENANT_ID_PUB }}"
-          fi
-          [ -n "${{ secrets.PG_ADMIN_PASSWORD }}" ] && echo "::add-mask::${{ secrets.PG_ADMIN_PASSWORD }}"
-          [ -n "${{ secrets.CDBPG_ADMIN_PASSWORD }}" ] && echo "::add-mask::${{ secrets.CDBPG_ADMIN_PASSWORD }}"
-          write_env TF_VAR_pg_admin_password    "${{ secrets.PG_ADMIN_PASSWORD }}"
-          write_env TF_VAR_cdbpg_admin_password "${{ secrets.CDBPG_ADMIN_PASSWORD }}"
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -198,7 +180,7 @@ jobs:
           environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
           audience:        ${{ steps.sel.outputs.AUDIENCE }}
 
-      - name: Terraform Init (backend in state/prod subscription)
+      - name: Terraform Init (backend in state subscription)
         env:
           ARM_USE_OIDC: true
           ARM_CLIENT_ID:       ${{ steps.sel.outputs.CLIENT_ID }}
@@ -226,27 +208,43 @@ jobs:
           audience:        ${{ steps.sel.outputs.AUDIENCE }}
 
       - name: Terraform Fmt & Validate
+        shell: bash
         run: |
+          set -euo pipefail
           terraform fmt -recursive
           terraform validate
 
       - name: Plan (detailed exit code)
         id: plan
+        shell: bash
         run: |
+          set -euo pipefail
+          set +e
           terraform plan -input=false -lock-timeout=5m \
             -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
             -var "product=${{ steps.sel.outputs.PRODUCT }}" \
             -var "env=${{ steps.sel.outputs.ENV }}" \
-            -detailed-exitcode -out=tfplan || ec=$?
-          echo "exitcode=${ec:-0}" >> $GITHUB_OUTPUT
+            -detailed-exitcode -out=tfplan
+          ec=$?
+          set -e
+          echo "exitcode=${ec}" >> "$GITHUB_OUTPUT"
           terraform show -no-color tfplan > plan.txt
+
+      - name: Sanity check plan output (no embedded errors)
+        if: ${{ steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2' }}
+        shell: bash
+        run: |
+          if grep -q '^Error:' plan.txt; then
+            echo "Found 'Error:' lines in plan.txt; failing."
+            exit 1
+          fi
 
       - name: Summarize plan
         id: summary
         shell: bash
         run: |
           set -euo pipefail
-          if grep -qE "^(No changes|No changes\.)" plan.txt; then
+          if grep -qiE "^no changes(\.|)$" plan.txt; then
             SUM="No changes. Infrastructure is up-to-date."
           else
             SUM="$(grep -E '^Plan: ' plan.txt | tail -n1 || true)"
@@ -265,7 +263,32 @@ jobs:
             echo "Artifact: \`platform-plan-${{ github.run_id }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Show plan exit code & outputs
+        shell: bash
+        run: |
+          echo "exitcode='${{ steps.plan.outputs.exitcode }}'"
+          echo "summary='${{ steps.summary.outputs.summary }}'"
+
+      - name: Parse plan JSON for changes
+        id: parse
+        if: ${{ steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform show -json tfplan > plan.json
+          COUNT=$(jq '[.resource_changes[] | select((.change.actions | index("no-op")) | not)] | length' plan.json)
+          echo "changes_count=${COUNT}" >> "$GITHUB_OUTPUT"
+          if [ "${COUNT}" -gt 0 ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "${COUNT}" -gt 0 ] && [ "${{ steps.plan.outputs.exitcode }}" = "0" ]; then
+            echo "::warning::Detected changes from JSON but exitcode=0; will treat as changes."
+          fi
+
       - name: Upload plan
+        if: ${{ steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: platform-plan-${{ github.run_id }}
@@ -273,28 +296,28 @@ jobs:
           path: |
             ${{ github.workspace }}/stacks/platform-app/tfplan
             ${{ github.workspace }}/stacks/platform-app/plan.txt
+            ${{ github.workspace }}/stacks/platform-app/plan.json
 
       - name: Open approval issue
-        if: ${{ steps.plan.outputs.exitcode != '1' }}
+        if: ${{ steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true' }}
         uses: actions/github-script@v7
         env:
           APPROVERS_CSV: ${{ env.APPROVERS_CSV }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const envVal = `${{ steps.sel.outputs.ENV }}`;
-            const product = `${{ steps.sel.outputs.PRODUCT }}`;
-            const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            const product   = `${{ steps.sel.outputs.PRODUCT }}`;
+            const envVal    = `${{ steps.sel.outputs.ENV }}`;
+            const runUrl    = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
             const planSummary = `${{ steps.summary.outputs.summary }}`;
-            const stateKey   = `${{ steps.paths.outputs.STATE_KEY }}`; 
-
-            const firstApprover = (process.env.APPROVERS_CSV || '')
-              .split(',')
-              .map(s => s.trim())
-              .filter(Boolean)[0];
+            const stateKey  = `${{ steps.paths.outputs.STATE_KEY }}`;
+            const approvers = (process.env.APPROVERS_CSV || '').split(',').map(s => s.trim()).filter(Boolean);
+            const firstApprover = approvers[0];
 
             const branch   = (context.ref || '').replace('refs/heads/', '') || 'detached';
             const shortSha = (context.sha || '').slice(0, 7);
-            const runNum   = context.runNumber; // Actions run number
+            const runNum   = context.runNumber;
 
             const title = `APPROVAL: platform-app | ${product}-${envVal} | ${branch} | #${runNum} | run ${context.runId} (${shortSha})`;
 
@@ -311,12 +334,13 @@ jobs:
             **Summary:** ${planSummary}
 
             **Artifact:** \`platform-plan-${context.runId}\`
+            **JSON:** \`plan.json\`
 
-            **Approve by commenting:** \`/approve ${context.runId}\`  
+            **Approve by commenting:** \`/approve ${context.runId}\`
             **Reject by commenting:** \`/reject ${context.runId}\`
             `;
 
-            const { data: issue } = await github.rest.issues.create({
+            const resp = await github.rest.issues.create({
               ...context.repo,
               title,
               body,
@@ -328,3 +352,12 @@ jobs:
                 `branch:${branch}`
               ]
             });
+            core.info(`Created issue #${resp.data.number}`);
+
+      - name: Guardrail - detect mismatch between exit code and JSON
+        id: guard
+        if: ${{ steps.plan.outputs.exitcode == '0' && steps.parse.outputs.has_changes == 'true' }}
+        shell: bash
+        run: |
+          echo "mismatch=true" >> "$GITHUB_OUTPUT"
+          echo "::warning::Terraform returned exitcode=0 (no changes) but plan.json shows changes. Treating as 'changes present'."
