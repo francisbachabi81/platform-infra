@@ -1,11 +1,11 @@
 name: "Apply | Observability"
-run-name: "${{ format('🚀 {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs.product, inputs.plane || inputs.env, github.ref_name, github.run_number) }}"
+run-name: "${{ format('🚀 {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs.product, inputs.env, github.ref_name, github.run_number) }}"
 
 on:
   workflow_dispatch:
     inputs:
       product: { type: choice, options: [hrz, pub], required: true }
-      plane:   { type: choice, options: [nonprod, prod], required: true }
+      env:     { type: choice, options: [dev, qa, uat, prod], required: true }
       plan_run_id: { type: string, required: true }
 
 permissions:
@@ -18,41 +18,46 @@ env:
 
 jobs:
   apply:
-    name: "Apply (observability: ${{ inputs.plane }}.${{ inputs.product }})"
+    name: "Apply (observability: ${{ inputs.env }}.${{ inputs.product }})"
     runs-on: ubuntu-latest
-    environment: ${{ inputs.plane }}
+    environment: ${{ inputs.env }}
     defaults: { run: { working-directory: stacks/observability } }
 
     steps:
       - uses: actions/checkout@v4
 
-      # (same cloud/sub selection & tfvars resolution as Plan)
+      # Same cloud/sub selection as PLAN (env → plane)
       - name: Select cloud + subscriptions
         id: sel
         shell: bash
         run: |
           set -euo pipefail
-          PLANE="${{ inputs.plane }}"
+          ENV_IN="${{ inputs.env }}"
           PRODUCT="${{ inputs.product }}"
+
+          case "$ENV_IN" in
+            dev|qa)   PLANE="nonprod" ;;
+            uat|prod) PLANE="prod"    ;;
+            *) echo "Unknown env: $ENV_IN"; exit 1 ;;
+          esac
+
           if [ "$PRODUCT" = "hrz" ]; then
             CLOUD_ENV="AzureUSGovernment"; ARM_ENV="usgovernment"
             TENANT="${{ secrets.AZ_TENANT_HRZ }}"; CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
             AUDIENCE="api://AzureADTokenExchangeUSGov"
             STATE_SUB="${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}"
-            case "$PLANE" in
-              nonprod) TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}";;
-              prod)    TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}";;
-            esac
+            if [ "$PLANE" = "prod" ]; then TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}"; else TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}"; fi
           else
             CLOUD_ENV="AzureCloud"; ARM_ENV="public"
             TENANT="${{ secrets.AZ_TENANT_PUB }}"; CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
             AUDIENCE="api://AzureADTokenExchange"
             STATE_SUB="${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}"
-            case "$PLANE" in
-              nonprod) TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}";;
-              prod)    TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}";;
-            esac
+            if [ "$PLANE" = "prod" ]; then TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}"; else TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}"; fi
           fi
+
+          echo "ENV=$ENV_IN"            >> $GITHUB_OUTPUT
+          echo "PRODUCT=$PRODUCT"       >> $GITHUB_OUTPUT
+          echo "PLANE=$PLANE"           >> $GITHUB_OUTPUT
           echo "CLOUD_ENV=$CLOUD_ENV"   >> $GITHUB_OUTPUT
           echo "ARM_ENV=$ARM_ENV"       >> $GITHUB_OUTPUT
           echo "TENANT=$TENANT"         >> $GITHUB_OUTPUT
@@ -60,54 +65,32 @@ jobs:
           echo "AUDIENCE=$AUDIENCE"     >> $GITHUB_OUTPUT
           echo "STATE_SUB=$STATE_SUB"   >> $GITHUB_OUTPUT
           echo "TARGET_SUB=$TARGET_SUB" >> $GITHUB_OUTPUT
+
           {
             echo "ARM_ENVIRONMENT=$ARM_ENV"
             echo "ARM_TENANT_ID=$TENANT"
             echo "ARM_CLIENT_ID=$CLIENT_ID"
             echo "TF_VAR_tenant_id=$TENANT"
-            echo "TF_VAR_product=${PRODUCT}"
+            echo "TF_VAR_product=$PRODUCT"
+            echo "TF_VAR_env=$ENV_IN"
+            echo "TF_VAR_plane=$PLANE"
             echo "TF_VAR_subscription_id=$TARGET_SUB"
             echo "TF_VAR_hub_tenant_id=$TENANT"
             echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
           } >> $GITHUB_ENV
 
-      - name: Resolve tfvars & backend key
+      - name: Resolve backend key (env-based)
         id: paths
         shell: bash
         run: |
           set -euo pipefail
-          PLANE="${{ inputs.plane }}"
-          PRODUCT="${{ inputs.product }}"
-      
-          TFVARS_DIR="${GITHUB_WORKSPACE}/stacks/observability/tfvars"
-          echo "🔎 Listing $TFVARS_DIR:"
-          ls -la "$TFVARS_DIR" || true
-      
-          candidates=(
-            "${PLANE}.${PRODUCT}.tfvars"
-            "${PRODUCT}.${PLANE}.tfvars"
-            "${PLANE}.tfvars"
-            "${PRODUCT}.tfvars"
-            "default.${PLANE}.tfvars"
-            "default.tfvars"
-          )
-      
-          TFVARS_PATH=""
-          for f in "${candidates[@]}"; do
-            if [ -f "${TFVARS_DIR}/${f}" ]; then
-              TFVARS_PATH="${TFVARS_DIR}/${f}"
-              echo "✅ Using tfvars: ${f}"
-              break
-            fi
-          done
-      
-          [ -n "${TFVARS_PATH}" ] || { echo "❌ Missing tfvars. Tried: ${candidates[*]}"; exit 1; }
-      
-          echo "TFVARS_PATH=${TFVARS_PATH}" >> "$GITHUB_OUTPUT"
-          echo "STATE_RG=rg-core-infra-state"               >> "$GITHUB_OUTPUT"
-          echo "STATE_SA=sacoretfstateinfra"               >> "$GITHUB_OUTPUT"
-          echo "STATE_CONTAINER=tfstate"                   >> "$GITHUB_OUTPUT"
-          echo "STATE_KEY=observability/${PRODUCT}/${PLANE}/terraform.tfstate" >> "$GITHUB_OUTPUT"
+          ENV="${{ steps.sel.outputs.ENV }}"
+          PRODUCT="${{ steps.sel.outputs.PRODUCT }}"
+
+          echo "STATE_RG=rg-core-infra-state"     >> "$GITHUB_OUTPUT"
+          echo "STATE_SA=sacoretfstateinfra"      >> "$GITHUB_OUTPUT"
+          echo "STATE_CONTAINER=tfstate"          >> "$GITHUB_OUTPUT"
+          echo "STATE_KEY=observability/${PRODUCT}/${ENV}/terraform.tfstate" >> "$GITHUB_OUTPUT"
 
       - uses: hashicorp/setup-terraform@v3
         with: { terraform_version: "1.13.3" }
@@ -160,6 +143,6 @@ jobs:
         run: |
           set -euo pipefail
           test -f tfplan || { echo "::error::tfplan not found in artifact"; ls -la; exit 1; }
-      
+
       - name: Terraform Apply (approved plan)
         run: terraform apply -input=false -auto-approve tfplan

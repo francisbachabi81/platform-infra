@@ -1,5 +1,5 @@
 name: "Plan | Observability"
-run-name: "${{ format('🧩 {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs.product, inputs.plane || inputs.env, github.ref_name, github.run_number) }}"
+run-name: "${{ format('🧩 {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs.product, inputs.env, github.ref_name, github.run_number) }}"
 
 env:
   ARM_USE_OIDC: true
@@ -14,11 +14,11 @@ on:
   #     - "modules/**"
   workflow_dispatch:
     inputs:
-      plane:
-        description: "Plane"
+      env:
+        description: "Environment"
         type: choice
-        options: [nonprod, prod]
-        default: nonprod
+        options: [dev, qa, uat, prod]
+        default: dev
       product:
         description: "Product"
         type: choice
@@ -36,9 +36,9 @@ permissions:
 
 jobs:
   plan:
-    name: "Plan (observability: ${{ inputs.plane }}.${{ inputs.product }})"
+    name: "Plan (observability: ${{ inputs.env }}.${{ inputs.product }})"
     runs-on: ubuntu-latest
-    environment: ${{ inputs.plane }}
+    environment: ${{ inputs.env }}
     defaults:
       run:
         working-directory: stacks/observability
@@ -46,7 +46,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Pick TF version without using expressions that can fail on push
       - name: Determine Terraform version
         id: tfver
         shell: bash
@@ -55,17 +54,19 @@ jobs:
           if [ -z "$TV" ]; then TV="1.13.3"; fi
           echo "version=$TV" >> "$GITHUB_OUTPUT"
 
-      # Decide cloud + audience + TENANT + SUBs (set defaults in bash, not in YAML expr)
-      - name: Select cloud + subscriptions
+      - name: Select cloud + subscriptions (derive plane from env)
         id: sel
         shell: bash
         run: |
           set -euo pipefail
-          PLANE="${{ inputs.plane }}"
+          ENV_IN="${{ inputs.env }}"
           PRODUCT="${{ inputs.product }}"
-          # Defaults when triggered by push (no inputs.*)
-          if [ -z "${PLANE:-}" ]; then PLANE="prod"; fi
-          if [ -z "${PRODUCT:-}" ]; then PRODUCT="hrz"; fi
+
+          case "$ENV_IN" in
+            dev|qa)   PLANE="nonprod" ;;
+            uat|prod) PLANE="prod"    ;;
+            *) echo "Unknown env: $ENV_IN"; exit 1 ;;
+          esac
 
           if [ "$PRODUCT" = "hrz" ]; then
             CLOUD_ENV="AzureUSGovernment"
@@ -74,11 +75,7 @@ jobs:
             CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
             AUDIENCE="api://AzureADTokenExchangeUSGov"
             STATE_SUB="${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}"
-            case "$PLANE" in
-              nonprod) TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}";;
-              prod)    TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}";;
-              *) echo "Unknown plane: $PLANE"; exit 1;;
-            esac
+            if [ "$PLANE" = "prod" ]; then TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}"; else TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}"; fi
           else
             CLOUD_ENV="AzureCloud"
             ARM_ENV="public"
@@ -86,15 +83,12 @@ jobs:
             CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
             AUDIENCE="api://AzureADTokenExchange"
             STATE_SUB="${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}"
-            case "$PLANE" in
-              nonprod) TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}";;
-              prod)    TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}";;
-              *) echo "Unknown plane: $PLANE"; exit 1;;
-            esac
+            if [ "$PLANE" = "prod" ]; then TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}"; else TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}"; fi
           fi
 
-          echo "PLANE=$PLANE"           >> $GITHUB_OUTPUT
+          echo "ENV=$ENV_IN"            >> $GITHUB_OUTPUT
           echo "PRODUCT=$PRODUCT"       >> $GITHUB_OUTPUT
+          echo "PLANE=$PLANE"           >> $GITHUB_OUTPUT
           echo "CLOUD_ENV=$CLOUD_ENV"   >> $GITHUB_OUTPUT
           echo "ARM_ENV=$ARM_ENV"       >> $GITHUB_OUTPUT
           echo "TENANT=$TENANT"         >> $GITHUB_OUTPUT
@@ -109,27 +103,29 @@ jobs:
             echo "ARM_CLIENT_ID=$CLIENT_ID"
             echo "TF_VAR_tenant_id=$TENANT"
             echo "TF_VAR_product=$PRODUCT"
+            echo "TF_VAR_env=$ENV_IN"
+            echo "TF_VAR_plane=$PLANE"
             echo "TF_VAR_subscription_id=$TARGET_SUB"
             echo "TF_VAR_hub_tenant_id=$TENANT"
             echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
           } >> $GITHUB_ENV
 
-      - name: Resolve tfvars & backend key
+      - name: Resolve tfvars & backend key (env-based)
         id: paths
         shell: bash
         run: |
           set -euo pipefail
-          PLANE="${{ steps.sel.outputs.PLANE }}"
+          ENV="${{ steps.sel.outputs.ENV }}"
           PRODUCT="${{ steps.sel.outputs.PRODUCT }}"
 
           TFVARS_DIR="${GITHUB_WORKSPACE}/stacks/observability/tfvars"
           echo "🔎 Listing $TFVARS_DIR:"; ls -la "$TFVARS_DIR" || true
 
           candidates=(
-            "${PLANE}.${PRODUCT}.tfvars"  # e.g., nonprod.hrz.tfvars
-            "${PLANE}.tfvars"             # e.g., nonprod.tfvars
-            "default.${PLANE}.tfvars"
-            "default.tfvars"
+            "${ENV}.${PRODUCT}.tfvars"  # e.g., dev.hrz.tfvars
+            "${ENV}.tfvars"             # optional
+            "default.${ENV}.tfvars"     # optional
+            "default.tfvars"            # optional
           )
 
           TFVARS_PATH=""
@@ -147,7 +143,7 @@ jobs:
           echo "STATE_RG=rg-core-infra-state"     >> "$GITHUB_OUTPUT"
           echo "STATE_SA=sacoretfstateinfra"      >> "$GITHUB_OUTPUT"
           echo "STATE_CONTAINER=tfstate"          >> "$GITHUB_OUTPUT"
-          echo "STATE_KEY=observability/${PRODUCT}/${PLANE}/terraform.tfstate" >> "$GITHUB_OUTPUT"
+          echo "STATE_KEY=observability/${PRODUCT}/${ENV}/terraform.tfstate" >> "$GITHUB_OUTPUT"
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -200,6 +196,7 @@ jobs:
           terraform plan -input=false -lock-timeout=5m \
             -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
             -var "product=${{ steps.sel.outputs.PRODUCT }}" \
+            -var "env=${{ steps.sel.outputs.ENV }}" \
             -var "plane=${{ steps.sel.outputs.PLANE }}" \
             -detailed-exitcode -out=tfplan || ec=$?
           echo "exitcode=${ec:-0}" >> $GITHUB_OUTPUT
@@ -245,11 +242,11 @@ jobs:
           APPROVERS_CSV: ${{ env.APPROVERS_CSV }}
         with:
           script: |
-            const plane = `${{ steps.sel.outputs.PLANE }}`;
+            const envVal = `${{ steps.sel.outputs.ENV }}`;
             const product = `${{ steps.sel.outputs.PRODUCT }}`;
             const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
             const planSummary = `${{ steps.summary.outputs.summary }}`;
-            const stateKey   = `${{ steps.paths.outputs.STATE_KEY }}`; 
+            const stateKey   = `${{ steps.paths.outputs.STATE_KEY }}`;
 
             const firstApprover = (process.env.APPROVERS_CSV || '')
               .split(',')
@@ -258,7 +255,7 @@ jobs:
 
             const branch   = (context.ref || '').replace('refs/heads/', '') || 'detached';
             const shortSha = (context.sha || '').slice(0, 7);
-            const runNum   = context.runNumber; // Actions run number
+            const runNum   = context.runNumber;
 
             const title = `APPROVAL: observability | ${product}-${envVal} | ${branch} | #${runNum} | run ${context.runId} (${shortSha})`;
 
@@ -266,7 +263,7 @@ jobs:
             **Plan ready**
             - **Stack:** observability
             - **Product:** ${product}
-            - **Plane/Env:** ${plane}
+            - **Env:** ${envVal}
             - **Branch:** ${context.ref}
             - **Commit:** ${context.sha}
             - **Run:** ${runUrl}
@@ -280,7 +277,7 @@ jobs:
             **Reject by commenting:** \`/reject ${context.runId}\`
             `;
 
-            const { data: issue } = await github.rest.issues.create({
+            await github.rest.issues.create({
               ...context.repo,
               title,
               body,
