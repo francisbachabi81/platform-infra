@@ -1,15 +1,11 @@
 name: "Plan | Shared Network"
-run-name: "${{ format('🧩 {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs.product, inputs.plane || inputs.env, github.ref_name, github.run_number) }}"
+run-name: "${{ format('🧩 {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs.product, inputs.plane, github.ref_name, github.run_number) }}"
 
-env:
-  APPROVERS_CSV: "francisbachabi81,user2"
+concurrency:
+  group: plan-shared-network-${{ inputs.product }}-${{ inputs.plane }}-${{ github.ref }}
+  cancel-in-progress: true
 
 on:
-  # push:
-  #   branches: [prod]
-  #   paths:
-  #     - "stacks/shared-network/**"
-  #     - "modules/**"
   workflow_dispatch:
     inputs:
       plane:
@@ -32,10 +28,14 @@ permissions:
   contents: read
   issues: write
 
-# This plan only targets prod (push branch is prod); don't reference inputs here.
+env:
+  ARM_USE_OIDC: true
+  TF_IN_AUTOMATION: true
+  APPROVERS_CSV: "francisbachabi81,user2"
+
 jobs:
   plan:
-    name: "Plan (shared-network)"
+    name: "Plan (shared-network: ${{ inputs.plane }}.${{ inputs.product }})"
     runs-on: ubuntu-latest
     environment: ${{ inputs.plane }}
     defaults:
@@ -45,16 +45,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Pick TF version without using expressions that can fail on push
       - name: Determine Terraform version
         id: tfver
         shell: bash
         run: |
+          set -euo pipefail
           TV="${{ inputs.terraform_version }}"
           if [ -z "$TV" ]; then TV="1.13.3"; fi
-          echo "version=$TV" >> "$GITHUB_OUTPUT"
+          echo "version=${TV}" >> "$GITHUB_OUTPUT"
 
-      # Decide cloud + audience + TENANT + SUBs (set defaults in bash, not in YAML expr)
+      - name: Cache Terraform plugins
+        uses: actions/cache@v4
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: tf-${{ runner.os }}-${{ steps.tfver.outputs.version }}
+
+      - name: Configure Terraform plugin cache dir
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.terraform.d/plugin-cache
+          echo 'plugin_cache_dir="~/.terraform.d/plugin-cache"' > ~/.terraformrc
+
       - name: Select cloud + subscriptions
         id: sel
         shell: bash
@@ -62,45 +74,42 @@ jobs:
           set -euo pipefail
           PLANE="${{ inputs.plane }}"
           PRODUCT="${{ inputs.product }}"
-          # Defaults when triggered by push (no inputs.*)
           if [ -z "${PLANE:-}" ]; then PLANE="prod"; fi
           if [ -z "${PRODUCT:-}" ]; then PRODUCT="hrz"; fi
 
           if [ "$PRODUCT" = "hrz" ]; then
-            CLOUD_ENV="AzureUSGovernment"
-            ARM_ENV="usgovernment"
-            TENANT="${{ secrets.AZ_TENANT_HRZ }}"
-            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
+            CLOUD_ENV="AzureUSGovernment"; ARM_ENV="usgovernment"
+            TENANT='${{ secrets.AZ_TENANT_HRZ }}'
+            CLIENT_ID='${{ secrets.AZURE_CLIENT_ID_HRZ }}'
             AUDIENCE="api://AzureADTokenExchangeUSGov"
-            STATE_SUB="${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}"
+            STATE_SUB='${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}'
             case "$PLANE" in
-              nonprod) TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}";;
-              prod)    TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}";;
-              *) echo "Unknown plane: $PLANE"; exit 1;;
+              nonprod) TARGET_SUB='${{ secrets.AZ_SUB_HRZ_NONPROD }}' ;;
+              prod)    TARGET_SUB='${{ secrets.AZ_SUB_HRZ_PROD }}'    ;;
+              *) echo "Unknown plane: $PLANE"; exit 1 ;;
             esac
           else
-            CLOUD_ENV="AzureCloud"
-            ARM_ENV="public"
-            TENANT="${{ secrets.AZ_TENANT_PUB }}"
-            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
+            CLOUD_ENV="AzureCloud"; ARM_ENV="public"
+            TENANT='${{ secrets.AZ_TENANT_PUB }}'
+            CLIENT_ID='${{ secrets.AZURE_CLIENT_ID_PUB }}'
             AUDIENCE="api://AzureADTokenExchange"
-            STATE_SUB="${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}"
+            STATE_SUB='${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}'
             case "$PLANE" in
-              nonprod) TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}";;
-              prod)    TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}";;
-              *) echo "Unknown plane: $PLANE"; exit 1;;
+              nonprod) TARGET_SUB='${{ secrets.AZ_SUB_PUB_NONPROD }}' ;;
+              prod)    TARGET_SUB='${{ secrets.AZ_SUB_PUB_PROD }}'    ;;
+              *) echo "Unknown plane: $PLANE"; exit 1 ;;
             esac
           fi
 
-          echo "PLANE=$PLANE"           >> $GITHUB_OUTPUT
-          echo "PRODUCT=$PRODUCT"       >> $GITHUB_OUTPUT
-          echo "CLOUD_ENV=$CLOUD_ENV"   >> $GITHUB_OUTPUT
-          echo "ARM_ENV=$ARM_ENV"       >> $GITHUB_OUTPUT
-          echo "TENANT=$TENANT"         >> $GITHUB_OUTPUT
-          echo "CLIENT_ID=$CLIENT_ID"   >> $GITHUB_OUTPUT
-          echo "AUDIENCE=$AUDIENCE"     >> $GITHUB_OUTPUT
-          echo "STATE_SUB=$STATE_SUB"   >> $GITHUB_OUTPUT
-          echo "TARGET_SUB=$TARGET_SUB" >> $GITHUB_OUTPUT
+          echo "PLANE=$PLANE"           >> "$GITHUB_OUTPUT"
+          echo "PRODUCT=$PRODUCT"       >> "$GITHUB_OUTPUT"
+          echo "CLOUD_ENV=$CLOUD_ENV"   >> "$GITHUB_OUTPUT"
+          echo "ARM_ENV=$ARM_ENV"       >> "$GITHUB_OUTPUT"
+          echo "TENANT=$TENANT"         >> "$GITHUB_OUTPUT"
+          echo "CLIENT_ID=$CLIENT_ID"   >> "$GITHUB_OUTPUT"
+          echo "AUDIENCE=$AUDIENCE"     >> "$GITHUB_OUTPUT"
+          echo "STATE_SUB=$STATE_SUB"   >> "$GITHUB_OUTPUT"
+          echo "TARGET_SUB=$TARGET_SUB" >> "$GITHUB_OUTPUT"
 
           {
             echo "ARM_ENVIRONMENT=$ARM_ENV"
@@ -108,10 +117,21 @@ jobs:
             echo "ARM_CLIENT_ID=$CLIENT_ID"
             echo "TF_VAR_tenant_id=$TENANT"
             echo "TF_VAR_product=$PRODUCT"
+            echo "TF_VAR_plane=$PLANE"
             echo "TF_VAR_subscription_id=$TARGET_SUB"
             echo "TF_VAR_hub_tenant_id=$TENANT"
             echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
-          } >> $GITHUB_ENV
+          } >> "$GITHUB_ENV"
+
+      - name: Debug - subscriptions (partial + hash)
+        shell: bash
+        run: |
+          set -euo pipefail
+          maskless() { v="$(printf '%s' "$1" | tr -d '[:space:]')"; printf '%s…%s' "${v:0:8}" "${v: -6}"; }
+          shortsha() { printf '%s' "$1" | tr -d '[:space:]' | shasum -a 256 | cut -c1-12; }
+          echo "BASE sub:  $(maskless "$TF_VAR_subscription_id") (sha12: $(shortsha "$TF_VAR_subscription_id"))"
+          echo "STATE sub: $(maskless "${{ steps.sel.outputs.STATE_SUB }}") (sha12: $(shortsha "${{ steps.sel.outputs.STATE_SUB }}"))"
+          echo "Tenant:    $(maskless "$TF_VAR_tenant_id")       (sha12: $(shortsha "$TF_VAR_tenant_id"))"
 
       - name: Resolve tfvars & backend key
         id: paths
@@ -120,17 +140,15 @@ jobs:
           set -euo pipefail
           PLANE="${{ steps.sel.outputs.PLANE }}"
           PRODUCT="${{ steps.sel.outputs.PRODUCT }}"
-
           TV1="${GITHUB_WORKSPACE}/stacks/shared-network/tfvars/${PLANE}.${PRODUCT}.tfvars"
           TV2="${GITHUB_WORKSPACE}/stacks/shared-network/tfvars/${PLANE}.tfvars"
           if [ -f "$TV1" ]; then TFVARS_PATH="$TV1";
           elif [ -f "$TV2" ]; then TFVARS_PATH="$TV2";
           else echo "❌ Missing tfvars: $TV1 (or $TV2)"; exit 1; fi
           echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
-
-          echo "STATE_RG=rg-core-infra-state"     >> "$GITHUB_OUTPUT"
-          echo "STATE_SA=sacoretfstateinfra"      >> "$GITHUB_OUTPUT"
-          echo "STATE_CONTAINER=tfstate"          >> "$GITHUB_OUTPUT"
+          echo "STATE_RG=rg-core-infra-state" >> "$GITHUB_OUTPUT"
+          echo "STATE_SA=sacoretfstateinfra"  >> "$GITHUB_OUTPUT"
+          echo "STATE_CONTAINER=tfstate"      >> "$GITHUB_OUTPUT"
           echo "STATE_KEY=shared-network/${PRODUCT}/${PLANE}/terraform.tfstate" >> "$GITHUB_OUTPUT"
 
       - uses: hashicorp/setup-terraform@v3
@@ -146,7 +164,7 @@ jobs:
           environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
           audience:        ${{ steps.sel.outputs.AUDIENCE }}
 
-      - name: Terraform Init (backend in state/prod subscription)
+      - name: Terraform Init (backend in state subscription)
         env:
           ARM_USE_OIDC: true
           ARM_CLIENT_ID:       ${{ steps.sel.outputs.CLIENT_ID }}
@@ -174,41 +192,51 @@ jobs:
           audience:        ${{ steps.sel.outputs.AUDIENCE }}
 
       - name: Terraform Fmt & Validate
+        shell: bash
         run: |
+          set -euo pipefail
           terraform fmt -recursive
           terraform validate
 
       - name: Plan (detailed exit code)
         id: plan
+        shell: bash
         run: |
+          set -euo pipefail
+          set +e
           terraform plan -input=false -lock-timeout=5m \
             -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
             -var "product=${{ steps.sel.outputs.PRODUCT }}" \
             -var "plane=${{ steps.sel.outputs.PLANE }}" \
-            -detailed-exitcode -out=tfplan || ec=$?
-          echo "exitcode=${ec:-0}" >> $GITHUB_OUTPUT
+            -detailed-exitcode -out=tfplan
+          ec=$?
+          set -e
+          echo "exitcode=${ec}" >> "$GITHUB_OUTPUT"
           terraform show -no-color tfplan > plan.txt
+
+      - name: Sanity check plan output (no embedded errors)
+        if: ${{ steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2' }}
+        shell: bash
+        run: |
+          if grep -q '^Error:' plan.txt; then
+            echo "Found 'Error:' lines in plan.txt; failing."
+            exit 1
+          fi
 
       - name: Summarize plan
         id: summary
         shell: bash
         run: |
           set -euo pipefail
-          # Extract a concise summary line
-          if grep -qE "^(No changes|No changes\.)" plan.txt; then
+          if grep -qiE "^no changes(\.|)$" plan.txt; then
             SUM="No changes. Infrastructure is up-to-date."
           else
             SUM="$(grep -E '^Plan: ' plan.txt | tail -n1 || true)"
             if [ -z "${SUM}" ]; then
-              # Fallback: show last 10 lines if the usual line isn't present (unusual output)
               SUM="(No 'Plan:' line found)"; echo "::group::Plan tail"; tail -n 10 plan.txt; echo "::endgroup::"
             fi
           fi
-
-          # Export as output
           echo "summary=${SUM}" >> "$GITHUB_OUTPUT"
-
-          # Nice job summary in the Actions UI
           {
             echo "## Terraform plan summary"
             echo
@@ -219,7 +247,32 @@ jobs:
             echo "Artifact: \`shared-network-plan-${{ github.run_id }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Show plan exit code & outputs
+        shell: bash
+        run: |
+          echo "exitcode='${{ steps.plan.outputs.exitcode }}'"
+          echo "summary='${{ steps.summary.outputs.summary }}'"
+
+      - name: Parse plan JSON for changes
+        id: parse
+        if: ${{ steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform show -json tfplan > plan.json
+          COUNT=$(jq '[.resource_changes[] | select((.change.actions | index("no-op")) | not)] | length' plan.json)
+          echo "changes_count=${COUNT}" >> "$GITHUB_OUTPUT"
+          if [ "${COUNT}" -gt 0 ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "${COUNT}" -gt 0 ] && [ "${{ steps.plan.outputs.exitcode }}" = "0" ]; then
+            echo "::warning::Detected changes from JSON but exitcode=0; will treat as changes."
+          fi
+
       - name: Upload plan
+        if: ${{ steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: shared-network-plan-${{ github.run_id }}
@@ -227,37 +280,37 @@ jobs:
           path: |
             ${{ github.workspace }}/stacks/shared-network/tfplan
             ${{ github.workspace }}/stacks/shared-network/plan.txt
+            ${{ github.workspace }}/stacks/shared-network/plan.json
 
       - name: Open approval issue
-        if: ${{ steps.plan.outputs.exitcode != '1' }}
+        if: ${{ steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true' }}
         uses: actions/github-script@v7
         env:
           APPROVERS_CSV: ${{ env.APPROVERS_CSV }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const plane = `${{ steps.sel.outputs.PLANE }}`;
             const product = `${{ steps.sel.outputs.PRODUCT }}`;
+            const plane = `${{ steps.sel.outputs.PLANE }}`;
+            const envLabel = plane;
             const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
             const planSummary = `${{ steps.summary.outputs.summary }}`;
-            const stateKey   = `${{ steps.paths.outputs.STATE_KEY }}`; 
-
-            // first approver from CSV
-            const firstApprover = (process.env.APPROVERS_CSV || '')
-              .split(',')
-              .map(s => s.trim())
-              .filter(Boolean)[0];
+            const stateKey = `${{ steps.paths.outputs.STATE_KEY }}`;
+            const approvers = (process.env.APPROVERS_CSV || '').split(',').map(s => s.trim()).filter(Boolean);
+            const firstApprover = approvers[0];
 
             const branch   = (context.ref || '').replace('refs/heads/', '') || 'detached';
             const shortSha = (context.sha || '').slice(0, 7);
-            const runNum   = context.runNumber; // Actions run number
+            const runNum   = context.runNumber;
 
-            const title = `APPROVAL: shared-network | ${product}-${envVal} | ${branch} | #${runNum} | run ${context.runId} (${shortSha})`;
+            const title = `APPROVAL: shared-network | ${product}-${envLabel} | ${branch} | #${runNum} | run ${context.runId} (${shortSha})`;
 
             const body = `
             **Plan ready**
             - **Stack:** shared-network
             - **Product:** ${product}
-            - **Plane/Env:** ${plane}
+            - **Plane:** ${envLabel}
             - **Branch:** ${context.ref}
             - **Commit:** ${context.sha}
             - **Run:** ${runUrl}
@@ -266,12 +319,13 @@ jobs:
             **Summary:** ${planSummary}
 
             **Artifact:** \`shared-network-plan-${context.runId}\`
+            **JSON:** \`plan.json\`
 
-            **Approve by commenting:** \`/approve ${context.runId}\`  
+            **Approve by commenting:** \`/approve ${context.runId}\`
             **Reject by commenting:** \`/reject ${context.runId}\`
             `;
 
-            const { data: issue } = await github.rest.issues.create({
+            const resp = await github.rest.issues.create({
               ...context.repo,
               title,
               body,
@@ -279,7 +333,16 @@ jobs:
               labels: [
                 'stack:shared-network',
                 `product:${product}`,
-                `env:${envVal}`,
+                `env:${envLabel}`,
                 `branch:${branch}`
               ]
             });
+            core.info(`Created issue #${resp.data.number}`);
+
+      - name: Guardrail - detect mismatch between exit code and JSON
+        id: guard
+        if: ${{ steps.plan.outputs.exitcode == '0' && steps.parse.outputs.has_changes == 'true' }}
+        shell: bash
+        run: |
+          echo "mismatch=true" >> "$GITHUB_OUTPUT"
+          echo "::warning::Terraform returned exitcode=0 (no changes) but plan.json shows changes. Treating as 'changes present'."
