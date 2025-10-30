@@ -20,6 +20,8 @@ locals {
   # Keep your original names
   plane_full = local.plane_effective                 # "nonprod" | "prod"
   plane_code = local.plane_effective == "nonprod" ? "np" : "pr"
+
+  activity_alert_location = "global"
 }
 
 # Prefer the Platform stack's subscription/tenant if it emitted them (covers dev AKS in core sub),
@@ -558,42 +560,36 @@ locals {
 
 resource "azurerm_monitor_activity_log_alert" "rg_changes" {
   count               = local.rg_app_name != null && local.ag_id != null ? 1 : 0
-  name                = "rg-change-${var.product}-${local.env_effective}"
-  location            = var.location
+  name                = "rg-change-${var.product}-${var.env}"
+  location            = local.activity_alert_location
   resource_group_name = local.rg_app_name
   scopes              = ["/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}/resourceGroups/${local.rg_app_name}"]
   description         = "Alert on administrative operations in platform RG"
 
-  criteria {
-    category = "Administrative"
-  }
+  criteria { category = "Administrative" }
 
-  action {
-    action_group_id = local.ag_id
-  }
+  action { action_group_id = local.ag_id }
 }
 
 resource "azurerm_monitor_activity_log_alert" "service_health" {
   count               = local.ag_id != null ? 1 : 0
-  name                = "service-health-${var.product}-${local.env_effective}"
-  location            = var.location
+  name                = "service-health-${var.product}-${var.env}"
+  location            = local.activity_alert_location
   resource_group_name = coalesce(local.rg_core_name, local.rg_app_name)
   scopes              = ["/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}"]
   description         = "Service Health incidents in this subscription"
 
-  criteria {
-    category = "ServiceHealth"
-  }
+  criteria { category = "ServiceHealth" }
 
-  action {
-    action_group_id = local.ag_id
-  }
+  action { action_group_id = local.ag_id }
 }
+
+resource "random_uuid" "wk_overview" {}
 
 resource "azapi_resource" "monitor_workbook_overview" {
   count     = local.rg_core_name != null ? 1 : 0
   type      = "Microsoft.Insights/workbooks@2022-04-01"
-  name      = "wk-${var.product}-${local.env_effective}-overview-${random_string.sfx.result}"
+  name      = random_uuid.wk_overview.result
   parent_id = "/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}/resourceGroups/${local.rg_core_name}"
   location  = var.location
 
