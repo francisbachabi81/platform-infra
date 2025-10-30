@@ -1,10 +1,7 @@
-# Resolve env/plane from either input; support YAML passing plane OR env
 locals {
   env_norm   = var.env == null ? null : lower(var.env)
   plane_norm = var.plane == null ? null : lower(var.plane)
 
-  # If env is given, derive plane; else if plane is given, keep it;
-  # default to nonprod/dev if nothing provided (useful for ad-hoc runs).
   env_effective = coalesce(
     local.env_norm,
     local.plane_norm == "nonprod" ? "dev" :
@@ -17,15 +14,13 @@ locals {
     contains(["dev","qa"], local.env_effective) ? "nonprod" : "prod"
   )
 
-  # Keep your original names
-  plane_full = local.plane_effective                 # "nonprod" | "prod"
+  plane_full = local.plane_effective
   plane_code = local.plane_effective == "nonprod" ? "np" : "pr"
 
-  activity_alert_location = "global"
+  activity_alert_location = "Global"
 }
 
-# Prefer the Platform stack's subscription/tenant if it emitted them (covers dev AKS in core sub),
-# otherwise fall back to the workflow-injected TF_VAR_subscription_id / TF_VAR_tenant_id.
+# Prefer the Platform stack's subscription/tenant if it emitted them; otherwise fall back to workflow-injected vars.
 provider "azurerm" {
   features {}
 
@@ -42,9 +37,9 @@ provider "azurerm" {
   environment = var.product == "hrz" ? "usgovernment" : "public"
 }
 
-# -------------------------
+provider "azapi" {}
+
 # Remote state lookups
-# -------------------------
 data "terraform_remote_state" "network" {
   backend = "azurerm"
   config = {
@@ -73,19 +68,18 @@ data "terraform_remote_state" "platform" {
     resource_group_name  = var.state_rg
     storage_account_name = var.state_sa
     container_name       = var.state_container
-    key                  = "platform-app/${var.product}/${var.env}/terraform.tfstate"
+    key                  = "platform-app/${var.product}/${local.env_effective}/terraform.tfstate"
     use_azuread_auth     = true
   }
 }
 
 # Subscriptions resolved once
 locals {
-  # enforce ENV sub; avoid falling back to platform/core
-  product_env  = var.product == "hrz" ? "usgovernment" : "public"
-  core_sub     = trimspace(coalesce(var.core_subscription_id, var.subscription_id))
-  core_tenant  = trimspace(coalesce(var.core_tenant_id,     var.tenant_id))
-  env_sub      = trimspace(var.env_subscription_id)  
-  env_tenant   = trimspace(coalesce(var.env_tenant_id, var.tenant_id))
+  product_env = var.product == "hrz" ? "usgovernment" : "public"
+  core_sub    = trimspace(coalesce(var.core_subscription_id, var.subscription_id))
+  core_tenant = trimspace(coalesce(var.core_tenant_id,     var.tenant_id))
+  env_sub     = trimspace(var.env_subscription_id)
+  env_tenant  = trimspace(coalesce(var.env_tenant_id, var.tenant_id))
 }
 
 # Explicit ENV alias
@@ -106,7 +100,7 @@ provider "azurerm" {
   environment     = local.product_env
 }
 
-# Who am I (subscription/tenant) on each provider?
+# Who am I
 data "azurerm_client_config" "core" { provider = azurerm.core }
 data "azurerm_client_config" "env"  { provider = azurerm.env  }
 
@@ -123,16 +117,14 @@ data "azurerm_resource_group" "env_rg" {
 }
 
 locals {
-  sub_core_resolved        = try(data.azurerm_client_config.core.subscription_id, null)
-  sub_env_resolved      = try(data.azurerm_client_config.env.subscription_id, null)
-  rg_env_name_resolved  = try(data.azurerm_resource_group.env_rg[0].name,    null)
-  rg_env_id_resolved    = try(data.azurerm_resource_group.env_rg[0].id,      null)
-  rg_core_name_resolved    = try(data.azurerm_resource_group.core_rg[0].name,    null)
+  sub_core_resolved       = try(data.azurerm_client_config.core.subscription_id, null)
+  sub_env_resolved        = try(data.azurerm_client_config.env.subscription_id, null)
+  rg_env_name_resolved    = try(data.azurerm_resource_group.env_rg[0].name, null)
+  rg_env_id_resolved      = try(data.azurerm_resource_group.env_rg[0].id,   null)
+  rg_core_name_resolved   = try(data.azurerm_resource_group.core_rg[0].name, null)
 }
 
-# -------------------------
 # Gather IDs and RGs
-# -------------------------
 locals {
   law_id = coalesce(
     var.law_workspace_id_override,
@@ -147,12 +139,11 @@ locals {
   net_vpng     = try(data.terraform_remote_state.network.outputs.vpn_gateway.id, null)
 
   rg_core_name = try(data.terraform_remote_state.core.outputs.meta.rg_core_name, null)
-  rg_app_name = coalesce(
+  rg_app_name  = coalesce(
     var.env_rg_name,
     try(data.terraform_remote_state.platform.outputs.meta.rg_name, null)
   )
 
-  # Per-type ID lists (skip nulls)
   ids_kv    = compact([try(local.platform_ids.kv1, null)])
   ids_sa    = compact([try(local.platform_ids.sa1, null)])
   ids_sbns  = compact([try(local.platform_ids.sbns1, null)])
@@ -170,7 +161,6 @@ locals {
     try(data.terraform_remote_state.platform.outputs.kubernetes.id, null),
   ])
 
-  # Function Apps / Web Apps (Microsoft.Web/sites)
   ids_funcapps = compact([
     try(local.platform_ids.fa1, null),
     try(local.platform_ids.function_app, null),
@@ -183,7 +173,6 @@ locals {
     try(local.platform_ids.app, null),
   ])
 
-  # App Gateway & Front Door
   ids_appgws = compact([
     try(data.terraform_remote_state.network.outputs.app_gateway.id, null),
     try(data.terraform_remote_state.network.outputs.application_gateway.id, null),
@@ -194,7 +183,6 @@ locals {
     try(data.terraform_remote_state.network.outputs.front_door.id, null),
   ])
 
-  # For-each maps
   kv_map    = { for id in local.ids_kv    : id => id }
   sa_map    = { for id in local.ids_sa    : id => id }
   sbns_map  = { for id in local.ids_sbns  : id => id }
@@ -209,13 +197,9 @@ locals {
   web_map    = { for id in local.ids_webapps   : id => id }
   appgw_map  = { for id in local.ids_appgws    : id => id }
   afd_map    = { for id in local.ids_frontdoor : id => id }
-
-  # aks_map = { for id in local.ids_aks : id => id }
 }
 
-# -------------------------
 # Diagnostic categories
-# -------------------------
 data "azurerm_monitor_diagnostic_categories" "kv" {
   for_each    = local.kv_map
   resource_id = each.value
@@ -261,7 +245,6 @@ data "azurerm_monitor_diagnostic_categories" "vpng" {
   resource_id = each.value
 }
 
-# New: Web/Functions/AppGW/Front Door
 data "azurerm_monitor_diagnostic_categories" "fa" {
   for_each    = local.fa_map
   resource_id = each.value
@@ -282,10 +265,7 @@ data "azurerm_monitor_diagnostic_categories" "afd" {
   resource_id = each.value
 }
 
-# -------------------------
 # Diagnostic settings (to LAW)
-# NOTE: the toset(try(..., [])) pattern avoids empty dynamic "content" issues
-# -------------------------
 resource "azurerm_monitor_diagnostic_setting" "kv" {
   for_each                   = data.azurerm_monitor_diagnostic_categories.kv
   name                       = var.diag_name
@@ -294,11 +274,8 @@ resource "azurerm_monitor_diagnostic_setting" "kv" {
 
   dynamic "enabled_log" {
     for_each = toset(try(each.value.logs, []))
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
-
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
     content {
@@ -316,11 +293,8 @@ resource "azurerm_monitor_diagnostic_setting" "sa" {
 
   dynamic "enabled_log" {
     for_each = toset(try(each.value.logs, []))
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
-
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
     content {
@@ -338,11 +312,8 @@ resource "azurerm_monitor_diagnostic_setting" "sbns" {
 
   dynamic "enabled_log" {
     for_each = toset(try(each.value.logs, []))
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
-
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
     content {
@@ -360,11 +331,8 @@ resource "azurerm_monitor_diagnostic_setting" "ehns" {
 
   dynamic "enabled_log" {
     for_each = toset(try(each.value.logs, []))
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
-
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
     content {
@@ -382,11 +350,8 @@ resource "azurerm_monitor_diagnostic_setting" "pg" {
 
   dynamic "enabled_log" {
     for_each = toset(try(each.value.logs, []))
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
-
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
     content {
@@ -404,11 +369,8 @@ resource "azurerm_monitor_diagnostic_setting" "redis" {
 
   dynamic "enabled_log" {
     for_each = toset(try(each.value.logs, []))
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
-
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
     content {
@@ -426,11 +388,8 @@ resource "azurerm_monitor_diagnostic_setting" "rsv" {
 
   dynamic "enabled_log" {
     for_each = toset(try(each.value.logs, []))
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
-
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
     content {
@@ -448,11 +407,8 @@ resource "azurerm_monitor_diagnostic_setting" "appi" {
 
   dynamic "enabled_log" {
     for_each = toset(try(each.value.logs, []))
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
-
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
     content {
@@ -470,11 +426,8 @@ resource "azurerm_monitor_diagnostic_setting" "vpng" {
 
   dynamic "enabled_log" {
     for_each = toset(try(each.value.logs, []))
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
-
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
     content {
@@ -484,7 +437,6 @@ resource "azurerm_monitor_diagnostic_setting" "vpng" {
   }
 }
 
-# New: Function Apps / Web Apps / App Gateway / Front Door
 resource "azurerm_monitor_diagnostic_setting" "fa" {
   for_each                   = data.azurerm_monitor_diagnostic_categories.fa
   name                       = var.diag_name
@@ -493,11 +445,8 @@ resource "azurerm_monitor_diagnostic_setting" "fa" {
 
   dynamic "enabled_log" {
     for_each = toset(try(each.value.logs, []))
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
-
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
     content {
@@ -515,11 +464,8 @@ resource "azurerm_monitor_diagnostic_setting" "web" {
 
   dynamic "enabled_log" {
     for_each = toset(try(each.value.logs, []))
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
-
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
     content {
@@ -537,11 +483,8 @@ resource "azurerm_monitor_diagnostic_setting" "appgw" {
 
   dynamic "enabled_log" {
     for_each = toset(try(each.value.logs, []))
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
-
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
     content {
@@ -559,11 +502,8 @@ resource "azurerm_monitor_diagnostic_setting" "afd" {
 
   dynamic "enabled_log" {
     for_each = toset(try(each.value.logs, []))
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
-
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
     content {
@@ -573,9 +513,7 @@ resource "azurerm_monitor_diagnostic_setting" "afd" {
   }
 }
 
-# -------------------------
 # Alerts & workbook
-# -------------------------
 locals {
   action_group_id = try(data.terraform_remote_state.core.outputs.action_group.id, null)
 }
@@ -587,7 +525,6 @@ resource "random_string" "sfx" {
 }
 
 locals {
-  # Prefer the structured receivers if provided; otherwise use plain alert_emails
   alert_emails_effective = length(var.action_group_email_receivers) > 0 ? [for r in var.action_group_email_receivers : r.email_address] : var.alert_emails
 }
 
@@ -602,7 +539,6 @@ resource "azurerm_monitor_action_group" "fallback" {
   dynamic "email_receiver" {
     for_each = toset(local.alert_emails_effective)
     content {
-      # Give each receiver a stable name; fall back to the email as the name
       name          = "email-${replace(email_receiver.value, "@", "_")}"
       email_address = email_receiver.value
     }
@@ -626,19 +562,18 @@ resource "azurerm_monitor_action_group" "fallback_env" {
 }
 
 locals {
-  ag_id = coalesce(local.action_group_id, try(azurerm_monitor_action_group.fallback[0].id, null))
-  ag_id_env  = coalesce(try(azurerm_monitor_action_group.fallback_env[0].id, null), local.ag_id) # prefer env AG if created
+  ag_id      = coalesce(local.action_group_id, try(azurerm_monitor_action_group.fallback[0].id, null))
+  ag_id_env  = coalesce(try(azurerm_monitor_action_group.fallback_env[0].id, null), local.ag_id)
   ag_id_core = local.ag_id
 }
 
-# ENV alerts — use the ENV provider; resource group name is just the string (we preflight it in the workflow)
 resource "azurerm_monitor_activity_log_alert" "rg_changes_env" {
   count               = (local.rg_env_name_resolved != null) ? 1 : 0
   provider            = azurerm.env
   name                = "rg-change-${var.product}-${local.env_effective}"
   location            = "Global"
   resource_group_name = local.rg_env_name_resolved
-  scopes              = [local.rg_env_id_resolved]   # exact RG id in ENV
+  scopes              = [local.rg_env_id_resolved]
   criteria { category = "Administrative" }
   action   { action_group_id = local.ag_id_env }
 
@@ -705,7 +640,6 @@ resource "azapi_resource" "monitor_workbook_overview" {
   count     = local.rg_core_name_resolved != null ? 1 : 0
   type      = "Microsoft.Insights/workbooks@2022-04-01"
   name      = random_uuid.wk_overview.result
-  # ⬇️ Use the RG ID resolved via the CORE provider → guarantees the CORE subscription
   parent_id = data.azurerm_resource_group.core_rg[0].id
   location  = var.location
 
@@ -744,29 +678,21 @@ resource "azapi_resource" "monitor_workbook_overview" {
   }
 }
 
-# -------------------------
-# AKS IDs: always read from platform outputs (even for dev)
-# dev AKS lives in core subscription, but platform-app still outputs the id, so this is consistent.
-# qa has none → compact() will just return [] and we won't create resources.
-# -------------------------
+# AKS diagnostics (env-gated)
 locals {
   aks_ids = toset(compact([
-    try(data.terraform_remote_state.platform.outputs.ids.aks,        null),
-    try(data.terraform_remote_state.platform.outputs.aks_id,         null),
-    try(data.terraform_remote_state.platform.outputs.kubernetes.id,  null),
+    try(data.terraform_remote_state.platform.outputs.ids.aks,       null),
+    try(data.terraform_remote_state.platform.outputs.aks_id,        null),
+    try(data.terraform_remote_state.platform.outputs.kubernetes.id, null),
   ]))
 
-  aks_map = { for id in local.aks_ids : id => id }
+  aks_map          = { for id in local.aks_ids : id => id }
+  aks_env_enabled  = contains(["dev","uat","prod"], local.env_effective)
 }
 
 data "azurerm_monitor_diagnostic_categories" "aks" {
   for_each    = local.aks_map
   resource_id = each.value
-}
-
-locals {
-  # Gate by env if you want to hard-disable for qa:
-  aks_env_enabled = contains(["dev","uat","prod"], var.env)
 }
 
 resource "azurerm_monitor_diagnostic_setting" "aks" {
@@ -782,9 +708,9 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
 
   dynamic "metric" {
     for_each = toset(try(data.azurerm_monitor_diagnostic_categories.aks[each.key].metrics, []))
-    content { 
-      category = metric.value 
-      enabled = true 
+    content {
+      category = metric.value
+      enabled  = true
     }
   }
 

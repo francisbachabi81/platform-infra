@@ -23,11 +23,6 @@ variable "plane" {
   }
 }
 
-variable "region" {
-  type    = string
-  default = null
-}
-
 variable "location" {
   type    = string
   default = null
@@ -43,7 +38,7 @@ variable "tenant_id" {
   default = null
 }
 
-# Backend/state settings (you pass these via -backend-config for actual backend; here for remote_state data sources)
+# Remote-state settings (for data sources)
 variable "state_rg" {
   type    = string
   default = null
@@ -66,20 +61,13 @@ variable "diag_name" {
   description = "Diagnostic setting name to apply to resources."
 }
 
-# Optional overrides carried in your tfvars
+# Optional overrides
 variable "ag_name" {
   type        = string
   default     = null
   description = "Optional Action Group name override."
 }
 
-variable "law_name" {
-  type        = string
-  default     = null
-  description = "Optional Log Analytics workspace name (informational)."
-}
-
-# Optional LAW override if you want to pin a workspace id
 variable "law_workspace_id_override" {
   type        = string
   default     = null
@@ -100,7 +88,7 @@ variable "enable_aks_diagnostics" {
   description = "Enable AKS diagnostic settings when AKS ids are discovered."
 }
 
-# NEW: optional, structured receivers (if you prefer name+email objects)
+# Structured receivers
 variable "action_group_email_receivers" {
   type = list(object({
     name          = string
@@ -110,14 +98,14 @@ variable "action_group_email_receivers" {
   description = "Optional structured list of receivers; if set, overrides alert_emails."
 }
 
-# NEW: optional extra tags to stamp on resources that support tags
+# Extra tags
 variable "tags_extra" {
   type        = map(string)
   default     = {}
   description = "Additional tags to apply to supported resources (e.g., Action Group)."
 }
 
-# --- provider scoping ---
+# Provider scoping
 variable "core_subscription_id" {
   type    = string
   default = null
@@ -138,6 +126,7 @@ variable "env_tenant_id" {
   default = null
 }
 
+# ENV RG override
 variable "env_rg_name" {
   type        = string
   default     = null

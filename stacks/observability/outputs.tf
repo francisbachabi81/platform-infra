@@ -49,20 +49,3 @@ output "diagnostic_setting_ids" {
     aks    = [for k, v in azurerm_monitor_diagnostic_setting.aks    : v.id]
   }
 }
-
-output "debug_obs_env_scope" {
-  value = {
-    env_subscription_id  = local.env_sub
-    env_tenant_id        = local.env_tenant
-    rg_app_name          = local.rg_app_name
-  }
-  sensitive = true
-}
-
-output "debug_obs_core_scope" {
-  value = {
-    core_subscription_id = local.core_sub
-    core_tenant_id       = local.core_tenant
-  }
-  sensitive = true
-}
