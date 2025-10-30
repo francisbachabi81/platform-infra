@@ -80,27 +80,37 @@ data "terraform_remote_state" "platform" {
 
 # Subscriptions resolved once
 locals {
-  sub_core = try(data.terraform_remote_state.core.outputs.meta.subscription, null)
-  sub_env  = coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, null))
+  product_env = var.product == "hrz" ? "usgovernment" : "public"
+
+  core_sub   = trimspace(coalesce(var.core_subscription_id, var.subscription_id))
+  core_tenant= trimspace(coalesce(var.core_tenant_id,     var.tenant_id))
+  env_sub    = trimspace(coalesce(var.env_subscription_id, var.subscription_id))
+  env_tenant = trimspace(coalesce(var.env_tenant_id,       var.tenant_id))
 }
 
-# Core subscription provider (for core-scoped resources)
-# Core subscription (e.g., core plane / shared RGs)
 provider "azurerm" {
-  alias   = "core"
   features {}
-  subscription_id = coalesce(var.core_subscription_id, var.subscription_id)
-  tenant_id       = coalesce(var.core_tenant_id,       var.tenant_id)
-  environment     = var.product == "hrz" ? "usgovernment" : "public"
+  subscription_id = local.env_sub
+  tenant_id       = local.env_tenant
+  environment     = local.product_env
 }
 
-# Env subscription (dev/qa/uat/prod)
+# Explicit ENV alias
 provider "azurerm" {
-  alias   = "env"
+  alias           = "env"
   features {}
-  subscription_id = coalesce(var.env_subscription_id, var.subscription_id)
-  tenant_id       = coalesce(var.env_tenant_id,       var.tenant_id)
-  environment     = var.product == "hrz" ? "usgovernment" : "public"
+  subscription_id = local.env_sub
+  tenant_id       = local.env_tenant
+  environment     = local.product_env
+}
+
+# Explicit CORE alias
+provider "azurerm" {
+  alias           = "core"
+  features {}
+  subscription_id = local.core_sub
+  tenant_id       = local.core_tenant
+  environment     = local.product_env
 }
 
 # Who am I (subscription/tenant) on each provider?
@@ -628,47 +638,31 @@ locals {
 }
 
 resource "azurerm_monitor_activity_log_alert" "rg_changes_env" {
-  count               = local.rg_app_name_resolved != null && local.ag_id_env != null && local.sub_env_resolved != null ? 1 : 0
+  count               = local.rg_app_name != null && local.ag_id != null ? 1 : 0
   provider            = azurerm.env
-  name                = "rg-change-${var.product}-${var.env}"
-  location            = local.activity_alert_location
-  resource_group_name = local.rg_app_name_resolved
-
-  # IMPORTANT: scope must be in *same* subscription as this rule (env)
-  scopes = [
-    "/subscriptions/${local.sub_env_resolved}/resourceGroups/${local.rg_app_name_resolved}"
-  ]
-
-  description = "Administrative operations in platform RG (env subscription)"
-  criteria    { category = "Administrative" }
-  action      { action_group_id = local.ag_id_env }
-
-  lifecycle {
-    precondition {
-      condition     = local.sub_env_resolved != null
-      error_message = "Env provider not authenticated / missing subscription."
-    }
-  }
+  name                = "rg-change-${var.product}-${local.env_effective}"
+  location            = "global"
+  resource_group_name = local.rg_app_name
+  scopes              = ["/subscriptions/${local.env_sub}/resourceGroups/${local.rg_app_name}"]
+  criteria { category = "Administrative" }
+  action   { action_group_id = local.ag_id }
 }
 
 resource "azurerm_monitor_activity_log_alert" "service_health_env" {
-  count               = local.ag_id_env != null && local.sub_env_resolved != null ? 1 : 0
+  count               = local.ag_id != null ? 1 : 0
   provider            = azurerm.env
-  name                = "service-health-${var.product}-${var.env}"
-  location            = local.activity_alert_location
-  resource_group_name = coalesce(local.rg_app_name_resolved, local.rg_core_name_resolved)
-
-  scopes = ["/subscriptions/${local.sub_env_resolved}"]
-
-  description = "Service Health incidents (env subscription)"
-  criteria    { category = "ServiceHealth" }
-  action      { action_group_id = local.ag_id_env }
+  name                = "service-health-${var.product}-${local.env_effective}"
+  location            = "global"
+  resource_group_name = coalesce(local.rg_app_name, local.rg_core_name)
+  scopes              = ["/subscriptions/${local.env_sub}"]
+  criteria { category = "ServiceHealth" }
+  action   { action_group_id = local.ag_id }
 }
 
 resource "azurerm_monitor_activity_log_alert" "service_health_core" {
   count               = local.rg_core_name_resolved != null && local.ag_id_core != null && local.sub_core_resolved != null ? 1 : 0
   provider            = azurerm.core
-  name                = "service-health-${var.product}-${local.env_effective}-core"
+  name                = "service-health-${var.product}-${local.plane_code}-core"
   location            = local.activity_alert_location
   resource_group_name = local.rg_core_name_resolved
   scopes              = ["/subscriptions/${local.sub_core_resolved}"]
@@ -687,7 +681,7 @@ resource "azurerm_monitor_activity_log_alert" "service_health_core" {
 resource "azurerm_monitor_activity_log_alert" "rg_changes_core" {
   count               = local.rg_core_name_resolved != null && local.ag_id_core != null && local.sub_core_resolved != null ? 1 : 0
   provider            = azurerm.core
-  name                = "rg-change-${var.product}-${local.env_effective}-core"
+  name                = "rg-change-${var.product}-${local.plane_code}-core"
   location            = local.activity_alert_location
   resource_group_name = local.rg_core_name_resolved
   scopes              = ["/subscriptions/${local.sub_core_resolved}/resourceGroups/${local.rg_core_name_resolved}"]
