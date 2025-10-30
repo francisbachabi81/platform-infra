@@ -641,9 +641,21 @@ resource "azapi_resource" "monitor_workbook_overview" {
   parent_id = data.azurerm_resource_group.core_rg[0].id
   location  = var.location
 
+  tags = merge(
+    {
+      "hidden-title" = "Observability Overview (${var.product}-${local.plane_code})"
+      "product"      = var.product
+      "env"          = local.plane_code
+      "plane"        = local.plane_code
+      "managed_by"   = "terraform"
+      "deployed_via" = "github-actions"
+    },
+    var.tags_extra
+  )
+
   body = {
     properties = {
-      displayName    = "Observability Overview (${var.product}-${local.env_effective})"
+      displayName    = "Observability Overview (${var.product}-${local.plane_code})"
       version        = "1.0"
       sourceId       = "/subscriptions/${local.sub_core_resolved}"
       category       = "workbook"
@@ -669,6 +681,7 @@ resource "azapi_resource" "monitor_workbook_overview" {
   }
 
   lifecycle {
+    ignore_changes = [output]
     precondition {
       condition     = local.rg_core_name_resolved != null
       error_message = "Core RG not resolved; cannot create workbook."
