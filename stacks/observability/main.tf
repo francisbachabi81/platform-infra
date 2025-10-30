@@ -264,6 +264,35 @@ data "azurerm_monitor_diagnostic_categories" "afd" {
 }
 
 # Diagnostic settings (to LAW)
+locals {
+  sub_env_target_id = local.sub_env_resolved != null ? "/subscriptions/${local.sub_env_resolved}" : null
+}
+
+resource "azurerm_monitor_diagnostic_setting" "sub_env" {
+  provider                   = azurerm.env
+  count                      = local.sub_env_target_id == null ? 0 : 1
+  name                       = var.diag_name
+  target_resource_id         = local.sub_env_target_id
+  log_analytics_workspace_id = local.law_id
+
+  # Explicit categories required for subscription-level Activity Logs
+  enabled_log { category = "Administrative" }
+  enabled_log { category = "Security" }
+  enabled_log { category = "ServiceHealth" }
+  enabled_log { category = "Alert" }
+  enabled_log { category = "Recommendation" }
+  enabled_log { category = "Policy" }
+  enabled_log { category = "Autoscale" }
+  enabled_log { category = "ResourceHealth" }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null
+      error_message = "LAW workspace ID not resolved for subscription diagnostics."
+    }
+  }
+}
+
 resource "azurerm_monitor_diagnostic_setting" "kv" {
   for_each                   = data.azurerm_monitor_diagnostic_categories.kv
   name                       = var.diag_name
@@ -632,61 +661,61 @@ resource "azurerm_monitor_activity_log_alert" "rg_changes_core" {
   action   { action_group_id = local.ag_id_core }
 }
 
-resource "random_uuid" "wk_overview" {}
+# resource "random_uuid" "wk_overview" {}
 
-resource "azapi_resource" "monitor_workbook_overview" {
-  count     = local.rg_core_name_resolved != null ? 1 : 0
-  type      = "Microsoft.Insights/workbooks@2022-04-01"
-  name      = random_uuid.wk_overview.result
-  parent_id = data.azurerm_resource_group.core_rg[0].id
-  location  = var.location
+# resource "azapi_resource" "monitor_workbook_overview" {
+#   count     = local.rg_core_name_resolved != null ? 1 : 0
+#   type      = "Microsoft.Insights/workbooks@2022-04-01"
+#   name      = random_uuid.wk_overview.result
+#   parent_id = data.azurerm_resource_group.core_rg[0].id
+#   location  = var.location
 
-  tags = merge(
-    {
-      "hidden-title" = "Observability Overview (${var.product}-${local.plane_code})"
-      "product"      = var.product
-      "env"          = local.plane_code
-      "plane"        = local.plane_code
-      "managed_by"   = "terraform"
-      "deployed_via" = "github-actions"
-    },
-    var.tags_extra
-  )
+#   tags = merge(
+#     {
+#       "hidden-title" = "Observability Overview (${var.product}-${local.plane_code})"
+#       "product"      = var.product
+#       "env"          = local.plane_code
+#       "plane"        = local.plane_code
+#       "managed_by"   = "terraform"
+#       "deployed_via" = "github-actions"
+#     },
+#     var.tags_extra
+#   )
 
-  body = {
-    properties = {
-      displayName    = "Observability Overview (${var.product}-${local.plane_code})"
-      version        = "1.0"
-      sourceId       = "/subscriptions/${local.sub_core_resolved}"
-      category       = "workbook"
-      serializedData = jsonencode({
-        version = "Notebook/1.0",
-        items = [{
-          type = 1,
-          content = {
-            json = {
-              query         = "AppRequests | where TimeGenerated > ago(1h) | summarize Requests = count()"
-              size          = 0
-              queryType     = 0
-              resourceType  = "microsoft.operationalinsights/workspaces"
-              visualization = "tile"
-              tileSettings  = { title = "Requests (1h)", subtitle = "" }
-            }
-          }
-        }],
-        isLocked = false
-      })
-    }
-    kind = "shared"
-  }
+#   body = {
+#     properties = {
+#       displayName    = "Observability Overview (${var.product}-${local.plane_code})"
+#       version        = "1.0"
+#       sourceId       = "/subscriptions/${local.sub_core_resolved}"
+#       category       = "workbook"
+#       serializedData = jsonencode({
+#         version = "Notebook/1.0",
+#         items = [{
+#           type = 1,
+#           content = {
+#             json = {
+#               query         = "AppRequests | where TimeGenerated > ago(1h) | summarize Requests = count()"
+#               size          = 0
+#               queryType     = 0
+#               resourceType  = "microsoft.operationalinsights/workspaces"
+#               visualization = "tile"
+#               tileSettings  = { title = "Requests (1h)", subtitle = "" }
+#             }
+#           }
+#         }],
+#         isLocked = false
+#       })
+#     }
+#     kind = "shared"
+#   }
 
-  lifecycle {
-    precondition {
-      condition     = local.rg_core_name_resolved != null
-      error_message = "Core RG not resolved; cannot create workbook."
-    }
-  }
-}
+#   lifecycle {
+#     precondition {
+#       condition     = local.rg_core_name_resolved != null
+#       error_message = "Core RG not resolved; cannot create workbook."
+#     }
+#   }
+# }
 
 # AKS diagnostics (env-gated)
 locals {
