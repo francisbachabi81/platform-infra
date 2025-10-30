@@ -24,3 +24,4 @@ tags_extra = {
 }
 
 env_rg_name="rg-pub-dev-cus-01"
+env_subscription_id="57f8aa30-981c-4764-94f6-6691c4d5c01c"

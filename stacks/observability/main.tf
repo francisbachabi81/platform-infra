@@ -88,10 +88,6 @@ locals {
   env_tenant   = trimspace(coalesce(var.env_tenant_id, var.tenant_id))
 }
 
-locals {
-  want_env_alerts = length(local.env_sub) > 0 && local.rg_app_name != null
-}
-
 # Explicit ENV alias
 provider "azurerm" {
   alias           = "env"
