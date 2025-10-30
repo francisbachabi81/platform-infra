@@ -561,61 +561,94 @@ resource "azurerm_monitor_activity_log_alert" "service_health" {
   }
 }
 
-resource "azurerm_monitor_workbook" "overview" {
-  count               = local.rg_core_name != null ? 1 : 0
-  name                = "wk-${var.product}-${var.env}-overview-${random_string.sfx.result}"
-  resource_group_name = local.rg_core_name
-  location            = var.location
-  display_name        = "Observability Overview (${var.product}-${var.env})"
-  version             = "1.0"
-  source_id           = "/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}"
+resource "azapi_resource" "monitor_workbook_overview" {
+  count = local.rg_core_name != null ? 1 : 0
 
-  serialized_data = jsonencode({
-    version = "Notebook/1.0",
-    items = [
-      {
-        type = 1,
-        content = {
-          json = {
-            query         = "AppRequests | where TimeGenerated > ago(1h) | summarize Requests = count()",
-            size          = 0,
-            queryType     = 0,
-            resourceType  = "microsoft.operationalinsights/workspaces",
-            visualization = "tile",
-            tileSettings  = { title = "Requests (1h)", subtitle = "" }
+  # /subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Insights/workbooks/{name}
+  type      = "Microsoft.Insights/workbooks@2022-04-01"
+  name      = "wk-${var.product}-${var.env}-overview-${random_string.sfx.result}"
+  parent_id = "/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}/resourceGroups/${local.rg_core_name}"
+  location  = var.location
+
+  body = jsonencode({
+    location   = var.location
+    properties = {
+      displayName = "Observability Overview (${var.product}-${var.env})"
+      version     = "1.0"
+      sourceId    = "/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}"
+      category    = "workbook"
+      serializedData = jsonencode({
+        version = "Notebook/1.0",
+        items = [{
+          type = 1,
+          content = {
+            json = {
+              query         = "AppRequests | where TimeGenerated > ago(1h) | summarize Requests = count()",
+              size          = 0,
+              queryType     = 0,
+              resourceType  = "microsoft.operationalinsights/workspaces",
+              visualization = "tile",
+              tileSettings  = { title = "Requests (1h)", subtitle = "" }
+            }
           }
-        }
-      }
-    ],
-    isLocked = false
+        }],
+        isLocked = false
+      })
+    }
+    kind = "shared" # or "user" if you want private
   })
 }
 
-# --- Diagnostic categories for AKS (add near the other `data "azurerm_monitor_diagnostic_categories"` blocks) ---
-data "azurerm_monitor_diagnostic_categories" "aks" {
-  for_each    = local.aks_map
-  resource_id = each.value
+
+# Which envs have AKS?
+locals {
+  aks_env_enabled = contains(["dev", "uat", "prod"], var.env)
 }
 
-# --- Diagnostic settings for AKS (same dynamic pattern as others) ---
+# Pull the AKS id(s) from the right state depending on env
+# - dev   → core state (rg-pub-np-cus-core-01 / hrz equivalent)
+# - qa    → none
+# - uat   → platform state (uat sub)
+# - prod  → platform state (prod sub)
+locals {
+  aks_ids_by_env = (
+    var.env == "dev"  ? compact([
+      try(data.terraform_remote_state.core.outputs.ids.aks, null),
+      try(data.terraform_remote_state.core.outputs.aks.id, null)
+    ]) :
+    contains(["uat","prod"], var.env) ? compact([
+      try(data.terraform_remote_state.platform.outputs.ids.aks, null),
+      try(data.terraform_remote_state.platform.outputs.aks.id, null),
+      try(data.terraform_remote_state.platform.outputs.kubernetes.id, null)
+    ]) :
+    [] # qa
+  )
+
+  aks_map = { for id in local.aks_ids_by_env : id => id }
+}
+
+# Gate the resource creation
+variable "enable_aks_diagnostics" {
+  type    = bool
+  default = true
+}
+
+# Use BOTH the env gate and the manual switch
 resource "azurerm_monitor_diagnostic_setting" "aks" {
-  for_each                   = var.enable_aks_diagnostics ? data.azurerm_monitor_diagnostic_categories.aks : {}
+  for_each                   = (var.enable_aks_diagnostics && local.aks_env_enabled) ? local.aks_map : {}
   name                       = var.diag_name
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
   dynamic "enabled_log" {
-    for_each = toset(try(each.value.logs, []))
-    content {
-      category = enabled_log.value
-    }
+    for_each = toset(try(data.azurerm_monitor_diagnostic_categories.aks[each.key].logs, []))
+    content { category = enabled_log.value }
   }
-
   dynamic "metric" {
-    for_each = toset(try(each.value.metrics, []))
-    content {
+    for_each = toset(try(data.azurerm_monitor_diagnostic_categories.aks[each.key].metrics, []))
+    content { 
       category = metric.value
-      enabled  = true
+      enabled = true 
     }
   }
 
@@ -625,4 +658,9 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
       error_message = "LAW workspace ID could not be resolved for AKS diagnostics."
     }
   }
+}
+
+data "azurerm_monitor_diagnostic_categories" "aks" {
+  for_each    = local.aks_map
+  resource_id = each.value
 }

@@ -6,3 +6,7 @@ terraform {
   }
   backend "azurerm" {}
 }
+
+provider "azapi" {
+  # inherits Azure auth from azurerm env vars
+}
