@@ -145,24 +145,6 @@ variable "cosmos_account_ids" {
   description = "Explicit Cosmos DB account resource IDs to enable diagnostics on."
 }
 
-variable "cosmos_log_categories" {
-  type = list(string)
-  default = [
-    "DataPlaneRequests",
-    "DataPlaneRequests5M",
-    "DataPlaneRequests15M",
-    "MongoRequests",
-    "QueryRuntimeStatistics",
-    "PartitionKeyStatistics",
-    "PartitionKeyRUConsumption",
-    "ControlPlaneRequests",
-    "CassandraRequests",
-    "GremlinRequests",
-    "TableApiRequests"
-  ]
-  description = "Cosmos DB diagnostic log categories to enable."
-}
-
 variable "enable_kv_diagnostics" {
   type        = bool
   default     = true
@@ -173,10 +155,4 @@ variable "key_vault_ids" {
   type        = list(string)
   default     = []
   description = "Explicit Key Vault resource IDs to enable diagnostics on."
-}
-
-variable "kv_log_categories" {
-  type        = list(string)
-  default     = ["AuditEvent","AzurePolicyEvaluationDetails"]
-  description = "Key Vault diagnostic log categories to enable."
 }

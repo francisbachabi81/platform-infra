@@ -323,7 +323,7 @@ resource "azurerm_monitor_diagnostic_setting" "kv" {
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
-  enabled_log { category = "AuditLogs" }
+  enabled_log { category = "AuditEvent" }
   enabled_log { category = "AzurePolicyEvaluationDetails" }
   
   dynamic "metric" {
