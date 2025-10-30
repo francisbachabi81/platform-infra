@@ -24,12 +24,6 @@ locals {
   activity_alert_location = "global"
 }
 
-# Subscriptions resolved once
-locals {
-  sub_core = try(data.terraform_remote_state.core.outputs.meta.subscription, null)
-  sub_env  = coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, null))
-}
-
 # Prefer the Platform stack's subscription/tenant if it emitted them (covers dev AKS in core sub),
 # otherwise fall back to the workflow-injected TF_VAR_subscription_id / TF_VAR_tenant_id.
 provider "azurerm" {
@@ -46,24 +40,6 @@ provider "azurerm" {
   )
 
   environment = var.product == "hrz" ? "usgovernment" : "public"
-}
-
-# Core subscription provider (for core-scoped resources)
-provider "azurerm" {
-  alias           = "core"
-  features        {}
-  subscription_id = local.sub_core
-  tenant_id       = coalesce(var.tenant_id, try(data.terraform_remote_state.core.outputs.meta.tenant, null))
-  environment     = var.product == "hrz" ? "usgovernment" : "public"
-}
-
-# Env subscription provider (for env-scoped resources)
-provider "azurerm" {
-  alias           = "env"
-  features        {}
-  subscription_id = local.sub_env
-  tenant_id       = coalesce(var.tenant_id, try(data.terraform_remote_state.platform.outputs.meta.tenant, null))
-  environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
 # -------------------------
@@ -100,6 +76,30 @@ data "terraform_remote_state" "platform" {
     key                  = "platform-app/${var.product}/${var.env}/terraform.tfstate"
     use_azuread_auth     = true
   }
+}
+
+# Subscriptions resolved once
+locals {
+  sub_core = try(data.terraform_remote_state.core.outputs.meta.subscription, null)
+  sub_env  = coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, null))
+}
+
+# Core subscription provider (for core-scoped resources)
+provider "azurerm" {
+  alias           = "core"
+  features        {}
+  subscription_id = local.sub_core
+  tenant_id       = coalesce(var.tenant_id, try(data.terraform_remote_state.core.outputs.meta.tenant, null))
+  environment     = var.product == "hrz" ? "usgovernment" : "public"
+}
+
+# Env subscription provider (for env-scoped resources)
+provider "azurerm" {
+  alias           = "env"
+  features        {}
+  subscription_id = local.sub_env
+  tenant_id       = coalesce(var.tenant_id, try(data.terraform_remote_state.platform.outputs.meta.tenant, null))
+  environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
 # -------------------------
