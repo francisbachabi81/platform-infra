@@ -236,6 +236,11 @@ jobs:
           # Only try to show/save a plan if tfplan exists (ec 0 or 2)
           terraform show -no-color tfplan > plan.txt
 
+      - name: Show plan exit code & outputs
+        run: |
+          echo "exitcode='${{ steps.plan.outputs.exitcode }}'"
+          echo "summary='${{ steps.summary.outputs.summary }}'"
+
       - name: Sanity check plan output (no embedded errors)
         if: ${{ steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2' }}
         shell: bash
@@ -269,6 +274,12 @@ jobs:
             echo "Artifact: \`observability-plan-${{ github.run_id }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Ensure plan artifact exists when changes
+        if: ${{ (steps.plan.outputs.exitcode || '0') == '2' }}
+        shell: bash
+        run: |
+          test -f tfplan && test -f plan.txt || { echo "Missing tfplan/plan.txt"; exit 1; }
+
       - name: Upload plan
         if: ${{ steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2' }}
         uses: actions/upload-artifact@v4
@@ -280,56 +291,61 @@ jobs:
             ${{ github.workspace }}/stacks/observability/plan.txt
 
       - name: Open approval issue
-        if: ${{ steps.plan.outputs.exitcode == '2' }}
+        if: ${{ (steps.plan.outputs.exitcode || '0') == '2' }}
         uses: actions/github-script@v7
         env:
           APPROVERS_CSV: ${{ env.APPROVERS_CSV }}
         with:
           script: |
-            const envVal = `${{ steps.sel.outputs.ENV }}`;
-            const product = `${{ steps.sel.outputs.PRODUCT }}`;
-            const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
-            const planSummary = `${{ steps.summary.outputs.summary }}`;
-            const stateKey   = `${{ steps.paths.outputs.STATE_KEY }}`;
+            try {
+              const envVal = `${{ steps.sel.outputs.ENV }}`;
+              const product = `${{ steps.sel.outputs.PRODUCT }}`;
+              const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+              const planSummary = `${{ steps.summary.outputs.summary }}`;
+              const stateKey   = `${{ steps.paths.outputs.STATE_KEY }}`;
 
-            const firstApprover = (process.env.APPROVERS_CSV || '')
-              .split(',')
-              .map(s => s.trim())
-              .filter(Boolean)[0];
+              const firstApprover = (process.env.APPROVERS_CSV || '')
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean)[0];
 
-            const branch   = (context.ref || '').replace('refs/heads/', '') || 'detached';
-            const shortSha = (context.sha || '').slice(0, 7);
-            const runNum   = context.runNumber;
+              const branch   = (context.ref || '').replace('refs/heads/', '') || 'detached';
+              const shortSha = (context.sha || '').slice(0, 7);
+              const runNum   = context.runNumber;
 
-            const title = `APPROVAL: observability | ${product}-${envVal} | ${branch} | #${runNum} | run ${context.runId} (${shortSha})`;
+              const title = `APPROVAL: observability | ${product}-${envVal} | ${branch} | #${runNum} | run ${context.runId} (${shortSha})`;
 
-            const body = `
-            **Plan ready**
-            - **Stack:** observability
-            - **Product:** ${product}
-            - **Env:** ${envVal}
-            - **Branch:** ${context.ref}
-            - **Commit:** ${context.sha}
-            - **Run:** ${runUrl}
-            - **State key:** \`${stateKey}\`
+              const body = `
+              **Plan ready**
+              - **Stack:** observability
+              - **Product:** ${product}
+              - **Env:** ${envVal}
+              - **Branch:** ${context.ref}
+              - **Commit:** ${context.sha}
+              - **Run:** ${runUrl}
+              - **State key:** \`${stateKey}\`
 
-            **Summary:** ${planSummary}
+              **Summary:** ${planSummary}
 
-            **Artifact:** \`observability-plan-${context.runId}\`
+              **Artifact:** \`observability-plan-${context.runId}\`
 
-            **Approve by commenting:** \`/approve ${context.runId}\`  
-            **Reject by commenting:** \`/reject ${context.runId}\`
-            `;
+              **Approve by commenting:** \`/approve ${context.runId}\`  
+              **Reject by commenting:** \`/reject ${context.runId}\`
+              `;
 
-            await github.rest.issues.create({
-              ...context.repo,
-              title,
-              body,
-              assignees: firstApprover ? [firstApprover] : undefined,
-              labels: [
-                'stack:observability',
-                `product:${product}`,
-                `env:${envVal}`,
-                `branch:${branch}`
-              ]
-            });
+              const resp = await github.rest.issues.create({
+                ...context.repo,
+                title,
+                body,
+                assignees: firstApprover ? [firstApprover] : undefined,
+                labels: [
+                  'stack:observability',
+                  `product:${product}`,
+                  `env:${envVal}`,
+                  `branch:${branch}`
+                ]
+              });
+              core.info(`Created issue #${resp.data.number}`);
+            } catch (e) {
+              core.setFailed(`Failed to create issue: ${e.message}`);
+            }
