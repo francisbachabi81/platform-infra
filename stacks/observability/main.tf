@@ -1,7 +1,25 @@
-# dev/qa -> nonprod plane; uat/prod -> prod plane (unchanged)
+# Resolve env/plane from either input; support YAML passing plane OR env
 locals {
-  plane_full = contains(["dev", "qa"], var.env) ? "nonprod" : "prod"
-  plane_code = contains(["dev", "qa"], var.env) ? "np" : "pr"
+  env_norm   = var.env == null ? null : lower(var.env)
+  plane_norm = var.plane == null ? null : lower(var.plane)
+
+  # If env is given, derive plane; else if plane is given, keep it;
+  # default to nonprod/dev if nothing provided (useful for ad-hoc runs).
+  env_effective = coalesce(
+    local.env_norm,
+    local.plane_norm == "nonprod" ? "dev" :
+    local.plane_norm == "prod"    ? "prod" :
+    "dev"
+  )
+
+  plane_effective = coalesce(
+    local.plane_norm,
+    contains(["dev","qa"], local.env_effective) ? "nonprod" : "prod"
+  )
+
+  # Keep your original names
+  plane_full = local.plane_effective                 # "nonprod" | "prod"
+  plane_code = local.plane_effective == "nonprod" ? "np" : "pr"
 }
 
 # Prefer the Platform stack's subscription/tenant if it emitted them (covers dev AKS in core sub),
@@ -511,16 +529,23 @@ resource "random_string" "sfx" {
   upper   = false
 }
 
+locals {
+  # Prefer the structured receivers if provided; otherwise use plain alert_emails
+  alert_emails_effective = length(var.action_group_email_receivers) > 0 ? [for r in var.action_group_email_receivers : r.email_address] : var.alert_emails
+}
+
 resource "azurerm_monitor_action_group" "fallback" {
   count               = local.action_group_id == null ? 1 : 0
-  name                = "ag-${var.product}-${var.env}-${random_string.sfx.result}"
+  name                = coalesce(var.ag_name, "ag-${var.product}-${local.env_effective}-${random_string.sfx.result}")
   resource_group_name = coalesce(local.rg_core_name, local.rg_app_name)
   short_name          = "obs${random_string.sfx.result}"
   location            = var.location
+  tags                = var.tags_extra
 
   dynamic "email_receiver" {
-    for_each = toset(var.alert_emails)
+    for_each = toset(local.alert_emails_effective)
     content {
+      # Give each receiver a stable name; fall back to the email as the name
       name          = "email-${replace(email_receiver.value, "@", "_")}"
       email_address = email_receiver.value
     }
@@ -533,7 +558,7 @@ locals {
 
 resource "azurerm_monitor_activity_log_alert" "rg_changes" {
   count               = local.rg_app_name != null && local.ag_id != null ? 1 : 0
-  name                = "rg-change-${var.product}-${var.env}"
+  name                = "rg-change-${var.product}-${local.env_effective}"
   location            = var.location
   resource_group_name = local.rg_app_name
   scopes              = ["/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}/resourceGroups/${local.rg_app_name}"]
@@ -550,7 +575,7 @@ resource "azurerm_monitor_activity_log_alert" "rg_changes" {
 
 resource "azurerm_monitor_activity_log_alert" "service_health" {
   count               = local.ag_id != null ? 1 : 0
-  name                = "service-health-${var.product}-${var.env}"
+  name                = "service-health-${var.product}-${local.env_effective}"
   location            = var.location
   resource_group_name = coalesce(local.rg_core_name, local.rg_app_name)
   scopes              = ["/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}"]
@@ -569,14 +594,14 @@ resource "azapi_resource" "monitor_workbook_overview" {
   count = local.rg_core_name != null ? 1 : 0
 
   type      = "Microsoft.Insights/workbooks@2022-04-01"
-  name      = "wk-${var.product}-${var.env}-overview-${random_string.sfx.result}"
+  name      = "wk-${var.product}-${local.env_effective}-overview-${random_string.sfx.result}"
   parent_id = "/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}/resourceGroups/${local.rg_core_name}"
   location  = var.location
 
   body = jsonencode({
     location   = var.location
     properties = {
-      displayName    = "Observability Overview (${var.product}-${var.env})"
+      displayName    = "Observability Overview (${var.product}-${local.env_effective})"
       version        = "1.0"
       sourceId       = "/subscriptions/${coalesce(var.subscription_id, try(data.terraform_remote_state.platform.outputs.meta.subscription, ""))}"
       category       = "workbook"

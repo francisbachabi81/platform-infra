@@ -1,74 +1,118 @@
 variable "product" {
-  description = "Product (hrz = Azure Gov, pub = Azure Commercial)"
   type        = string
+  description = "hrz (Azure Gov) or pub (Azure Commercial)"
 }
 
 variable "env" {
-  description = "Environment (dev, qa, uat, prod)"
   type        = string
-
+  default     = null
+  description = "dev | qa | uat | prod (optional if plane provided)"
   validation {
-    condition     = contains(["dev", "qa", "uat", "prod"], var.env)
-    error_message = "env must be one of dev, qa, uat, prod."
+    condition     = var.env == null || contains(["dev", "qa", "uat", "prod"], lower(var.env))
+    error_message = "env must be one of: dev, qa, uat, prod."
   }
 }
 
-variable "subscription_id" {
-  description = "Target subscription for this env. If null, pulled from platform-app meta output."
+variable "plane" {
   type        = string
   default     = null
+  description = "nonprod | prod (optional if env provided)"
+  validation {
+    condition     = var.plane == null || contains(["nonprod", "prod"], lower(var.plane))
+    error_message = "plane must be one of: nonprod, prod."
+  }
 }
 
-variable "tenant_id" {
-  description = "Tenant for the target subscription. If null, pulled from platform-app meta output."
-  type        = string
-  default     = null
-}
-
-variable "state_rg" {
-  description = "Terraform state RG name (shared)"
-  type        = string
-  default     = "rg-core-infra-state"
-}
-
-variable "state_sa" {
-  description = "Terraform state storage account name (shared)"
-  type        = string
-  default     = "sacoretfstateinfra"
-}
-
-variable "state_container" {
-  description = "Terraform state container"
-  type        = string
-  default     = "tfstate"
-}
-
-variable "diag_name" {
-  description = "Name of each diagnostic setting resource"
-  type        = string
-  default     = "send-to-law"
-}
-
-variable "law_workspace_id_override" {
-  description = "Override Log Analytics Workspace ID; if null the Core stack LAW will be used."
-  type        = string
-  default     = null
-}
-
-variable "alert_emails" {
-  description = "Optional list of email receivers for activity log alerts (used only if Core stack action_group is absent)."
-  type        = list(string)
-  default     = []
+variable "region" {
+  type    = string
+  default = null
 }
 
 variable "location" {
-  description = "Azure location for workbook (use same as Core/Platform)"
-  type        = string
-  default     = "eastus"
+  type    = string
+  default = null
 }
 
+variable "subscription_id" {
+  type    = string
+  default = null
+}
+
+variable "tenant_id" {
+  type    = string
+  default = null
+}
+
+# Backend/state settings (you pass these via -backend-config for actual backend; here for remote_state data sources)
+variable "state_rg" {
+  type    = string
+  default = null
+}
+
+variable "state_sa" {
+  type    = string
+  default = null
+}
+
+variable "state_container" {
+  type    = string
+  default = null
+}
+
+# Diagnostics / naming
+variable "diag_name" {
+  type        = string
+  default     = "obs-diag"
+  description = "Diagnostic setting name to apply to resources."
+}
+
+# Optional overrides carried in your tfvars
+variable "ag_name" {
+  type        = string
+  default     = null
+  description = "Optional Action Group name override."
+}
+
+variable "law_name" {
+  type        = string
+  default     = null
+  description = "Optional Log Analytics workspace name (informational)."
+}
+
+# Optional LAW override if you want to pin a workspace id
+variable "law_workspace_id_override" {
+  type        = string
+  default     = null
+  description = "If set, send all diagnostic settings to this LAW id."
+}
+
+# Alerting recipients
+variable "alert_emails" {
+  type        = list(string)
+  default     = []
+  description = "Email recipients for fallback Action Group (if core AG not found)."
+}
+
+# Feature flags
 variable "enable_aks_diagnostics" {
-  description = "If true, attach diagnostic settings for AKS clusters discovered in the platform-app remote state."
   type        = bool
   default     = true
+  description = "Enable AKS diagnostic settings when AKS ids are discovered."
+}
+
+# NEW: optional, structured receivers (if you prefer name+email objects)
+variable "action_group_email_receivers" {
+  type = list(object({
+    name          = string
+    email_address = string
+  }))
+  default     = []
+  description = "Optional structured list of receivers; if set, overrides alert_emails."
+}
+
+# NEW: optional extra tags to stamp on resources that support tags
+variable "tags_extra" {
+  type        = map(string)
+  default     = {}
+  description = "Additional tags to apply to supported resources (e.g., Action Group)."
 }

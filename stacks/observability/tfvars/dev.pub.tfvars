@@ -1,24 +1,24 @@
 # ---- Observability (PUB | dev) ----
-env         = "dev"
-product     = "pub"
-plane       = "np"
-location    = "Central US"
-region      = "cus"
+product  = "pub"
+env      = "dev"
+# plane is derived from env; if you want to pass plane explicitly, use: plane = "nonprod"
+location = "Central US"
+region   = "cus"
 
-rg_name     = "rg-obs-pub-dev-cus-01"
-law_name    = "law-pub-dev-cus-01"
-ag_name     = "ag-obs-pub-dev-cus-01"
+# Optional, informational only (declared and safe to keep)
+law_name = "law-pub-dev-cus-01"
+ag_name  = "ag-obs-pub-dev-cus-01"
 
-law_sku             = "PerGB2018"
-law_retention_days  = 30
-
-enable_container_insights = true
-enable_vm_insights        = true
-enable_ama_dcr            = true
-
+# Use either the structured list below OR simple alert_emails = [...]
 action_group_email_receivers = [
   { name = "Ops", email_address = "ops@example.com" }
 ]
 
-diag_categories = ["AuditEvent","Security","AppServiceHTTPLogs","StorageRead","StorageWrite"]
-tags_extra = { purpose = "observability", layer = "platform" }
+# If you prefer the simple list instead, comment the block above and use:
+# alert_emails = ["ops@example.com"]
+
+# Extra tags (now applied to the Action Group)
+tags_extra = {
+  purpose = "observability"
+  layer   = "platform"
+}
