@@ -1,3 +1,19 @@
+# In the observability stack (root of that module)
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 4.9.0"
+    }
+    azapi = {
+      source  = "azure/azapi"
+      version = "~> 2.0"
+    }
+  }
+}
+
+provider "azapi" {}
+
 locals {
   plane_full = contains(["dev", "qa"], var.env) ? "nonprod" : "prod"
   plane_code = contains(["dev", "qa"], var.env) ? "np" : "pr"
