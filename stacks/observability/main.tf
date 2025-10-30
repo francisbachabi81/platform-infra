@@ -627,30 +627,31 @@ locals {
   ag_id_core = local.ag_id
 }
 
+# ENV alerts — use the ENV provider; resource group name is just the string (we preflight it in the workflow)
 resource "azurerm_monitor_activity_log_alert" "rg_changes_env" {
-  count               = local.rg_app_name_resolved != null && local.ag_id_env != null ? 1 : 0
+  count               = local.rg_app_name != null && local.ag_id_env != null ? 1 : 0
   provider            = azurerm.env
   name                = "rg-change-${var.product}-${local.env_effective}"
   location            = "global"
-  resource_group_name = local.rg_app_name_resolved
-  scopes              = ["/subscriptions/${local.sub_env_resolved}/resourceGroups/${local.rg_app_name_resolved}"]
+  resource_group_name = local.rg_app_name
+  scopes              = ["/subscriptions/${local.sub_env_resolved}/resourceGroups/${local.rg_app_name}"]
   criteria { category = "Administrative" }
   action   { action_group_id = local.ag_id_env }
 
   lifecycle {
     precondition {
-      condition     = local.sub_env_resolved != null && local.rg_app_name_resolved != null
+      condition     = local.sub_env_resolved != null && local.rg_app_name != null
       error_message = "ENV subscription/RG not resolved; cannot create env RG change alert."
     }
   }
 }
 
 resource "azurerm_monitor_activity_log_alert" "service_health_env" {
-  count               = local.ag_id_env != null && local.sub_env_resolved != null ? 1 : 0
+  count               = local.ag_id_env != null ? 1 : 0
   provider            = azurerm.env
   name                = "service-health-${var.product}-${local.env_effective}"
   location            = "global"
-  resource_group_name = coalesce(local.rg_app_name_resolved, local.rg_core_name_resolved)
+  resource_group_name = coalesce(local.rg_app_name, local.rg_core_name)
   scopes              = ["/subscriptions/${local.sub_env_resolved}"]
   criteria { category = "ServiceHealth" }
   action   { action_group_id = local.ag_id_env }
