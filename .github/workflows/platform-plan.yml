@@ -29,7 +29,7 @@ permissions:
   issues: write
 
 env:
-  ARM_USE_OIDC: true
+  # ARM_USE_OIDC: true
   TF_IN_AUTOMATION: true
   APPROVERS_CSV: "francisbachabi81,user2"
 
