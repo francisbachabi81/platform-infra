@@ -96,12 +96,25 @@ pg_storage_mb            = 32768
 pg_geo_redundant_backup  = false
 pg_delegated_subnet_name = "pgflex"
 pg_aad_auth_enabled      = true
-pg_ha_enabled            = false
-pg_zone                  = "2"
-pg_ha_zone               = "3"
+# HA/Replica logic:
+# - pg_ha_enabled and pg_replica_enabled are mutually exclusive.
+# - pg_ha_enabled = true → built-in HA (no replica module).
+# - pg_replica_enabled = true & pg_ha_enabled = false → create read replica.
+# - both = false → single primary only.
+#
+# Zones:
+# - Azure Government (e.g. usgovarizona):
+#       • Many SKUs (incl. Standard_B1ms) have supportedZones = [],
+#         so pg_zone must be null and only SameZone HA is possible.
+# - Azure Commercial:
+#       • pg_zone may be set explicitly (1/2/3) if SKU/region supports it.
+#       • HA may support SameZone or ZoneRedundant depending on SKU/region.
+pg_ha_enabled            = false  # HA OFF
+pg_zone                  = null   # important change: no explicit AZ
+pg_ha_zone               = "2"    # effectively ignored while HA is off
 pg_firewall_rules        = []
 pg_databases             = ["appdb"]
-pg_replica_enabled       = false
+pg_replica_enabled       = false  # no replica
 pg_enable_postgis        = true
 # pg_admin_password via TF_VAR_pg_admin_password
 
