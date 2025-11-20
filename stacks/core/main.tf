@@ -44,6 +44,10 @@ locals {
   create_scope_pub  = local.enable_public_features
   create_scope_hrz  = local.enable_hrz_features
   create_scope_both = local.enable_both
+
+  acs_name       = "acs-${var.product}-${local.plane_code}-${var.region}-01"
+  email_svc_name = "acse-${var.product}-${local.plane_code}-${var.region}-01"
+  email_dom_name = "acsdom-${var.product}-${local.plane_code}-${var.region}-01"
 }
 
 # shared-network state (optional)
@@ -265,4 +269,18 @@ KQL
     azurerm_log_analytics_workspace.plane,         # Workspace must exist
     azurerm_monitor_action_group.core              # Action group (if created) must exist
   ]
+}
+
+module "communication" {
+  source = "../../modules/communication"
+
+  resource_group_name = local.rg_name_core
+  acs_name            = local.acs_name
+  email_service_name  = local.email_svc_name
+  email_domain_name   = local.email_dom_name
+
+  # this is a geography, not the Azure region name
+  data_location = "United States"
+
+  tags = local.tags_common
 }

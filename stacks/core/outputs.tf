@@ -97,3 +97,30 @@ output "observability" {
   }
   sensitive = true
 }
+
+output "communication_services" {
+  value = {
+    communication_service = try({
+      id           = module.communication.acs.id
+      name         = module.communication.acs.name
+      # Only ACS has connection strings
+      primary_key  = module.communication.acs_keys.primary_key
+      primary_connection_string = module.communication.acs_keys.primary_connection_string
+    }, null)
+
+    email_service = try({
+      id   = module.communication.email_service.id
+      name = module.communication.email_service.name
+    }, null)
+
+    email_domain = try({
+      id                = module.communication.email_domain.id
+      name              = module.communication.email_domain.name
+      domain_management = module.communication.email_domain.domain_management
+    }, null)
+
+    features = try(module.communication.features, null)
+  }
+
+  sensitive = true  # because it contains ACS keys/connection strings
+}
