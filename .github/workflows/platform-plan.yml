@@ -218,6 +218,7 @@ jobs:
           audience:        ${{ steps.sel.outputs.AUDIENCE }}
 
       - name: Terraform Fmt & Validate
+        id: validate
         shell: bash
         run: |
           set -euo pipefail
@@ -241,7 +242,8 @@ jobs:
           terraform show -no-color tfplan > plan.txt
 
       - name: Sanity check plan output (no embedded errors)
-        if: ${{ steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2' }}
+        id: sanity
+        if: ${{ success() && (steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2') }}
         shell: bash
         run: |
           if grep -q '^Error:' plan.txt; then
@@ -281,7 +283,7 @@ jobs:
 
       - name: Parse plan JSON for changes
         id: parse
-        if: ${{ steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2' }}
+        if: ${{ success() && (steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2') }}
         shell: bash
         run: |
           set -euo pipefail
@@ -296,9 +298,28 @@ jobs:
           if [ "${COUNT}" -gt 0 ] && [ "${{ steps.plan.outputs.exitcode }}" = "0" ]; then
             echo "::warning::Detected changes from JSON but exitcode=0; will treat as changes."
           fi
+      - name: Collect status / error summary
+        id: status
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ERR_COUNT=0
+          if [ -f "plan.txt" ]; then
+            ERR_COUNT=$(grep -c '^Error:' plan.txt || true)
+          fi
+
+          echo "error_count=${ERR_COUNT}" >> "$GITHUB_OUTPUT"
+
+      - name: Mark pipeline had errors
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          echo "HAS_PIPELINE_FAILURE=true" >> "$GITHUB_ENV"
 
       - name: Upload plan
-        if: ${{ steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true' }}
+        if: ${{ success() && (steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true') }}
         uses: actions/upload-artifact@v4
         with:
           name: platform-plan-${{ github.run_id }}
@@ -309,7 +330,7 @@ jobs:
             ${{ github.workspace }}/stacks/platform-app/plan.json
 
       - name: Open approval issue
-        if: ${{ steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true' }}
+        if: ${{ always() && (steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true' || env.HAS_PIPELINE_FAILURE == 'true' || steps.status.outputs.error_count != '0') }}
         uses: actions/github-script@v7
         env:
           APPROVERS_CSV: ${{ env.APPROVERS_CSV }}
@@ -329,10 +350,28 @@ jobs:
             const shortSha = (context.sha || '').slice(0, 7);
             const runNum   = context.runNumber;
 
+            const errorCountRaw = '${{ steps.status.outputs.error_count }}';
+            const errorCount = parseInt(errorCountRaw || '0', 10) || 0;
+            const pipelineFailed = (process.env.HAS_PIPELINE_FAILURE === 'true');
+            const planExitCode = '${{ steps.plan.outputs.exitcode }}';
+
+            const hasErrors = pipelineFailed || errorCount > 0;
+
+            let headlineStatus;
+            if (hasErrors) {
+              headlineStatus = `⚠️ This plan run had errors. Please review the Actions logs before approving. (Error lines in plan.txt: ${errorCount})`;
+            } else if (planExitCode === '2') {
+              headlineStatus = '✅ Plan succeeded with pending changes.';
+            } else if (planExitCode === '0') {
+              headlineStatus = '✅ Plan succeeded with no changes.';
+            } else {
+              headlineStatus = 'ℹ️ Plan status is not fully determined from exit code.';
+            }
+
             const title = `APPROVAL: platform-app | ${product}-${envVal} | ${branch} | #${runNum} | run ${context.runId} (${shortSha})`;
 
             const body = `
-            **Plan ready**
+            **Plan ready (${hasErrors ? '❌ WITH ERRORS' : '✅ clean'})**
             - **Stack:** platform-app
             - **Product:** ${product}
             - **Env:** ${envVal}
@@ -342,6 +381,10 @@ jobs:
             - **State key:** \`${stateKey}\`
 
             **Summary:** ${planSummary}
+
+            ${headlineStatus}
+
+            ${hasErrors ? '> ⚠️ One or more steps in this workflow failed or errors were detected in the plan output. Do **not** approve until the errors are understood and resolved.\n' : ''}
 
             **Artifact:** \`platform-plan-${context.runId}\`
             **JSON:** \`plan.json\`
