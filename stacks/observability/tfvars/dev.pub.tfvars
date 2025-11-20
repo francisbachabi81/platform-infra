@@ -9,8 +9,17 @@ ag_name  = "ag-obs-pub-dev-cus-01"
 
 # Use either the structured list below OR simple alert_emails = [...]
 action_group_email_receivers = [
-  { name = "Ops", email_address = "ops@example.com" }
+  {
+    name                    = "Ops"
+    email_address           = "ops@example.gov"
+    use_common_alert_schema = true
+  },
+  {
+    name          = "OnCall"
+    email_address = "oncall@example.gov"
+  }
 ]
+
 # alert_emails = ["ops@example.com"]
 
 # Extra tags
