@@ -267,8 +267,17 @@ locals {
   shared_np_core_rg_name    = try(data.terraform_remote_state.core[0].outputs.resource_group.name, null)
 
   # From SHARED-NETWORK state: nonprod hub → akspub subnet
-  np_hub_vnet_id        = try(local.rs_outputs.vnets["nonprod_hub"].id, null)
-  np_hub_subnet_akspub  = try(local.rs_outputs.vnets["nonprod_hub"].subnets["akspub"], null)
+  # np_hub_vnet_id        = try(local.rs_outputs.vnets["nonprod_hub"].id, null)
+  # np_hub_subnet_akspub  = try(local.rs_outputs.vnets["nonprod_hub"].subnets["akspub"], null)
+  np_hub_vnet_id = try(local.rs_outputs.vnets["nonprod_hub"].id, null)
+
+  # For nonprod hub, use akshrz for hrz, akspub for pub
+  np_hub_subnet_aks = try(
+    local.rs_outputs.vnets["nonprod_hub"].subnets[
+      var.product == "hrz" ? "akshrz" : "akspub"
+    ],
+    null
+  )
 
   # Which provider alias to use for AKS (for docs/outputs only)
   aks_provider_alias = (
@@ -300,8 +309,20 @@ locals {
   # AKS nodepool subnet:
   # - dev → nonprod hub akspub
   # - prod/uat → existing env-derived value
+  # aks_default_nodepool_subnet_id = (
+  #   var.env == "dev" ? local.np_hub_subnet_akspub : local.aks_nodepool_subnet_effective
+  # )
   aks_default_nodepool_subnet_id = (
-    var.env == "dev" ? local.np_hub_subnet_akspub : local.aks_nodepool_subnet_effective
+    var.env == "dev"
+      ? coalesce(
+          (
+            var.aks_nodepool_subnet_id != null && trimspace(var.aks_nodepool_subnet_id) != ""
+              ? var.aks_nodepool_subnet_id
+              : null
+          ),
+          local.np_hub_subnet_aks
+        )
+      : local.aks_nodepool_subnet_effective
   )
 
   # PDZ id (unchanged source)
@@ -986,8 +1007,14 @@ module "cdbpg1" {
 
 # PostgreSQL Flexible (env)
 locals {
+  _pg_pdz_pub = "privatelink.postgres.database.azure.com"
+  _pg_pdz_gov = "privatelink.postgres.database.usgovcloudapi.net"
+
+  _pg_pdz_name = var.product == "hrz" ? local._pg_pdz_gov : local._pg_pdz_pub
+
   pgflex_subnet_id        = try(local.subnet_ids_from_state[var.pg_delegated_subnet_name], null)
-  pg_private_zone_id      = try(local.zone_ids_effective["privatelink.postgres.database.azure.com"], null)
+  pg_private_zone_id      = try(local.zone_ids_effective[local._pg_pdz_name], null)
+  # pg_private_zone_id      = try(local.zone_ids_effective["privatelink.postgres.database.azure.com"], null)
   pg_name1                = "pgflex-${var.product}-${var.env}-${var.region}-01"
   pg_geo_backup_effective = var.env == "prod" ? true : var.pg_geo_redundant_backup
 }
