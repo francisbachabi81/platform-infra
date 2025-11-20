@@ -45,6 +45,9 @@ jobs:
             AUDIENCE="api://AzureADTokenExchange"
             STATE_SUB="${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}"
             if [ "$PLANE" = "prod" ]; then TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}"; else TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}"; fi
+            # PUB DB secrets (environment secrets)
+            CDBPG_ADMIN_PASSWORD='${{ secrets.CDBPG_ADMIN_PASSWORD_PUB }}'
+            PG_ADMIN_PASSWORD='${{ secrets.PG_ADMIN_PASSWORD_PUB }}'
           fi
 
           echo "ENV=$ENV_IN"            >> $GITHUB_OUTPUT
