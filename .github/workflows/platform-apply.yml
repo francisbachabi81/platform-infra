@@ -39,6 +39,9 @@ jobs:
             AUDIENCE="api://AzureADTokenExchangeUSGov"
             STATE_SUB="${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}"
             if [ "$PLANE" = "prod" ]; then TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}"; else TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}"; fi
+            # HRZ DB secrets (environment secrets)
+            CDBPG_ADMIN_PASSWORD='${{ secrets.CDBPG_ADMIN_PASSWORD_HRZ }}'
+            PG_ADMIN_PASSWORD='${{ secrets.PG_ADMIN_PASSWORD_HRZ }}'
           else
             CLOUD_ENV="AzureCloud"; ARM_ENV="public"
             TENANT="${{ secrets.AZ_TENANT_PUB }}"; CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
