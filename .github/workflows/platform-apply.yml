@@ -75,6 +75,8 @@ jobs:
             echo "TF_VAR_subscription_id=$TARGET_SUB"
             echo "TF_VAR_hub_tenant_id=$TENANT"
             echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
+            echo "TF_VAR_cdbpg_admin_password=$CDBPG_ADMIN_PASSWORD"
+            echo "TF_VAR_pg_admin_password=$PG_ADMIN_PASSWORD"
           } >> $GITHUB_ENV
 
       - name: Resolve tfvars & backend key
