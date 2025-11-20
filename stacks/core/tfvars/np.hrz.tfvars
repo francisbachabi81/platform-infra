@@ -3,7 +3,7 @@ product         = "hrz"
 location        = "USGov Arizona"
 region          = "usaz"
 
-subscription_id = "641d3872-8322-4bdb-83ce-bfbc119fa3cd"
+subscription_id = "df6dc63f-c4dc-4590-ba4b-f2ce9639ca6c"
 tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
 tags = {

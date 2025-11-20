@@ -74,7 +74,7 @@ locals {
   sa_suffix_short = substr(local.sa_suffix_clean, 0, 6)
 
   sa1_name  = substr("sa${var.product}${var.env}${var.region}01${local.uniq}", 0, 24)
-  aks1_name = "aks-${var.product}-${var.env}-${var.region}-100"
+  aks1_name = "aks-${var.product}-${var.env}-${var.region}-01"
 
   rg_hub = coalesce(var.rg_plane_name, "rg-${var.product}-${local.plane_code}-${var.region}-core-01")
 
@@ -332,7 +332,7 @@ check "aks_pdz_exists" {
 
 # Key Vault (env)
 locals {
-  kv1_base_name    = "kvt-${var.product}-${var.env}-${var.region}-100"
+  kv1_base_name    = "kvt-${var.product}-${var.env}-${var.region}-01"
   kv1_name_cleaned = replace(lower(trimspace(local.kv1_base_name)), "-", "")
 }
 
@@ -384,7 +384,7 @@ module "sa1" {
 
 # Cosmos (NoSQL) (env)
 locals {
-  cosmos1_name         = "cosno-${var.product}-${var.env}-${var.region}-100"
+  cosmos1_name         = "cosno-${var.product}-${var.env}-${var.region}-01"
   cosmos1_name_cleaned = replace(lower(trimspace(local.cosmos1_name)), "-", "")
   cosmos_enabled       = local.enable_public_features
 }
@@ -480,7 +480,7 @@ locals {
 resource "azurerm_user_assigned_identity" "aks_env_shared_nonprod" {
   count               = local.aks_enabled_env && var.env == "dev" ? 1 : 0
   provider            = azurerm.shared_nonprod
-  name                = "uai-${var.product}-${local.plane_code}-${var.region}-aks-100"
+  name                = "uai-${var.product}-${local.plane_code}-${var.region}-aks-01"
   location            = var.location
   resource_group_name = local.aks_rg_name_effective
   tags                = merge(local.tags_common, { purpose = "aks-control-plane-identity" }, var.tags)
@@ -489,7 +489,7 @@ resource "azurerm_user_assigned_identity" "aks_env_shared_nonprod" {
 resource "azurerm_user_assigned_identity" "aks_env_prod" {
   count               = local.aks_enabled_env && var.env == "prod" ? 1 : 0
   provider            = azurerm.prod
-  name                = "uai-${var.product}-${var.env}-${var.region}-aks-100"
+  name                = "uai-${var.product}-${var.env}-${var.region}-aks-01"
   location            = var.location
   resource_group_name = local.aks_rg_name_effective
   tags                = merge(local.tags_common, { purpose = "aks-control-plane-identity" }, var.tags)
@@ -498,7 +498,7 @@ resource "azurerm_user_assigned_identity" "aks_env_prod" {
 resource "azurerm_user_assigned_identity" "aks_env_uat" {
   count               = local.aks_enabled_env && var.env == "uat" ? 1 : 0
   provider            = azurerm.uat
-  name                = "uai-${var.product}-${var.env}-${var.region}-aks-100"
+  name                = "uai-${var.product}-${var.env}-${var.region}-aks-01"
   location            = var.location
   resource_group_name = local.aks_rg_name_effective
   tags                = merge(local.tags_common, { purpose = "aks-control-plane-identity" }, var.tags)
@@ -566,7 +566,7 @@ module "aks1_env_shared_nonprod" {
   source    = "../../modules/aks"
   providers = { azurerm = azurerm.shared_nonprod }
 
-  name                        = "aks-${var.product}-${local.plane_code}-${var.region}-100"
+  name                        = "aks-${var.product}-${local.plane_code}-${var.region}-01"
   location                    = var.location
   resource_group_name         = local.aks_rg_name_effective
   node_resource_group         = "rg-${var.product}-${local.plane_code}-${var.region}-aksn-01"
@@ -766,7 +766,7 @@ module "sbns1" {
   count  = (local.enable_both && var.create_servicebus) ? 1 : 0
   source = "../../modules/servicebus"
 
-  name                = "svb-${var.product}-${var.env}-${var.region}-100"
+  name                = "svb-${var.product}-${var.env}-${var.region}-01"
   location            = var.location
   resource_group_name = var.rg_name
 
@@ -799,7 +799,7 @@ module "sbns1" {
 module "plan1_func" {
   count               = local.enable_both ? 1 : 0
   source              = "../../modules/app-service-plan"
-  name                = "asp-${var.product}-${var.env}-${var.region}-100"
+  name                = "asp-${var.product}-${var.env}-${var.region}-01"
   location            = var.location
   resource_group_name = var.rg_name
   os_type             = var.asp_os_type
@@ -810,9 +810,9 @@ module "plan1_func" {
 }
 
 locals {
-  funcapp1_name       = "func-${var.product}-${var.env}-${var.region}-100"
+  funcapp1_name       = "func-${var.product}-${var.env}-${var.region}-01"
   funcapp1_name_clean = replace(lower(trimspace(local.funcapp1_name)), "-", "")
-  funcapp2_name       = "func-${var.product}-${var.env}-${var.region}-102"
+  funcapp2_name       = "func-${var.product}-${var.env}-${var.region}-02"
   funcapp2_name_clean = replace(lower(trimspace(local.funcapp2_name)), "-", "")
 }
 
@@ -902,7 +902,7 @@ module "funcapp2" {
 # Event Hubs (env)
 locals {
   create_eventhub      = var.env == "dev" || var.env == "prod"
-  eh1_namespace        = "evhns-${var.product}-${var.env}-${var.region}-100"
+  eh1_namespace        = "evhns-${var.product}-${var.env}-${var.region}-01"
   eh1_name_clean       = replace(lower(trimspace(local.eh1_namespace)), "-", "")
   eh1_pe_name          = "pep-${local.eh1_name_clean}-namespace"
   eh1_psc_name         = "psc-${local.eh1_name_clean}-namespace"
@@ -946,7 +946,7 @@ module "eventhub_cgs" {
 
 # Cosmos DB for PostgreSQL (Citus) (env)
 locals {
-  cdbpg_name         = "cdbpg-${var.product}-${var.env}-${var.region}-100"
+  cdbpg_name         = "cdbpg-${var.product}-${var.env}-${var.region}-01"
   cdbpg_name_cleaned = replace(lower(trimspace(local.cdbpg_name)), "-", "")
 }
 
@@ -988,7 +988,7 @@ module "cdbpg1" {
 locals {
   pgflex_subnet_id        = try(local.subnet_ids_from_state[var.pg_delegated_subnet_name], null)
   pg_private_zone_id      = try(local.zone_ids_effective["privatelink.postgres.database.azure.com"], null)
-  pg_name1                = "pgflex-${var.product}-${var.env}-${var.region}-100"
+  pg_name1                = "pgflex-${var.product}-${var.env}-${var.region}-01"
   pg_geo_backup_effective = var.env == "prod" ? true : var.pg_geo_redundant_backup
 }
 
@@ -1051,7 +1051,7 @@ module "postgres_replica" {
 
 # Redis (env)
 locals {
-  redis1_name       = "redis-${var.product}-${var.env}-${var.region}-100-${local.uniq}"
+  redis1_name       = "redis-${var.product}-${var.env}-${var.region}-01-${local.uniq}"
   redis1_name_clean = replace(lower(trimspace(local.redis1_name)), "-", "")
 }
 
