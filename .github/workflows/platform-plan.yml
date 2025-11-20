@@ -90,6 +90,9 @@ jobs:
             AUDIENCE="api://AzureADTokenExchangeUSGov"
             STATE_SUB='${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}'
             if [ "$PLANE" = "prod" ]; then TARGET_SUB='${{ secrets.AZ_SUB_HRZ_PROD }}'; else TARGET_SUB='${{ secrets.AZ_SUB_HRZ_NONPROD }}'; fi
+            # HRZ DB secrets (environment secrets)
+            CDBPG_ADMIN_PASSWORD='${{ secrets.CDBPG_ADMIN_PASSWORD_HRZ }}'
+            PG_ADMIN_PASSWORD='${{ secrets.PG_ADMIN_PASSWORD_HRZ }}'
           else
             CLOUD_ENV="AzureCloud"; ARM_ENV="public"
             TENANT='${{ secrets.AZ_TENANT_PUB }}'
@@ -97,6 +100,9 @@ jobs:
             AUDIENCE="api://AzureADTokenExchange"
             STATE_SUB='${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}'
             if [ "$PLANE" = "prod" ]; then TARGET_SUB='${{ secrets.AZ_SUB_PUB_PROD }}'; else TARGET_SUB='${{ secrets.AZ_SUB_PUB_NONPROD }}'; fi
+            # PUB DB secrets (environment secrets)
+            CDBPG_ADMIN_PASSWORD='${{ secrets.CDBPG_ADMIN_PASSWORD_PUB }}'
+            PG_ADMIN_PASSWORD='${{ secrets.PG_ADMIN_PASSWORD_PUB }}'
           fi
 
           echo "ENV=$ENV_IN"            >> "$GITHUB_OUTPUT"
@@ -121,6 +127,8 @@ jobs:
             echo "TF_VAR_subscription_id=$TARGET_SUB"
             echo "TF_VAR_hub_tenant_id=$TENANT"
             echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
+            echo "TF_VAR_cdbpg_admin_password=$CDBPG_ADMIN_PASSWORD"
+            echo "TF_VAR_pg_admin_password=$PG_ADMIN_PASSWORD"
           } >> "$GITHUB_ENV"
 
       - name: Debug - subscriptions (partial + hash)
