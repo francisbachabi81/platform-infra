@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 env:
-  ARM_USE_OIDC: true
+  # ARM_USE_OIDC: true
   TF_IN_AUTOMATION: true
 
 jobs:
@@ -39,12 +39,18 @@ jobs:
             AUDIENCE="api://AzureADTokenExchangeUSGov"
             STATE_SUB="${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}"
             if [ "$PLANE" = "prod" ]; then TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}"; else TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}"; fi
+            # HRZ DB secrets (environment secrets)
+            CDBPG_ADMIN_PASSWORD='${{ secrets.CDBPG_ADMIN_PASSWORD_HRZ }}'
+            PG_ADMIN_PASSWORD='${{ secrets.PG_ADMIN_PASSWORD_HRZ }}'
           else
             CLOUD_ENV="AzureCloud"; ARM_ENV="public"
             TENANT="${{ secrets.AZ_TENANT_PUB }}"; CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
             AUDIENCE="api://AzureADTokenExchange"
             STATE_SUB="${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}"
             if [ "$PLANE" = "prod" ]; then TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}"; else TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}"; fi
+            # PUB DB secrets (environment secrets)
+            CDBPG_ADMIN_PASSWORD='${{ secrets.CDBPG_ADMIN_PASSWORD_PUB }}'
+            PG_ADMIN_PASSWORD='${{ secrets.PG_ADMIN_PASSWORD_PUB }}'
           fi
 
           echo "ENV=$ENV_IN"            >> $GITHUB_OUTPUT
@@ -69,6 +75,8 @@ jobs:
             echo "TF_VAR_subscription_id=$TARGET_SUB"
             echo "TF_VAR_hub_tenant_id=$TENANT"
             echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
+            echo "TF_VAR_cdbpg_admin_password=$CDBPG_ADMIN_PASSWORD"
+            echo "TF_VAR_pg_admin_password=$PG_ADMIN_PASSWORD"
           } >> $GITHUB_ENV
 
       - name: Resolve tfvars & backend key
@@ -102,7 +110,8 @@ jobs:
 
       - name: Terraform Init (backend)
         env:
-          ARM_USE_OIDC: true
+          ARM_USE_CLI: true
+          ARM_USE_AZUREAD: true
           ARM_CLIENT_ID:       ${{ steps.sel.outputs.CLIENT_ID }}
           ARM_TENANT_ID:       ${{ steps.sel.outputs.TENANT }}
           ARM_SUBSCRIPTION_ID: ${{ steps.sel.outputs.STATE_SUB }}
@@ -116,7 +125,8 @@ jobs:
             -backend-config="storage_account_name=${{ steps.paths.outputs.STATE_SA }}" \
             -backend-config="container_name=${{ steps.paths.outputs.STATE_CONTAINER }}" \
             -backend-config="key=${{ steps.paths.outputs.STATE_KEY }}" \
-            -backend-config="use_azuread_auth=true"
+            -backend-config="use_azuread_auth=true" \
+            -backend-config="use_cli=true"
 
       - name: Azure Login (target)
         uses: azure/login@v2

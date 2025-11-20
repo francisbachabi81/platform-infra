@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 env:
-  ARM_USE_OIDC: true
+  # ARM_USE_OIDC: true
   TF_IN_AUTOMATION: true
 
 jobs:
@@ -133,7 +133,8 @@ jobs:
 
       - name: Terraform Init (backend)
         env:
-          ARM_USE_OIDC: true
+          ARM_USE_CLI: true
+          ARM_USE_AZUREAD: true
           ARM_CLIENT_ID:       ${{ steps.sel.outputs.CLIENT_ID }}
           ARM_TENANT_ID:       ${{ steps.sel.outputs.TENANT }}
           ARM_SUBSCRIPTION_ID: ${{ steps.sel.outputs.STATE_SUB }}
@@ -147,7 +148,8 @@ jobs:
             -backend-config="storage_account_name=${{ steps.paths.outputs.STATE_SA }}" \
             -backend-config="container_name=${{ steps.paths.outputs.STATE_CONTAINER }}" \
             -backend-config="key=${{ steps.paths.outputs.STATE_KEY }}" \
-            -backend-config="use_azuread_auth=true"
+            -backend-config="use_azuread_auth=true" \
+            -backend-config="use_cli=true"
 
       - name: Azure Login (target ENV subscription)
         uses: azure/login@v2
