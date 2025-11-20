@@ -21,12 +21,38 @@ enable_ama_dcr            = true
 
 # Action Group email receivers
 action_group_email_receivers = [
-  { name = "Ops", email_address = "ops@example.gov",    use_common_alert_schema = true },
-  { name = "OnCall", email_address = "oncall@example.gov" }
+  {
+    name                    = "Ops"
+    email_address           = "ops@example.gov"
+    use_common_alert_schema = true
+  },
+  {
+    name          = "OnCall"
+    email_address = "oncall@example.gov"
+  }
 ]
 
 # Diagnostics categories to enable (add/remove as needed)
-diag_categories = ["AuditEvent","SignInLogs","Security","AppServiceHTTPLogs","StorageRead","StorageWrite"]
+diag_categories = [
+  "AuditEvent",
+  "SignInLogs",
+  "Security",
+  "AppServiceHTTPLogs",
+  "StorageRead",
+  "StorageWrite",
+]
 
 # Optional tags
-tags_extra = { purpose = "observability", layer = "platform" }
+tags_extra = {
+  purpose = "observability"
+  layer   = "platform"
+}
+
+servicebus_queues = [
+  "incident-processor"
+]
+
+# servicebus_topics = [
+#   "topic1",
+#   "topic3",
+# ]

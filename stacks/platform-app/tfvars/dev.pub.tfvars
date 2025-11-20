@@ -71,8 +71,11 @@ acr_zone_redundancy_enabled    = false
 create_servicebus             = true
 servicebus_sku                = "Standard"       # Basic | Standard | Premium
 servicebus_capacity           = 1
-servicebus_queues             = ["custom-dlq", "incident-processor"]
-servicebus_topics             = []
+servicebus_queues = [
+  "incident-processor",
+  "location-processor",
+]
+servicebus_topics = []
 servicebus_local_auth_enabled = true
 servicebus_manage_policy_name = "sb-dev-manage"
 servicebus_min_tls_version    = "1.2"
@@ -118,3 +121,13 @@ redis_capacity   = 1
 # ── App Service Plan / Functions (env) ────────────────────────────────────────
 asp_os_type              = "Linux"
 func_linux_plan_sku_name = "P0v3"
+
+servicebus_queues = [
+  "incident-processor",
+  "location-processor",
+]
+
+# servicebus_topics = [
+#   "topic1",
+#   "topic2",
+# ]
