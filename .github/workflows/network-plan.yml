@@ -257,7 +257,7 @@ jobs:
 
       - name: Parse plan JSON for changes
         id: parse
-        if: ${{ steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2' }}
+        if: ${{ success() && (steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2') }}
         shell: bash
         run: |
           set -euo pipefail
@@ -273,8 +273,28 @@ jobs:
             echo "::warning::Detected changes from JSON but exitcode=0; will treat as changes."
           fi
 
+      - name: Collect status / error summary
+        id: status
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ERR_COUNT=0
+          if [ -f "plan.txt" ]; then
+            ERR_COUNT=$(grep -c '^Error:' plan.txt || true)
+          fi
+
+          echo "error_count=${ERR_COUNT}" >> "$GITHUB_OUTPUT"
+
+      - name: Mark pipeline had errors
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          echo "HAS_PIPELINE_FAILURE=true" >> "$GITHUB_ENV"
+
       - name: Upload plan
-        if: ${{ steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true' }}
+        if: ${{ success() && (steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true') }}
         uses: actions/upload-artifact@v4
         with:
           name: shared-network-plan-${{ github.run_id }}
@@ -285,46 +305,96 @@ jobs:
             ${{ github.workspace }}/stacks/shared-network/plan.json
 
       - name: Open approval issue
-        if: ${{ steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true' }}
+        # open an issue if:
+        # - plan had changes (exitcode 2)
+        # - or parse detected changes
+        # - or any step failed (HAS_PIPELINE_FAILURE)
+        # - or plan.txt contained Error: lines
+        if: ${{ always() && (steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true' || env.HAS_PIPELINE_FAILURE == 'true' || steps.status.outputs.error_count != '0') }}
         uses: actions/github-script@v7
         env:
           APPROVERS_CSV: ${{ env.APPROVERS_CSV }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRODUCT:       ${{ steps.sel.outputs.PRODUCT }}
+          PLANE:         ${{ steps.sel.outputs.PLANE }}
+          PLAN_SUMMARY:  ${{ steps.summary.outputs.summary }}
+          STATE_KEY:     ${{ steps.paths.outputs.STATE_KEY }}
+          ERROR_COUNT:   ${{ steps.status.outputs.error_count }}
+          PLAN_EXITCODE: ${{ steps.plan.outputs.exitcode }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const product = `${{ steps.sel.outputs.PRODUCT }}`;
-            const plane = `${{ steps.sel.outputs.PLANE }}`;
-            const envLabel = plane;
-            const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
-            const planSummary = `${{ steps.summary.outputs.summary }}`;
-            const stateKey = `${{ steps.paths.outputs.STATE_KEY }}`;
-            const approvers = (process.env.APPROVERS_CSV || '').split(',').map(s => s.trim()).filter(Boolean);
+            const product      = process.env.PRODUCT || '';
+            const plane        = process.env.PLANE || '';
+            const envLabel     = plane; // here plane is nonprod/prod
+            const planSummary  = process.env.PLAN_SUMMARY || '';
+            const stateKey     = process.env.STATE_KEY || '';
+            const errorCount   = parseInt(process.env.ERROR_COUNT || '0', 10) || 0;
+            const planExitCode = process.env.PLAN_EXITCODE || '';
+            const pipelineFailed = process.env.HAS_PIPELINE_FAILURE === 'true';
+
+            const hasErrors = pipelineFailed || errorCount > 0;
+
+            const approvers = (process.env.APPROVERS_CSV || '')
+              .split(',')
+              .map(s => s.trim())
+              .filter(Boolean);
             const firstApprover = approvers[0];
 
-            const branch   = (context.ref || '').replace('refs/heads/', '') || 'detached';
-            const shortSha = (context.sha || '').slice(0, 7);
-            const runNum   = context.runNumber;
+            const branchRaw  = process.env.GITHUB_REF || '';
+            const branch     = branchRaw.replace('refs/heads/', '') || 'detached';
+            const shortSha   = (process.env.GITHUB_SHA || '').slice(0, 7);
+            const runNum     = process.env.GITHUB_RUN_NUMBER;
+            const runId      = process.env.GITHUB_RUN_ID;
+            const serverUrl  = process.env.GITHUB_SERVER_URL;
+            const repo       = process.env.GITHUB_REPOSITORY;
+            const runUrl     = `${serverUrl}/${repo}/actions/runs/${runId}`;
 
-            const title = `APPROVAL: shared-network | ${product}-${envLabel} | ${branch} | #${runNum} | run ${context.runId} (${shortSha})`;
+            let headlineStatus;
+            if (hasErrors) {
+              headlineStatus = `⚠️ This plan run had errors. Please review the Actions logs before approving. (Error lines in plan.txt: ${errorCount})`;
+            } else if (planExitCode === '2') {
+              headlineStatus = '✅ Plan succeeded with pending changes.';
+            } else if (planExitCode === '0') {
+              headlineStatus = '✅ Plan succeeded with no changes.';
+            } else {
+              headlineStatus = 'ℹ️ Plan status is not fully determined from exit code.';
+            }
+
+            let titlePrefix = 'APPROVAL: shared-network';
+            if (hasErrors) {
+              titlePrefix += ' (WITH ERRORS)';
+            }
+            const title =
+              titlePrefix +
+              ' | ' + product + '-' + envLabel +
+              ' | ' + branch +
+              ' | #' + runNum +
+              ' | run ' + runId +
+              ' (' + shortSha + ')';
+
+            const statusTag = hasErrors ? '❌ WITH ERRORS' : '✅ clean';
 
             const body = `
-            **Plan ready**
+            **Plan ready (${statusTag})**
             - **Stack:** shared-network
             - **Product:** ${product}
             - **Plane:** ${envLabel}
-            - **Branch:** ${context.ref}
-            - **Commit:** ${context.sha}
+            - **Branch:** ${branchRaw}
+            - **Commit:** ${process.env.GITHUB_SHA}
             - **Run:** ${runUrl}
             - **State key:** \`${stateKey}\`
 
             **Summary:** ${planSummary}
 
-            **Artifact:** \`shared-network-plan-${context.runId}\`
+            ${headlineStatus}
+
+            ${hasErrors ? '> ⚠️ One or more steps in this workflow failed or errors were detected in the plan output. Do **not** approve until the errors are understood and resolved.\n' : ''}
+
+            **Artifact:** \`shared-network-plan-${runId}\`
             **JSON:** \`plan.json\`
 
-            **Approve by commenting:** \`/approve ${context.runId}\`
-            **Reject by commenting:** \`/reject ${context.runId}\`
+            **Approve by commenting:** \`/approve ${runId}\`
+            **Reject by commenting:** \`/reject ${runId}\`
             `;
 
             const resp = await github.rest.issues.create({
@@ -343,7 +413,7 @@ jobs:
 
       - name: Guardrail - detect mismatch between exit code and JSON
         id: guard
-        if: ${{ steps.plan.outputs.exitcode == '0' && steps.parse.outputs.has_changes == 'true' }}
+        if: ${{ success() && steps.plan.outputs.exitcode == '0' && steps.parse.outputs.has_changes == 'true' }}
         shell: bash
         run: |
           echo "mismatch=true" >> "$GITHUB_OUTPUT"
