@@ -20,14 +20,15 @@ resource "azurerm_email_communication_service_domain" "azure_managed" {
   # no DNS records required for Azure-managed domain
 }
 
-resource "azurerm_communication_email_service_domain_association" "azure_managed" {
-  communication_service_id           = azurerm_communication_service.this.id
-  email_communication_service_domain_id = azurerm_email_communication_service_domain.azure_managed.id
-}
+resource "azurerm_communication_service_email_domain_association" "azure_managed" {
+  communication_service_id = azurerm_communication_service.this.id
+  email_service_domain_id  = azurerm_email_communication_service_domain.azure_managed.id
 
-# -------------------------------------------------------------------
+  depends_on = [
+    azurerm_email_communication_service_domain.azure_managed
+  ]
+}
 # Customer-managed domain (optional, no association by default)
-# -------------------------------------------------------------------
 resource "azurerm_email_communication_service_domain" "custom" {
   count                   = var.enable_custom_domain ? 1 : 0
   name                    = var.custom_domain_name
@@ -38,9 +39,13 @@ resource "azurerm_email_communication_service_domain" "custom" {
 }
 
 # Optional association for the custom domain (only after DNS is ready)
-resource "azurerm_communication_email_service_domain_association" "custom" {
+resource "azurerm_communication_service_email_domain_association" "custom" {
   count = var.enable_custom_domain && var.associate_custom_domain ? 1 : 0
 
-  communication_service_id              = azurerm_communication_service.this.id
-  email_communication_service_domain_id = azurerm_email_communication_service_domain.custom[0].id
+  communication_service_id = azurerm_communication_service.this.id
+  email_service_domain_id  = azurerm_email_communication_service_domain.custom[0].id
+
+  depends_on = [
+    azurerm_email_communication_service_domain.custom
+  ]
 }
