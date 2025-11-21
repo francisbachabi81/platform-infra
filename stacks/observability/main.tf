@@ -55,7 +55,6 @@ locals {
 
   # Recovery Services Vault
   rsv_log_categories = [
-    "AzureBackup",
     "AzureSiteRecoveryJobs",
     "AzureSiteRecoveryEvents",
   ]
