@@ -589,25 +589,6 @@ resource "azurerm_monitor_diagnostic_setting" "appi" {
   log_analytics_workspace_id = local.law_id
 
   dynamic "enabled_log" {
-    for_each = toset(try(each.value.logs, []))
-    content { category = enabled_log.value }
-  }
-  dynamic "metric" {
-    for_each = toset(try(each.value.metrics, []))
-    content {
-      category = metric.value
-      enabled  = true
-    }
-  }
-}
-
-resource "azurerm_monitor_diagnostic_setting" "appi" {
-  for_each                   = data.azurerm_monitor_diagnostic_categories.appi
-  name                       = var.diag_name
-  target_resource_id         = each.key
-  log_analytics_workspace_id = local.law_id
-
-  dynamic "enabled_log" {
     for_each = toset([
       for c in local.appi_log_categories :
       c if contains(try(each.value.logs, []), c)
