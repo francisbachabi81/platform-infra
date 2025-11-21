@@ -48,6 +48,11 @@ locals {
   acs_name       = "acs-${var.product}-${local.plane_code}-${var.region}-01"
   email_svc_name = "acse-${var.product}-${local.plane_code}-${var.region}-01"
   email_dom_name = "acsdom-${var.product}-${local.plane_code}-${var.region}-01"
+
+  # Data location rules:
+  # - Azure Gov (hrz) → "usgov"
+  # - Azure Commercial (pub) → "United States"
+  acs_data_location = var.product == "hrz" ? "usgov" : "United States"
 }
 
 # shared-network state (optional)
@@ -280,7 +285,7 @@ module "communication" {
   email_domain_name   = local.email_dom_name
 
   # this is a geography, not the Azure region name
-  data_location = "United States"
+  data_location       = local.acs_data_location
 
-  tags = local.tags_common
+  tags = merge(local.tags_common, { service = "communication" })
 }
