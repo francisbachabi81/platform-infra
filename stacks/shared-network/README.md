@@ -4,6 +4,18 @@ This stack manages **plane-level shared networking** resources, such as hub virt
 
 ---
 
+## Network Architecture
+
+A detailed breakdown of all hub and environment (dev / qa / uat / prod) virtual networks and subnets for both Azure Government (hrz) and Azure Commercial (pub) is available in the following document:
+
+  - [`Network Overview`](docs/network_overview.md)
+
+```(Includes CIDRs, subnet purposes, plane structure, and cross-subscription layout.)```
+
+This document is designed to help contributors quickly understand how networking is structured across products and planes, and how the shared-network stack ties into application environments.
+
+---
+
 ## Scope
 
 - Creates and configures the shared network for a **plane**:
