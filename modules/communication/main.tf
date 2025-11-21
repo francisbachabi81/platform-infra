@@ -10,7 +10,7 @@ resource "azurerm_communication_service" "this" {
 resource "azurerm_email_communication_service" "this" {
   name                = var.email_service_name
   resource_group_name = var.resource_group_name
-  data_location       = var.data_location
+  data_location       = var.email_data_location
   tags                = var.tags
 }
 

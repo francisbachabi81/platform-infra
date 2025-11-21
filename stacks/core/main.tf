@@ -1,8 +1,12 @@
 # terraform & providers
 terraform {
   required_version = ">= 1.6.5"
+
   required_providers {
-    azurerm = { source = "hashicorp/azurerm", version = "~> 4.9.0" }
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 4.14.0" # or latest 4.x you’re comfortable with
+    }
   }
 }
 
@@ -53,6 +57,8 @@ locals {
   # - Azure Gov (hrz) → "usgov"
   # - Azure Commercial (pub) → "United States"
   acs_data_location = var.product == "hrz" ? "usgov" : "United States"
+
+  email_data_location = local.acs_data_location
 }
 
 # shared-network state (optional)
@@ -286,6 +292,7 @@ module "communication" {
 
   # this is a geography, not the Azure region name
   data_location       = local.acs_data_location
+  email_data_location   = local.email_data_location
 
   tags = merge(local.tags_common, { service = "communication" })
 }

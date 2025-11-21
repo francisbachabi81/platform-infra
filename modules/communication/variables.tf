@@ -20,7 +20,12 @@ variable "email_domain_name" {
 }
 
 variable "data_location" {
-  description = "ACS data location (e.g. 'United States', 'Europe'). NOT the Azure region."
+  description = "ACS data location (e.g. 'United States' for pub, 'usgov' for hrz)"
+  type        = string
+}
+
+variable "email_data_location" {
+  description = "Email service data location"
   type        = string
 }
 
