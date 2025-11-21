@@ -1,21 +1,18 @@
-# Observability Stack
+# Platform Application Stack
 
-This stack manages **environment-specific observability and diagnostics** configuration for platform and core resources.
+This stack defines **environment-specific application infrastructure** (e.g., app services, databases, supporting resources) for each environment and cloud product.
 
 ---
 
 ## Scope
 
-- Configures diagnostics and log routing per **environment** and **product**, such as:
-  - Diagnostic settings
-  - Log Analytics/workspace connections
-  - Other monitoring configuration
-
-- Environments:
+- Deployed **per environment**:
   - `dev`, `qa`, `uat`, `prod`
-- Products:
+- Supports both clouds:
   - `hrz` — Azure Government
   - `pub` — Azure Commercial
+
+Resource-level details are defined in `main.tf` using shared modules (e.g., `modules/app-service-plan`, `modules/postgres-flex`, etc.).
 
 ---
 
@@ -35,7 +32,6 @@ tfvars/
   uat.pub.tfvars
   prod.hrz.tfvars
   prod.pub.tfvars
-README.md
 ```
 
 ---
@@ -57,26 +53,29 @@ Typical variables:
 
 - `product` → `hrz` or `pub`
 - `env` → `dev` | `qa` | `uat` | `prod`
-- Observability/diagnostic targets and configuration
+- App-specific settings as needed
 
 ---
 
 ## Dependencies
 
-- **Requires** underlying resources to exist (from `shared-network`, `core`, and `platform-app` for the relevant env/product).
-- Should be deployed **after** the `platform-app` stack for the same env/product.
+- Requires plane-level stacks:
+  - `shared-network` for networking
+  - `core` for shared/core services
+- Should be deployed **before** `observability` for the same env/product, so observability settings can attach to existing resources.
 
 ---
 
 ## Related Workflows
 
-- Plan: `workflows/observability-plan.yml`
-- Apply: `workflows/observability-apply.yml`
+- Plan: `workflows/platform-plan.yml`
+- Apply: `workflows/platform-apply.yml`
 
 These workflows:
 
 - Accept `product` and `env` as inputs
-- Run Terraform in `stacks/observability/`
+- Map `env` to a plane internally (e.g., `dev/qa` → nonprod, `uat/prod` → prod)
+- Run Terraform in `stacks/platform-app/`
 - Select the matching `tfvars` file
 
 ---
@@ -85,20 +84,20 @@ These workflows:
 
 From GitHub:
 
-1. Trigger **Observability Plan**:
-   - Workflow: `observability-plan.yml`
-   - Inputs: `product=hrz`, `env=prod`
+1. Trigger **Platform App Plan**:
+   - Workflow: `platform-plan.yml`
+   - Inputs: `product=pub`, `env=qa`
 2. Review the plan.
-3. Trigger **Observability Apply**:
-   - Workflow: `observability-apply.yml`
+3. Trigger **Platform App Apply**:
+   - Workflow: `platform-apply.yml`
    - Same inputs.
 
 From CLI (conceptually):
 
 ```bash
-cd stacks/observability
+cd stacks/platform-app
 
 terraform init   -backend-config=...
-terraform plan   -var-file=tfvars/prod.hrz.tfvars
-terraform apply  -var-file=tfvars/prod.hrz.tfvars
+terraform plan   -var-file=tfvars/qa.pub.tfvars
+terraform apply  -var-file=tfvars/qa.pub.tfvars
 ```

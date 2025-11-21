@@ -5,7 +5,7 @@ This page documents the GitHub **Repository** and **Environment** secrets used f
 - **Repository secrets** – available to all workflows in the repo.
 - **Environment secrets** – scoped to a specific GitHub Environment (e.g., `dev`, `qa`, `uat`, `prod`).
 
-> ℹ️ This document uses **dev** as the example environment. The same pattern can be replicated for `qa`, `uat`, and `prod`.
+> This document uses **dev** as the example environment. The same pattern can be replicated for `qa`, `uat`, and `prod`.
 
 ---
 
