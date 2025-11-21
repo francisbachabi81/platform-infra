@@ -560,7 +560,6 @@ resource "azurerm_monitor_diagnostic_setting" "rsv" {
   # Get the exact strings from the Portal JSON view.
   enabled_log { category = "AzureSiteRecoveryJobs" }
   enabled_log { category = "AzureSiteRecoveryEvents" }
-  enabled_log { category = "AzureBackupReporting" }
   enabled_log { category = "CoreAzureBackup" }
   # ...add any of the Backup “Addon” categories you want...
 
