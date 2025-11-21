@@ -288,8 +288,7 @@ locals {
   ])
 
   ids_frontdoor = compact([
-    try(data.terraform_remote_state.network.outputs.frontdoor.profile_id,  null),
-    try(data.terraform_remote_state.network.outputs.frontdoor.endpoint_id, null),
+    try(data.terraform_remote_state.network.outputs.frontdoor.profile_id,  null)
   ])
 
   kv_map    = { for id in local.ids_kv    : id => id }
@@ -553,7 +552,7 @@ resource "azurerm_monitor_diagnostic_setting" "redis" {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "rsv" {
-  for_each                   = local.rsv_diag_targets
+  for_each                   = data.azurerm_monitor_diagnostic_categories.rsv
   name                       = var.diag_name
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
