@@ -49,9 +49,8 @@ locals {
   create_scope_hrz  = local.enable_hrz_features
   create_scope_both = local.enable_both
 
-  acs_name       = "acs-${var.product}-${local.plane_code}-${var.region}-01"
-  email_svc_name = "acse-${var.product}-${local.plane_code}-${var.region}-01"
-  email_dom_name = "acsdom-${var.product}-${local.plane_code}-${var.region}-01"
+  acs_name        = "acs-${var.product}-${local.plane_code}-${var.region}-01"
+  email_svc_name  = "acse-${var.product}-${local.plane_code}-${var.region}-01"
 
   # Data location rules:
   # - Azure Gov (hrz) → "usgov"
@@ -286,13 +285,18 @@ module "communication" {
   source = "../../modules/communication"
 
   resource_group_name = local.rg_name_core
+  location            = var.location
   acs_name            = local.acs_name
   email_service_name  = local.email_svc_name
-  email_domain_name   = local.email_dom_name
 
   # this is a geography, not the Azure region name
   data_location       = local.acs_data_location
-  email_data_location   = local.email_data_location
+
+  # Custom domain OFF initially (you can still set enable_custom_domain = true
+  # just to create the domain and get DNS records)
+  enable_custom_domain    = true          # create the customer-managed domain resource
+  custom_domain_name      = "mail.example.com"
+  associate_custom_domain = false        # turn this to true *after* DNS verification
 
   tags = merge(local.tags_common, { service = "communication" })
 }

@@ -1,36 +1,44 @@
 variable "resource_group_name" {
-  description = "Core resource group where ACS + Email live"
-  type        = string
+  type = string
 }
 
-variable "acs_name" {
-  description = "Azure Communication Service name (e.g. acs-hrz-np-usaz-01)"
-  type        = string
-}
-
-variable "email_service_name" {
-  description = "Email Communication Service name (e.g. email-hrz-np-usaz-01)"
-  type        = string
-}
-
-variable "email_domain_name" {
-  description = "Email Communication Service domain name. Use 'AzureManagedDomain' for Azure-managed."
-  type        = string
-  default     = "AzureManagedDomain"
-}
-
-variable "data_location" {
-  description = "ACS data location (e.g. 'United States' for pub, 'usgov' for hrz)"
-  type        = string
-}
-
-variable "email_data_location" {
-  description = "Email service data location"
-  type        = string
+variable "location" {
+  type = string
 }
 
 variable "tags" {
-  description = "Tags to apply to ACS + Email resources"
-  type        = map(string)
-  default     = {}
+  type    = map(string)
+  default = {}
+}
+
+variable "acs_name" {
+  type = string
+}
+
+variable "email_service_name" {
+  type = string
+}
+
+variable "data_location" {
+  description = "ACS/Email data location (e.g. 'United States')"
+  type        = string
+}
+
+# --- Custom domain toggles ---
+variable "enable_custom_domain" {
+  description = "Create a customer-managed email domain resource"
+  type        = bool
+  default     = false
+}
+
+variable "custom_domain_name" {
+  description = "Customer-managed email domain (e.g. 'mail.example.com')"
+  type        = string
+  default     = null
+}
+
+variable "associate_custom_domain" {
+  description = "Associate ACS with the custom domain (only after DNS verification)"
+  type        = bool
+  default     = false
 }

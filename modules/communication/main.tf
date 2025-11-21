@@ -1,31 +1,46 @@
-# Azure Communication Service
 resource "azurerm_communication_service" "this" {
   name                = var.acs_name
   resource_group_name = var.resource_group_name
   data_location       = var.data_location
-  tags                = var.tags
+  tags                = merge(var.tags, { component = "communication-service" })
 }
 
-# Email Communication Service
 resource "azurerm_email_communication_service" "this" {
   name                = var.email_service_name
   resource_group_name = var.resource_group_name
-  data_location       = var.email_data_location
-  tags                = var.tags
+  data_location       = var.data_location
+  tags                = merge(var.tags, { component = "email-service" })
 }
 
-# Email domain (Azure-managed or custom)
-resource "azurerm_email_communication_service_domain" "this" {
-  name             = var.email_domain_name
-  email_service_id = azurerm_email_communication_service.this.id
-
-  # For now we default to Azure-managed domain. If you later pass a real
-  # custom domain, you can make this conditional via a variable.
+# Azure-managed domain (always created & associated immediately)
+resource "azurerm_email_communication_service_domain" "azure_managed" {
+  name                    = "AzureManagedDomain" # required literal
+  email_service_id      = azurerm_email_communication_service.this.id
   domain_management = "AzureManaged"
+  # no DNS records required for Azure-managed domain
 }
 
-# Associate the email domain with the ACS resource
-resource "azurerm_communication_service_email_domain_association" "this" {
-  communication_service_id = azurerm_communication_service.this.id
-  email_service_domain_id  = azurerm_email_communication_service_domain.this.id
+resource "azurerm_communication_email_service_domain_association" "azure_managed" {
+  communication_service_id           = azurerm_communication_service.this.id
+  email_communication_service_domain_id = azurerm_email_communication_service_domain.azure_managed.id
+}
+
+# -------------------------------------------------------------------
+# Customer-managed domain (optional, no association by default)
+# -------------------------------------------------------------------
+resource "azurerm_email_communication_service_domain" "custom" {
+  count                   = var.enable_custom_domain ? 1 : 0
+  name                    = var.custom_domain_name
+  email_service_id      = azurerm_email_communication_service.this.id
+  domain_management = "CustomerManaged"
+  # Important: you'll use the verification_records output to set DNS
+  # records in your DNS zone *before* turning on associate_custom_domain.
+}
+
+# Optional association for the custom domain (only after DNS is ready)
+resource "azurerm_communication_email_service_domain_association" "custom" {
+  count = var.enable_custom_domain && var.associate_custom_domain ? 1 : 0
+
+  communication_service_id              = azurerm_communication_service.this.id
+  email_communication_service_domain_id = azurerm_email_communication_service_domain.custom[0].id
 }
