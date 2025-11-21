@@ -181,3 +181,21 @@ variable "action_group_email_receivers" {
   }))
   default = []
 }
+
+variable "enable_custom_domain" {
+  description = "Whether to create a customer-managed email domain for ACS."
+  type        = bool
+  default     = false
+}
+
+variable "custom_domain_name" {
+  description = "Custom email domain (e.g. mail.example.com). Required if enable_custom_domain = true."
+  type        = string
+  default     = null
+}
+
+variable "associate_custom_domain" {
+  description = "Whether to associate the custom domain with ACS (set true only after DNS is verified)."
+  type        = bool
+  default     = false
+}

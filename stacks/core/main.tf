@@ -294,9 +294,9 @@ module "communication" {
 
   # Custom domain OFF initially (you can still set enable_custom_domain = true
   # just to create the domain and get DNS records)
-  enable_custom_domain    = true          # create the customer-managed domain resource
-  custom_domain_name      = "mail.example.com"
-  associate_custom_domain = false        # turn this to true *after* DNS verification
+  enable_custom_domain    = var.enable_custom_domain         # create the customer-managed domain resource
+  custom_domain_name      = var.custom_domain_name
+  associate_custom_domain = var.associate_custom_domain        # turn this to true *after* DNS verification
 
   tags = merge(local.tags_common, { service = "communication" })
 }

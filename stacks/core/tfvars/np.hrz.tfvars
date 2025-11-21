@@ -33,3 +33,7 @@ action_group_email_receivers = [
   #   use_common_alert_schema = false
   # }
 ]
+
+enable_custom_domain    = true
+custom_domain_name      = "dev.horizon.intterra.io"
+associate_custom_domain = false  # flip to true *after* DNS verification

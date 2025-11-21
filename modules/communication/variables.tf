@@ -24,7 +24,6 @@ variable "data_location" {
   type        = string
 }
 
-# --- Custom domain toggles ---
 variable "enable_custom_domain" {
   description = "Create a customer-managed email domain resource"
   type        = bool
