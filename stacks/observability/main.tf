@@ -551,26 +551,18 @@ resource "azurerm_monitor_diagnostic_setting" "redis" {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "rsv" {
-  for_each                   = local.rsv_diag_targets
+  for_each                   = local.rsv_map
   name                       = var.diag_name
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
-  dynamic "enabled_log" {
-    for_each = toset([
-      for c in local.rsv_log_categories :
-      c if contains(try(each.value.logs, []), c)
-    ])
-    content { category = enabled_log.value }
-  }
-
-  dynamic "metric" {
-    for_each = toset(try(each.value.metrics, []))
-    content {
-      category = metric.value
-      enabled  = true
-    }
-  }
+  # Enable the categories you care about.
+  # Get the exact strings from the Portal JSON view.
+  enabled_log { category = "AzureSiteRecoveryJobs" }
+  enabled_log { category = "AzureSiteRecoveryEvents" }
+  enabled_log { category = "AzureBackupReporting" }
+  enabled_log { category = "CoreAzureBackup" }
+  # ...add any of the Backup “Addon” categories you want...
 
   lifecycle {
     precondition {
