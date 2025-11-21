@@ -271,9 +271,9 @@ locals {
   ])
 
   ids_funcapps = compact([
-    try(local.platform_ids.fa1, null),
-    try(local.platform_ids.function_app, null),
-    try(local.platform_app.function_app_id, null),
+    try(local.platform_ids.funcapp1, null),
+    try(local.platform_ids.funcapp2, null),
+    try(local.platform_ids.plan1_func, null),
   ])
 
   ids_webapps = compact([
@@ -288,8 +288,8 @@ locals {
   ])
 
   ids_frontdoor = compact([
-    try(data.terraform_remote_state.network.outputs.azure_front_door.profile_id, null),
-    try(data.terraform_remote_state.network.outputs.front_door.id, null),
+    try(data.terraform_remote_state.network.outputs.frontdoor.profile_id,  null),
+    try(data.terraform_remote_state.network.outputs.frontdoor.endpoint_id, null),
   ])
 
   kv_map    = { for id in local.ids_kv    : id => id }

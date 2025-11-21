@@ -48,7 +48,9 @@ output "ids" {
     postgres = try(module.postgres[0].id, null)
     redis    = try(module.redis1[0].id, null)
     cdbpg1   = try(module.cdbpg1[0].id, null)
-    # aks_diag = try(local.aks_diag_id, null)
+    funcapp1   = try(module.funcapp1[0].id, null)
+    funcapp2   = try(module.funcapp2[0].id, null)
+    plan1_func = try(module.plan1_func[0].id, null)
   }
 }
 
