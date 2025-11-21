@@ -551,7 +551,7 @@ resource "azurerm_monitor_diagnostic_setting" "redis" {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "rsv" {
-  for_each                   = data.azurerm_monitor_diagnostic_categories.rsv
+  for_each                   = local.rsv_diag_targets
   name                       = var.diag_name
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
