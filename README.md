@@ -90,6 +90,55 @@ See [`docs/folder_structure.md`](docs/folder_structure.md) for a detailed breakd
 
 ---
 
+## Observability Stack — Diagnostics & Alerts Coverage
+
+The **observability** stack does **not** create the core/platform resources themselves; instead, it:
+
+- Resolves existing IDs from the **network**, **core**, and **platform-app** remote state.
+- Attaches **diagnostic settings** to those resources, sending logs/metrics to the shared **Log Analytics workspace**.
+- Creates **action groups** when a shared one doesn’t already exist.
+- Configures **activity log alerts** at both env and core subscription scopes.
+
+> ✅ = diagnostics/alerts configured when the resource exists and the corresponding feature flag is enabled (or not gated).
+
+### Diagnostics to Log Analytics
+
+| Resource Type / Scope | hrz | pub | Notes |
+|---|:--:|:--:|---|
+| Network Security Groups (NSGs) | ✅ | ✅ | `azurerm_monitor_diagnostic_setting.nsg`; enables `NetworkSecurityGroupEvent` / `NetworkSecurityGroupRuleCounter` where available |
+| Subscription Activity Logs (env subscription) | ✅ | ✅ | `sub_env` setting; categories: Administrative, Security, ServiceHealth, Alert, Recommendation, Policy, Autoscale, ResourceHealth |
+| Key Vault | ✅ | ✅ | `kv`; only when `var.enable_kv_diagnostics = true`; enables `AuditEvent`, `AzurePolicyEvaluationDetails` if supported |
+| Storage Accounts | ✅ | ✅ | `sa`; enables StorageRead/Write/Delete logs + all metrics categories supported |
+| Service Bus Namespace | ✅ | ✅ | `sbns`; enables `OperationalLogs` when present |
+| Event Hubs Namespace | ✅ | ✅ | `ehns`; enables `OperationalLogs` when present |
+| PostgreSQL Flexible / CDBPG | ✅ | ✅ | `pg`; enables `PostgreSQLLogs`, `QueryStoreRuntimeStatistics`, `QueryStoreWaitStatistics` where supported |
+| Redis Cache | ✅ | ✅ | `redis`; enables `ConnectedClientList`, `CacheRead/Write/Delete` where supported |
+| Recovery Services Vault | ✅ | ✅ | `rsv`; enables `AzureBackupOperations`, `AzureSiteRecoveryJobs`, `AzureSiteRecoveryEvents`, `CoreAzureBackup`, plus optional addon categories |
+| Application Insights | ✅ | ✅ | `appi`; enables AppRequests, AppDependencies, AppTraces, etc. (workspace-based) |
+| VPN Gateway | ✅ | ✅ | `vpng`; enables `GatewayDiagnosticLog`, `TunnelDiagnosticLog`, `RouteDiagnosticLog` |
+| Function Apps | ✅ | ✅ | `fa`; enables `FunctionAppLogs`, `AppServicePlatformLogs` |
+| Web Apps (App Services) | ✅ | ✅ | `web`; enables HTTP, console, and application logs where supported |
+| Application Gateway (WAF) | ✅ | ✅ | `appgw`; enables access, performance, and firewall logs |
+| Azure Front Door / WAF | ✅ | ✅ | `afd`; enables `FrontdoorAccessLog`, `FrontdoorWebApplicationFirewallLog` |
+| Cosmos DB (NoSQL) | ✅ | ✅ | `cosmos`; only when `var.enable_cosmos_diagnostics = true`; enables DataPlane/ControlPlane/Query/Partition logs |
+| AKS Clusters | ✅ | ✅ | `aks`; only when `var.enable_aks_diagnostics = true` **and** env is one of `dev`, `uat`, `prod`; enables all available log + metric categories |
+
+All diagnostics are sent to the **Log Analytics workspace** resolved as `local.law_id` (from core/platform outputs, or an explicit override).
+
+### Alerts & Action Groups
+
+| Feature | hrz | pub | Notes |
+|---|:--:|:--:|---|
+| Shared Action Group (core or fallback) | ✅ | ✅ | Uses existing core `action_group` if present; otherwise creates `azurerm_monitor_action_group.fallback` in core or env RGs |
+| Env RG Change Alert | ✅ | ✅ | `rg_changes_env`; alerts on Administrative operations in the env app RG |
+| Env Subscription Service Health Alert | ✅ | ✅ | `service_health_env`; ServiceHealth incidents in the env subscription |
+| Core Subscription Service Health Alert | ✅ | ✅ | `service_health_core`; ServiceHealth incidents in the core subscription |
+| Core RG Change Alert | ✅ | ✅ | `rg_changes_core`; Administrative operations in the core RG |
+
+> The observability stack is **product-agnostic**: behavior is the same for `hrz` and `pub`; differences come from which resources actually exist in each environment and which feature flags (`enable_*_diagnostics`, etc.) are set.
+
+---
+
 ## Shared-Network Overview
 
 The shared-network stack establishes:
