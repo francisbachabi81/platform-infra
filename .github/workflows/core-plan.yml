@@ -355,7 +355,11 @@ jobs:
               headlineStatus = 'ℹ️ Plan status is not fully determined from exit code.';
             }
 
-            const title = `APPROVAL: core | ${product}-${plane} | ${branch} | #${runNum} | run ${context.runId} (${shortSha})`;
+            # const title = `APPROVAL: core | ${product}-${plane} | ${branch} | #${runNum} | run ${context.runId} (${shortSha})`;
+
+            // title prefix reflects errors
+            const titlePrefix = hasErrors ? 'APPROVAL: core (WITH ERRORS)' : 'APPROVAL: core';
+            const title = `${titlePrefix} | ${product}-${plane} | ${branch} | #${runNum} | run ${context.runId} (${shortSha})`;
 
             const body = `
             **Plan ready (${hasErrors ? '❌ WITH ERRORS' : '✅ clean'})**
