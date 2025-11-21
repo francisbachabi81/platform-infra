@@ -52,6 +52,7 @@ These secrets are used when deploying the **PUB** product.
 | `AZ_SUB_PUB_DEV`       | Subscription ID for the **PUB dev** subscription.                          |
 | `AZ_SUB_PUB_NONPROD`   | Subscription ID for the **PUB nonprod** subscription.                      |
 | `AZ_SUB_PUB_QA`        | Subscription ID for the **PUB QA** subscription.                           |
+| `AZ_SUB_PUB_PROD`      | Subscription ID for the **PUB prod** subscription.                      |
 | `AZ_SUB_STATE_PUB`     | Subscription ID that hosts the **PUB Terraform remote state** resources.   |
 
 ---
@@ -67,8 +68,6 @@ Below uses the **`dev`** environment as an example. You can repeat the same patt
 | Secret name                     | Description                                                                      |
 |---------------------------------|----------------------------------------------------------------------------------|
 | `AZ_SUB_HRZ_CORE`               | Subscription ID for the **HRZ core** resources in the **dev** environment.      |
-| `HUB_SUB_ID_HRZ`                | Hub subscription ID for **HRZ** (networking / hub resources).                   |
-| `HUB_TENANT_ID_HRZ`             | Tenant ID for the **HRZ hub** subscription.                                     |
 | `CDBPG_ADMIN_PASSWORD_HRZ`      | Admin password for HRZ Cosmos DB/Postgres (or equivalent) in **dev**.           |
 | `PG_ADMIN_PASSWORD_HRZ`         | Postgres admin password for HRZ in **dev**.                                     |
 
@@ -81,8 +80,6 @@ Below uses the **`dev`** environment as an example. You can repeat the same patt
 | Secret name                     | Description                                                                      |
 |---------------------------------|----------------------------------------------------------------------------------|
 | `AZ_SUB_PUB_CORE`               | Subscription ID for the **PUB core** resources in the **dev** environment.      |
-| `HUB_SUB_ID_PUB`                | Hub subscription ID for **PUB** (networking / hub resources).                   |
-| `HUB_TENANT_ID_PUB`             | Tenant ID for the **PUB hub** subscription.                                     |
 | `CDBPG_ADMIN_PASSWORD_PUB`      | Admin password for PUB Cosmos DB/Postgres (or equivalent) in **dev**.           |
 | `PG_ADMIN_PASSWORD_PUB`         | Postgres admin password for PUB in **dev**.                                     |
 

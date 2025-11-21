@@ -11,11 +11,11 @@ hub_subscription_id = "df6dc63f-c4dc-4590-ba4b-f2ce9639ca6c"
 hub_tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
 # If DEV/QA VNets live in different subscriptions, set these
-dev_subscription_id = "62ae6908-cbcb-40cb-8773-54bd318ff7f9"  # e.g. "11111111-2222-3333-4444-555555555555"
-dev_tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"  # e.g. "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+dev_subscription_id = "62ae6908-cbcb-40cb-8773-54bd318ff7f9" 
+dev_tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
-qa_subscription_id  = "d4c1d472-722c-49c2-857f-4243441104c8"  # e.g. "66666666-7777-8888-9999-000000000000"
-qa_tenant_id        = "ed7990c3-61c2-477d-85e9-1a396c19ae94"  # e.g. "ffffffff-1111-2222-3333-444444444444"
+qa_subscription_id  = "d4c1d472-722c-49c2-857f-4243441104c8"
+qa_tenant_id        = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
 # Private DNS zones (Azure Government)
 private_zones = [

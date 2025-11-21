@@ -67,6 +67,7 @@ See [`docs/folder_structure.md`](docs/folder_structure.md) for a detailed breakd
 | Key Vault | ✅ | ✅ |  |
 | Storage Account | ✅ | ✅ |  |
 | Cosmos (NoSQL) |  | ✅ |  |
+| Communication Service (Email) |  | ✅ | Created only when email/Comms features are enabled (public cloud only) |
 | AKS Cluster | ✅ | ✅ |  |
 | Service Bus | ✅ | ✅ | When `var.create_servicebus` |
 | App Service Plan |  | ✅ | Public only |

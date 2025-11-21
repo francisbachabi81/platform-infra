@@ -10,12 +10,12 @@ seq      = "01"                     # sequence in names
 hub_subscription_id = "ee8a4693-54d4-4de8-842b-b6f35fc0674d"
 hub_tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
-# Optional per-env overrides (leave null or omit to fall back to HUB)
-dev_subscription_id = "57f8aa30-981c-4764-94f6-6691c4d5c01c"  # e.g. "11111111-2222-3333-4444-555555555555"
-dev_tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"  # e.g. "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+# If DEV/QA VNets live in different subscriptions, set these
+dev_subscription_id = "57f8aa30-981c-4764-94f6-6691c4d5c01c" 
+dev_tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
-qa_subscription_id  = "647feab6-e53a-4db2-99ab-55d04a5997d7"  # e.g. "66666666-7777-8888-9999-000000000000"
-qa_tenant_id        = "dd58f16c-b85a-4d66-99e1-f86905453853"  # e.g. "ffffffff-1111-2222-3333-444444444444"
+qa_subscription_id  = "647feab6-e53a-4db2-99ab-55d04a5997d7"
+qa_tenant_id        = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
 # Private DNS zones (Azure Commercial)
 private_zones = [
