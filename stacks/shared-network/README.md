@@ -8,7 +8,7 @@ This stack manages **plane-level shared networking** resources, such as hub virt
 
 A detailed breakdown of all hub and environment (dev / qa / uat / prod) virtual networks and subnets for both Azure Government (hrz) and Azure Commercial (pub) is available in the following document:
 
-  - [`Network Overview`](docs/network_overview.md)
+  - [`Network Overview`](../../docs/network_overview.md)
 
 ```(Includes CIDRs, subnet purposes, plane structure, and cross-subscription layout.)```
 
