@@ -10,6 +10,14 @@ This document summarizes the **hub** and **environment (spoke)** VNets and subne
 Only **hub** and **env VNets/subnets** are covered here (no DNS zones, tags, or gateway configuration details).
 
 ---
+## Network Diagrams
+A high-level diagram:
+[`Network Architecture Overview Diagram`](network-diagram.png).
+
+A detailed nonprod-plane diagram showing:
+[`Nonprod Network Diagram (Dev & QA)`](nonprod-network-diagram.png).
+
+---
 
 ## 1. Nonprod Plane — `hrz` (Azure Gov, usgovarizona / usaz)
 
