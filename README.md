@@ -58,6 +58,69 @@ See [`docs/folder_structure.md`](docs/folder_structure.md) for a detailed breakd
 
 ---
 
+## Platform-App — What Gets Created per Product
+
+> ✅ = created (subject to feature toggles/inputs). Empty = not created for that product.
+
+| Resource / Module | hrz | pub | Notes |
+|---|:--:|:--:|---|
+| Key Vault | ✅ | ✅ |  |
+| Storage Account | ✅ | ✅ |  |
+| Cosmos (NoSQL) |  | ✅ |  |
+| AKS UAI | ✅ | ✅ |  |
+| AKS Cluster | ✅ | ✅ |  |
+| AKS Diagnostics | ✅ | ✅ |  |
+| Service Bus | ✅ | ✅ | When `var.create_servicebus` |
+| App Service Plan |  | ✅ | Public only |
+| Function Apps |  | ✅ |  |
+| Event Hubs |  | ✅ | Dev/Prod only |
+| Cosmos PostgreSQL |  | ✅ | When enabled |
+| PostgreSQL Flex |  | ✅ |  |
+| PostgreSQL Replica | ✅ | ✅ |  |
+| Redis Cache | ✅ | ✅ |  |
+
+---
+
+## Core Stack — Plane-Level Shared Resources
+
+| Resource | hrz | pub |
+|---|:--:|:--:|
+| Core RG | ✅ | ✅ |
+| Log Analytics | ✅ | ✅ |
+| Application Insights | ✅ | ✅ |
+| Recovery Services Vault | ✅ | ✅ |
+
+---
+
+## Shared-Network Overview
+
+The shared-network stack establishes:
+
+- Hub/Spoke VNets per plane + environment  
+- VPN Gateway (optional)  
+- Application Gateway (optional)  
+- Azure Front Door (optional)  
+- Private DNS zones + resolver  
+- Per-subnet NSGs  
+- Public DNS (optional)
+
+Cloud awareness is handled by `var.product`.
+
+---
+
+## Secrets Hydration (Provision-Secrets Workflow)
+
+The **infra-secrets-provision.yml** workflow automatically hydrates Azure Key Vault secrets using schemas under `stacks/provision-secrets/`.
+
+### Key features:
+
+- Auto-select cloud (hrz/pub)
+- One KV hydrated per run
+- Supports literal bundle secrets
+- Uses schema to determine required values
+
+---
+
 ## Deployment Order (Conceptual)
 
 The typical end-to-end order is:
