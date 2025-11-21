@@ -1,4 +1,4 @@
-name: "Plan | Platform App"
+name: "Plan | 03-Platform App"
 run-name: "${{ format('🧩 {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs.product, inputs.env, github.ref_name, github.run_number) }}"
 
 concurrency:
