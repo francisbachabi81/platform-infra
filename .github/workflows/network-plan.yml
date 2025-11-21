@@ -1,4 +1,4 @@
-name: "Plan | Shared Network"
+name: "Plan | 01-Shared Network"
 run-name: "${{ format('🧩 {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs.product, inputs.plane, github.ref_name, github.run_number) }}"
 
 concurrency:
