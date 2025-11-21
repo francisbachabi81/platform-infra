@@ -40,7 +40,7 @@ sa_replication_type = "LRS"                      # LRS | ZRS | RAGRS | GZRS | RA
 
 # AKS (dev deploys in shared nonprod core RG; nodepool in nonprod hub/akspub) ─
 create_aks         = true
-kubernetes_version = "1.33.3"                    # ensure this version is available in your region
+kubernetes_version = "1.33.5"                    # ensure this version is available in your region
 aks_node_vm_size   = "Standard_B2s"
 aks_node_count     = 1
 aks_pod_cidr       = "10.210.0.0/16"
@@ -61,7 +61,10 @@ acr_zone_redundancy_enabled    = false
 create_servicebus             = true
 servicebus_sku                = "Standard"       # Basic | Standard | Premium
 servicebus_capacity           = 1
-servicebus_queues             = ["custom-dlq"]
+servicebus_queues = [
+  "incident-processor",
+  "location-processor",
+]
 servicebus_topics             = []
 servicebus_local_auth_enabled = true
 servicebus_manage_policy_name = "sb-dev-manage"

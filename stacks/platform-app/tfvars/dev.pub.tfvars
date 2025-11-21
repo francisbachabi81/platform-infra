@@ -40,7 +40,7 @@ sa_replication_type = "LRS"                      # LRS | ZRS | RAGRS | GZRS | RA
 
 # AKS (dev deploys in shared nonprod)
 create_aks         = true
-kubernetes_version = "1.33.3"                    # ensure this version is available in your region
+kubernetes_version = "1.33.5"                    # ensure this version is available in your region
 aks_node_vm_size   = "Standard_B2s"
 aks_node_count     = 1
 aks_pod_cidr       = "172.210.0.0/16"

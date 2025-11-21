@@ -67,16 +67,14 @@ See [`docs/folder_structure.md`](docs/folder_structure.md) for a detailed breakd
 | Key Vault | ✅ | ✅ |  |
 | Storage Account | ✅ | ✅ |  |
 | Cosmos (NoSQL) |  | ✅ |  |
-| AKS UAI | ✅ | ✅ |  |
 | AKS Cluster | ✅ | ✅ |  |
-| AKS Diagnostics | ✅ | ✅ |  |
 | Service Bus | ✅ | ✅ | When `var.create_servicebus` |
 | App Service Plan |  | ✅ | Public only |
 | Function Apps |  | ✅ |  |
 | Event Hubs |  | ✅ | Dev/Prod only |
 | Cosmos PostgreSQL |  | ✅ | When enabled |
-| PostgreSQL Flex |  | ✅ |  |
-| PostgreSQL Replica | ✅ | ✅ |  |
+| PostgreSQL Flex | ✅  | ✅ |  |
+| PostgreSQL Replica | ✅* | ✅* | Replica is created only when pg_replica_enabled=true and pg_ha_enabled=false (mutually exclusive with HA), and typically enabled only for QA and Prod. |
 | Redis Cache | ✅ | ✅ |  |
 
 ---
