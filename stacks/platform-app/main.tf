@@ -73,7 +73,8 @@ locals {
   sa_suffix_clean = replace(local.sa_suffix_raw, "-", "")
   sa_suffix_short = substr(local.sa_suffix_clean, 0, 6)
 
-  sa1_name  = substr("sa${var.product}${var.env}${var.region}01${local.uniq}", 0, 24)
+  # sa1_name  = substr("sa${var.product}${var.env}${var.region}01${local.uniq}", 0, 24)
+  sa1_name  = substr("sa${var.product}${var.env}${var.region}01", 0, 24)
   aks1_name = "aks-${var.product}-${var.env}-${var.region}-01"
 
   rg_hub = coalesce(var.rg_plane_name, "rg-${var.product}-${local.plane_code}-${var.region}-core-01")
@@ -1078,7 +1079,8 @@ module "postgres_replica" {
 
 # Redis (env)
 locals {
-  redis1_name       = "redis-${var.product}-${var.env}-${var.region}-01-${local.uniq}"
+  # redis1_name       = "redis-${var.product}-${var.env}-${var.region}-01-${local.uniq}"
+  redis1_name       = "redis-${var.product}-${var.env}-${var.region}-01"
   redis1_name_clean = replace(lower(trimspace(local.redis1_name)), "-", "")
 }
 
