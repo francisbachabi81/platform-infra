@@ -24,12 +24,16 @@ shared_state_enabled = true
 action_group_email_receivers = [
   {
     name                    = "Primary On-Call"
-    email_address           = "francis.bachabi@intterragoup.com"
+    email_address           = "francis.bachabi@intterragroup.com"
     # use_common_alert_schema defaults to true (omitted)
-  }#,
-  # {
-  #   name                    = "Ops Manager"
-  #   email_address           = "ops.manager@intterra.example"
-  #   use_common_alert_schema = false
-  # }
+  },
+  {
+    name                    = "Ops Manager"
+    email_address           = "francis.bachabi@intterragroup.com"
+    use_common_alert_schema = false
+  }
 ]
+
+enable_custom_domain    = true
+custom_domain_name      = "dev.public.intterra.io"
+associate_custom_domain = false  # flip to true *after* DNS verification

@@ -167,3 +167,13 @@ output "hub_ids" {
     vnet_id = try(module.vnet_hub.id, null)
   }
 }
+
+output "nsg_ids_by_env" {
+  value = {
+    hub  = try(module.nsg_hub.nsg_ids, {})
+    dev  = try(module.nsg_dev[0].nsg_ids, {})
+    qa   = try(module.nsg_qa[0].nsg_ids, {})
+    prod = try(module.nsg_prod[0].nsg_ids, {})
+    uat  = try(module.nsg_uat[0].nsg_ids, {})
+  }
+}

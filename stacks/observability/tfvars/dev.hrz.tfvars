@@ -11,12 +11,12 @@ ag_name  = "ag-obs-hrz-dev-cus-01"
 action_group_email_receivers = [
   {
     name                    = "Ops"
-    email_address           = "ops@example.gov"
+    email_address           = "francis.bachabi@intterragroup.com"
     use_common_alert_schema = true
   },
   {
     name          = "OnCall"
-    email_address = "oncall@example.gov"
+    email_address = "francis.bachabi@intterragroup.com"
   }
 ]
 

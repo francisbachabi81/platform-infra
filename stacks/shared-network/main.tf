@@ -1,10 +1,10 @@
-# ── terraform & providers ─────────────────────────────────────────────────────
+# terraform & providers
 terraform {
   required_version = ">= 1.6.5"
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 4.9.0"
+      version = "~> 4.14.0"
     }
   }
 }
@@ -62,7 +62,7 @@ provider "azurerm" {
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
-# ── globals ───────────────────────────────────────────────────────────────────
+# globals ───────────────────────────────────────────────────────────────────
 locals {
   is_nonprod = var.plane == "nonprod"
   is_prod    = var.plane == "prod"
@@ -173,7 +173,7 @@ locals {
   hub_key = local.is_nonprod ? "nphub" : "prhub"
 }
 
-# ── resource groups (per-env with proper provider) ────────────────────────────
+# resource groups (per-env with proper provider)
 module "rg_hub" {
   source   = "../../modules/resource-group"
   name     = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
@@ -217,7 +217,7 @@ module "rg_uat" {
   tags      = merge(local.tag_base, local.uat_only_tags, { layer = local.rg_layer_by_key["uat"] })
 }
 
-# ── vnets (per-env with proper provider) ──────────────────────────────────────
+# vnets (per-env with proper provider)
 module "vnet_hub" {
   source              = "../../modules/vnet"
   name                = local.is_nonprod ? var.nonprod_hub.vnet : var.prod_hub.vnet
@@ -281,7 +281,7 @@ module "vnet_uat" {
   depends_on          = [module.rg_uat]
 }
 
-# ── vnet peerings (ensure VPN GW first for transit) ───────────────────────────
+# vnet peerings (ensure VPN GW first for transit)
 resource "azurerm_virtual_network_peering" "hub_to_dev" {
   count                         = local.is_nonprod ? 1 : 0
   name                          = "peer-hub-to-dev"
@@ -382,7 +382,7 @@ resource "azurerm_virtual_network_peering" "uat_to_hub" {
   depends_on                    = [azurerm_virtual_network_peering.hub_to_uat]
 }
 
-# ── private dns (zones + links) ───────────────────────────────────────────────
+# private dns (zones + links)
 locals {
   vnet_links_nonprod_map = local.is_nonprod ? merge(
     { for z in var.private_zones :
@@ -444,7 +444,7 @@ module "pdns" {
   depends_on          = [module.rg_hub]
 }
 
-# ── connectivity: vpn gateway ─────────────────────────────────────────────────
+# connectivity: vpn gateway
 locals {
   create_vpng_effective     = var.create_vpn_gateway
   vpng_hub_rg               = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
@@ -490,7 +490,7 @@ module "vpng" {
   ]
 }
 
-# ── ingress: waf & appgw ──────────────────────────────────────────────────────
+# ingress: waf & appgw
 locals {
   appgw_hub_rg     = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
   has_appgw_subnet = local.is_nonprod ? contains(keys(var.nonprod_hub.subnets), "appgw") : contains(keys(var.prod_hub.subnets), "appgw")
@@ -592,7 +592,7 @@ module "appgw" {
   depends_on            = [azurerm_subnet_network_security_group_association.appgw_assoc]
 }
 
-# ── generic nsgs (except excluded) ────────────────────────────────────────────
+# generic nsgs (except excluded)
 locals {
   _np_hub_subnet_names  = local.is_nonprod ? keys(var.nonprod_hub.subnets) : []
   _np_dev_subnet_names  = local.is_nonprod ? keys(var.dev_spoke.subnets)   : []
@@ -706,7 +706,7 @@ module "nsg_uat" {
   tags                = merge(local.tag_base, local.uat_only_tags, { lane = "prod" })
 }
 
-# ── nsg rules: isolation & baseline (provider-correct per subscription) ───────
+# nsg rules: isolation & baseline (provider-correct per subscription) ───────
 locals {
   # Existing struct maps from earlier locals (unchanged)
   all_plane_nsg_targets_struct = {
@@ -743,7 +743,7 @@ locals {
   all_targets_prod = { for k, v in local.all_plane_nsg_targets_struct : k => v if can(regex("^prod-", k)) }
   all_targets_uat  = { for k, v in local.all_plane_nsg_targets_struct : k => v if can(regex("^uat-",  k)) }
 
-  # ── workload (non-PE) NSGs for baseline egress rules
+  # workload (non-PE) NSGs for baseline egress rules
   _workload_pairs = {
     for k in local.nsg_keys :
     k => {
@@ -766,7 +766,7 @@ locals {
   workload_targets_prod = { for k, v in local.workload_targets_all : k => v if can(regex("^prod-", k)) }
   workload_targets_uat  = { for k, v in local.workload_targets_all : k => v if can(regex("^uat-",  k)) }
 
-  # ── PE subnet NSGs
+  # PE subnet NSGs
   _pe_keys_plane = [for k in local.nsg_keys : k if can(regex("privatelink", k))]
 
   _pe_role_by_key = {
@@ -1040,7 +1040,7 @@ resource "azurerm_network_security_rule" "deny_uat_to_prod_pr" {
   ]
 }
 
-# ── baseline egress on workload nsgs (per subscription) ───────────────────────
+# baseline egress on workload nsgs (per subscription) ───────────────────────
 resource "azurerm_network_security_rule" "allow_dns_to_azure_hub" {
   for_each                    = local.workload_targets_hub
   name                        = "allow-dns-azure"
@@ -1435,7 +1435,7 @@ resource "azurerm_network_security_rule" "allow_azuremonitor_uat" {
   ]
 }
 
-# ── private endpoint rules (lane allow/deny) per subscription ────────────────
+# private endpoint rules (lane allow/deny) per subscription ────────────────
 resource "azurerm_network_security_rule" "pe_allow_lane_hub" {
   for_each                    = local.pe_allow_hub
   name                        = "allow-from-hub-and-spoke"
@@ -1626,7 +1626,7 @@ resource "azurerm_network_security_rule" "pe_deny_other_vnets_uat" {
   ]
 }
 
-# ── AKS egress (per subscription) ─────────────────────────────────────────────
+# AKS egress (per subscription)
 
 # HTTPS to Internet
 resource "azurerm_network_security_rule" "aks_allow_https_internet_hub" {
@@ -1928,7 +1928,7 @@ resource "azurerm_network_security_rule" "aks_allow_acr_uat" {
   ]
 }
 
-# ── PE (Cosmos DB for PostgreSQL) - outbound baseline (per subscription) ─────
+# PE (Cosmos DB for PostgreSQL) - outbound baseline (per subscription) ─────
 resource "azurerm_network_security_rule" "pe_cdbpg_deny_internet_hub" {
   for_each                    = local.pe_cdbpg_hub
   name                        = "deny-internet-egress"
@@ -2028,7 +2028,7 @@ resource "azurerm_network_security_rule" "pe_cdbpg_deny_internet_uat" {
   ]
 }
 
-# ── dns: private resolver ─────────────────────────────────────────────────────
+# dns: private resolver
 locals {
   dnsr_name         = "pdnsr-${var.product}-${local.plane_code}-${var.region}-01"
   dnsr_hub_rg       = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
@@ -2066,7 +2066,7 @@ module "dns_resolver" {
   ]
 }
 
-# ── dns: public zones ─────────────────────────────────────────────────────────
+# dns: public zones 
 locals {
   public_dns_zones_active = toset(var.public_dns_zones)
   public_dns_env          = local.is_nonprod ? "nonprod" : "prod"
@@ -2126,7 +2126,7 @@ module "fd" {
   depends_on = [module.rg_hub]
 }
 
-# ── network watcher (regional, managed by this stack) ─────────────────────────
+# network watcher (regional, managed by this stack) 
 resource "azurerm_network_watcher" "hub" {
   name                = "nw-${var.product}-${local.plane_code}-${var.region}-01"
   location            = var.location
@@ -2141,7 +2141,7 @@ resource "azurerm_network_watcher" "hub" {
   depends_on = [module.rg_hub]
 }
 
-# ── network watcher (spokes, subscription-local) ──────────────────────────────
+# network watcher (spokes, subscription-local)
 
 # DEV (nonprod plane only)
 resource "azurerm_network_watcher" "dev" {

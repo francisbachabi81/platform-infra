@@ -5,7 +5,7 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 4.14.0" # or latest 4.x you’re comfortable with
+      version = "~> 4.14.0"
     }
   }
 }
@@ -44,7 +44,7 @@ locals {
   rsv_name      = "rsv-${var.product}-${local.plane_code}-${var.region}-01"
   rg_name_core  = "rg-${var.product}-${local.plane_code}-${var.region}-core-01"
 
-  # choose ONE of these to control scope:
+  # control scope
   create_scope_pub  = local.enable_public_features
   create_scope_hrz  = local.enable_hrz_features
   create_scope_both = local.enable_both
@@ -52,9 +52,8 @@ locals {
   acs_name        = "acs-${var.product}-${local.plane_code}-${var.region}-01"
   email_svc_name  = "acse-${var.product}-${local.plane_code}-${var.region}-01"
 
-  # Data location rules:
-  # - Azure Gov (hrz) → "usgov"
-  # - Azure Commercial (pub) → "United States"
+  # - Azure Gov (hrz) > "usgov"
+  # - Azure Commercial (pub) > "United States"
   acs_data_location = var.product == "hrz" ? "usgov" : "United States"
 
   email_data_location = local.acs_data_location
@@ -76,7 +75,6 @@ data "terraform_remote_state" "shared" {
 }
 
 module "rg_core_platform" {
-  # pick one scope below by swapping create_scope_*:
   count    = (var.create_rg_core_platform && local.create_scope_both) ? 1 : 0
   source   = "../../modules/resource-group"
   name     = local.rg_name_core
@@ -275,7 +273,7 @@ KQL
   }
 
   depends_on = [
-    module.rg_core_platform,                       # RG must exist first (when you create it)
+    module.rg_core_platform,                       # RG must exist first
     azurerm_log_analytics_workspace.plane,         # Workspace must exist
     azurerm_monitor_action_group.core              # Action group (if created) must exist
   ]
@@ -296,7 +294,7 @@ module "communication" {
   # just to create the domain and get DNS records)
   enable_custom_domain    = var.enable_custom_domain         # create the customer-managed domain resource
   custom_domain_name      = var.custom_domain_name
-  associate_custom_domain = var.associate_custom_domain        # turn this to true *after* DNS verification
+  associate_custom_domain = var.associate_custom_domain        # turn this to true after DNS verification
 
   tags = merge(local.tags_common, { service = "communication" })
 }

@@ -1,56 +1,46 @@
-# ── env / provider ────────────────────────────────────────────────────────────
+# env / provider
 env             = "dev"                         # dev | qa | uat | prod
-product         = "pub"                         # pub (Azure Commercial)
+product         = "pub"                         # hrz (Azure Gov) | pub (Azure Commercial)
 location        = "Central US"
 region          = "cus"
 rg_name         = "rg-pub-dev-cus-01"
 subscription_id = "57f8aa30-981c-4764-94f6-6691c4d5c01c"   # ← dev subscription
 tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
-# Hub overrides (shared-network lives here; often same as shared nonprod)
+# Hub overrides — shared-network (nonprod hub) usually lives in the shared nonprod sub.
+# Set these so data sources that use provider.azurerm.hub resolve correctly.
 hub_subscription_id = "ee8a4693-54d4-4de8-842b-b6f35fc0674d"  # ← shared nonprod
 hub_tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
-# NEW: Provider alias overrides used by AKS routing logic
-shared_nonprod_subscription_id = "ee8a4693-54d4-4de8-842b-b6f35fc0674d"  # must differ from subscription_id
+# Provider alias overrides used by AKS routing logic (shared nonprod)
+shared_nonprod_subscription_id = "ee8a4693-54d4-4de8-842b-b6f35fc0674d"
 shared_nonprod_tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
-# (When you run for prod/uat, you can set these; they are optional and default to subscription_id/tenant_id)
-# prod_subscription_id = "..."
-# prod_tenant_id       = "..."
-# uat_subscription_id  = "..."
-# uat_tenant_id        = "..."
-
-# ── remote state (shared-network + core) ──────────────────────────────────────
+# remote state (shared-network + core)
 state_rg_name        = "rg-core-infra-state"
 state_sa_name        = "sacoretfstateinfra"
 state_container_name = "tfstate"
 
 shared_state_enabled = true
 core_state_enabled   = true
-# default core key = core/np/terraform.tfstate
-# core_state_key     = "core/np/terraform.tfstate"
 
-# ── tags / naming ────────────────────────────────────────────────────────────
-tags        = { 
-    env = "dev"
-    product = "pub" 
+# tags / naming
+tags = {
+  env     = "dev"
+  product = "pub"
 }
 name_suffix = ""
 
-# ── key vault ─────────────────────────────────────────────────────────────────
+# key vault
 purge_protection_enabled   = false
 soft_delete_retention_days = 7
 
-# ── storage ───────────────────────────────────────────────────────────────────
+# storage 
 sa_replication_type = "LRS"                      # LRS | ZRS | RAGRS | GZRS | RAGZRS
 
-# ── AKS (dev deploys in shared nonprod) ───────────────────────────────────────
+# AKS (dev deploys in shared nonprod)
 create_aks         = true
 kubernetes_version = "1.33.3"                    # ensure this version is available in your region
-# NOTE: The module sets node_resource_group from a naming convention in main.tf.
-# The following tfvar is UNUSED and can be removed to avoid confusion:
-# node_resource_group = "rg-pub-np-aksnodes-cus"
 aks_node_vm_size   = "Standard_B2s"
 aks_node_count     = 1
 aks_pod_cidr       = "172.210.0.0/16"
@@ -58,7 +48,7 @@ aks_service_cidr   = "172.110.0.0/16"
 aks_dns_service_ip = "172.110.0.10"
 aks_sku_tier       = "Free"                       # Free | Standard | Premium
 
-# ── ACR (hub) ─────────────────────────────────────────────────────────────────
+# ACR (hub)
 acr_sku                        = "Basic"         # Basic | Standard | Premium
 admin_enabled                  = true
 public_network_access_enabled  = false           # honored on Premium only
@@ -67,7 +57,7 @@ acr_anonymous_pull_enabled     = false
 acr_data_endpoint_enabled      = false
 acr_zone_redundancy_enabled    = false
 
-# ── Service Bus (env) ─────────────────────────────────────────────────────────
+# Service Bus (env)
 create_servicebus             = true
 servicebus_sku                = "Standard"       # Basic | Standard | Premium
 servicebus_capacity           = 1
@@ -75,12 +65,12 @@ servicebus_queues = [
   "incident-processor",
   "location-processor",
 ]
-servicebus_topics = []
+servicebus_topics             = []
 servicebus_local_auth_enabled = true
 servicebus_manage_policy_name = "sb-dev-manage"
 servicebus_min_tls_version    = "1.2"
 
-# ── Cosmos DB for PostgreSQL (Citus) (env) ───────────────────────────────────
+# Cosmos DB for PostgreSQL (Citus) (env)
 create_cdbpg                          = true
 cdbpg_node_count                      = 0
 cdbpg_citus_version                   = "12.1"
@@ -94,7 +84,7 @@ cdbpg_enable_private_endpoint         = true
 cdbpg_preferred_primary_zone          = "2"
 # cdbpg_admin_password via TF_VAR_cdbpg_admin_password
 
-# ── PostgreSQL Flexible Server (env) ─────────────────────────────────────────
+# PostgreSQL Flexible Server (env)
 pg_version               = "16"
 pg_sku_name              = "B_Standard_B1ms"
 pg_storage_mb            = 32768
@@ -123,23 +113,19 @@ pg_replica_enabled       = false
 pg_enable_postgis        = true
 # pg_admin_password via TF_VAR_pg_admin_password
 
-# ── Cosmos (NoSQL) (env) ─────────────────────────────────────────────────────
+# Cosmos (NoSQL) (env) 
 cosno_total_throughput_limit = 400
 
-# ── Redis (env) ───────────────────────────────────────────────────────────────
+# Redis (env) 
 redis_sku_name   = "Standard"                     # Basic | Standard | Premium
 redis_sku_family = "C"
 redis_capacity   = 1
 
-# ── App Service Plan / Functions (env) ────────────────────────────────────────
+# App Service Plan / Functions (env)
 asp_os_type              = "Linux"
 func_linux_plan_sku_name = "P0v3"
 
-servicebus_queues = [
-  "incident-processor",
-  "location-processor",
-]
-
+# Example for topics if needed later:
 # servicebus_topics = [
 #   "topic1",
 #   "topic2",

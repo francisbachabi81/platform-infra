@@ -290,6 +290,17 @@ locals {
     try(data.terraform_remote_state.network.outputs.frontdoor.profile_id,  null)
   ])
 
+  nsg_ids_flat = concat(
+    values(try(data.terraform_remote_state.network.outputs.nsg_ids_by_env.hub,  {})),
+    values(try(data.terraform_remote_state.network.outputs.nsg_ids_by_env.dev,  {})),
+    values(try(data.terraform_remote_state.network.outputs.nsg_ids_by_env.qa,   {})),
+    values(try(data.terraform_remote_state.network.outputs.nsg_ids_by_env.prod, {})),
+    values(try(data.terraform_remote_state.network.outputs.nsg_ids_by_env.uat,  {}))
+  )
+
+  ids_nsg = compact(local.nsg_ids_flat)
+
+
   kv_map    = { for id in local.ids_kv    : id => id }
   sa_map    = { for id in local.ids_sa    : id => id }
   sbns_map  = { for id in local.ids_sbns  : id => id }
@@ -305,6 +316,11 @@ locals {
   web_map    = { for id in local.ids_webapps   : id => id }
   appgw_map  = { for id in local.ids_appgws    : id => id }
   afd_map    = { for id in local.ids_frontdoor : id => id }
+
+  nsg_map = {
+    for id in local.ids_nsg :
+    id => id
+  }
 }
 
 # Diagnostic categories
@@ -378,9 +394,55 @@ data "azurerm_monitor_diagnostic_categories" "cosmos" {
   resource_id = each.value
 }
 
+data "azurerm_monitor_diagnostic_categories" "nsg" {
+  for_each    = local.nsg_map
+  resource_id = each.value
+}
+
 # Diagnostic settings (to LAW)
 locals {
   sub_env_target_id = local.sub_env_resolved != null ? "/subscriptions/${local.sub_env_resolved}" : null
+}
+
+resource "azurerm_monitor_diagnostic_setting" "nsg" {
+  for_each                   = {
+    for id, cats in data.azurerm_monitor_diagnostic_categories.nsg :
+    id => cats
+    if length(try(cats.logs, [])) > 0 || length(try(cats.metrics, [])) > 0
+  }
+
+  name                       = var.diag_name
+  target_resource_id         = each.key
+  log_analytics_workspace_id = local.law_id
+
+  dynamic "enabled_log" {
+    for_each = toset([
+      for c in [
+        "NetworkSecurityGroupEvent",
+        "NetworkSecurityGroupRuleCounter",
+      ] :
+      c if contains(try(each.value.logs, []), c)
+    ])
+    content {
+      category = enabled_log.value
+    }
+  }
+
+  # NSGs typically don’t have metrics categories, but this keeps the pattern consistent
+  dynamic "metric" {
+    for_each = toset(try(each.value.metrics, []))
+    content {
+      category = metric.value
+      enabled  = true
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null
+      error_message = "LAW workspace ID could not be resolved for NSG diagnostics."
+    }
+  }
 }
 
 resource "azurerm_monitor_diagnostic_setting" "sub_env" {
@@ -558,6 +620,7 @@ resource "azurerm_monitor_diagnostic_setting" "rsv" {
 
   # Enable the categories you care about.
   # Get the exact strings from the Portal JSON view.
+  enabled_log { category = "AzureBackupOperations" }
   enabled_log { category = "AzureSiteRecoveryJobs" }
   enabled_log { category = "AzureSiteRecoveryEvents" }
   enabled_log { category = "CoreAzureBackup" }

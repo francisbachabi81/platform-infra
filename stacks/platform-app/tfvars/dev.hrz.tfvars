@@ -1,54 +1,46 @@
-# ── env / provider ────────────────────────────────────────────────────────────
+# env / provider 
 env             = "dev"                         # dev | qa | uat | prod
-product         = "hrz"                         # hrz (Azure Gov) | pub (Azure Public)
+product         = "hrz"                         # hrz (Azure Gov) | pub (Azure Commercial)
 location        = "USGov Arizona"
 region          = "usaz"
 rg_name         = "rg-hrz-dev-usaz-01"
 subscription_id = "62ae6908-cbcb-40cb-8773-54bd318ff7f9"  # ← dev subscription (NOT the shared nonprod)
-tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
+tenant_id       = " ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
 # Hub overrides — shared-network (nonprod hub) usually lives in the shared nonprod sub.
 # Set these so data sources that use provider.azurerm.hub resolve correctly.
 hub_subscription_id = "df6dc63f-c4dc-4590-ba4b-f2ce9639ca6c"
 hub_tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
-# AKS provider alias for env=dev → shared nonprod subscription
+# Provider alias overrides used by AKS routing logic (shared nonprod)
 shared_nonprod_subscription_id = "df6dc63f-c4dc-4590-ba4b-f2ce9639ca6c"
 shared_nonprod_tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
-# (Optional for other env runs; defaults to subscription_id/tenant_id if omitted)
-# prod_subscription_id = "..."
-# prod_tenant_id       = "..."
-# uat_subscription_id  = "..."
-# uat_tenant_id        = "..."
-
-# ── remote state (shared-network + core) ──────────────────────────────────────
+# remote state (shared-network + core) 
 state_rg_name        = "rg-core-infra-state"
 state_sa_name        = "sacoretfstateinfra"
 state_container_name = "tfstate"
 
 shared_state_enabled = true
 core_state_enabled   = true
-# default core key = core/np/terraform.tfstate
-# core_state_key     = "core/np/terraform.tfstate"
 
-# ── tags / naming ────────────────────────────────────────────────────────────
-tags        = { 
-    env = "dev"
-    product = "hrz" 
+# tags / naming 
+tags = {
+  env     = "dev"
+  product = "hrz"
 }
 name_suffix = ""
 
-# ── key vault ─────────────────────────────────────────────────────────────────
+# key vault 
 purge_protection_enabled   = false
 soft_delete_retention_days = 7
 
-# ── storage ───────────────────────────────────────────────────────────────────
+# storage
 sa_replication_type = "LRS"                      # LRS | ZRS | RAGRS | GZRS | RAGZRS
 
-# ── AKS (dev deploys in shared nonprod core RG; nodepool in nonprod hub/akspub) ─
+# AKS (dev deploys in shared nonprod core RG; nodepool in nonprod hub/akspub) ─
 create_aks         = true
-kubernetes_version = "1.33.3"                    # ensure available in USGov region
+kubernetes_version = "1.33.3"                    # ensure this version is available in your region
 aks_node_vm_size   = "Standard_B2s"
 aks_node_count     = 1
 aks_pod_cidr       = "10.210.0.0/16"
@@ -56,7 +48,7 @@ aks_service_cidr   = "10.110.0.0/16"
 aks_dns_service_ip = "10.110.0.10"
 aks_sku_tier       = "Free"                      # Free | Standard | Premium
 
-# ── ACR (hub) ─────────────────────────────────────────────────────────────────
+# ACR (hub) 
 acr_sku                        = "Basic"         # Basic | Standard | Premium
 admin_enabled                  = true
 public_network_access_enabled  = false           # honored on Premium only
@@ -65,7 +57,7 @@ acr_anonymous_pull_enabled     = false
 acr_data_endpoint_enabled      = false
 acr_zone_redundancy_enabled    = false
 
-# ── Service Bus (env) ─────────────────────────────────────────────────────────
+# Service Bus (env)
 create_servicebus             = true
 servicebus_sku                = "Standard"       # Basic | Standard | Premium
 servicebus_capacity           = 1
@@ -75,7 +67,7 @@ servicebus_local_auth_enabled = true
 servicebus_manage_policy_name = "sb-dev-manage"
 servicebus_min_tls_version    = "1.2"
 
-# ── Cosmos DB for PostgreSQL (Citus) (env) ───────────────────────────────────
+# Cosmos DB for PostgreSQL (Citus) (env) 
 create_cdbpg                          = true
 cdbpg_node_count                      = 0
 cdbpg_citus_version                   = "12.1"
@@ -89,7 +81,7 @@ cdbpg_enable_private_endpoint         = true
 cdbpg_preferred_primary_zone          = "2"
 # cdbpg_admin_password via TF_VAR_cdbpg_admin_password
 
-# ── PostgreSQL Flexible Server (env) ─────────────────────────────────────────
+# PostgreSQL Flexible Server (env)
 pg_version               = "16"
 pg_sku_name              = "B_Standard_B1ms"
 pg_storage_mb            = 32768
@@ -118,14 +110,14 @@ pg_replica_enabled       = false  # no replica
 pg_enable_postgis        = true
 # pg_admin_password via TF_VAR_pg_admin_password
 
-# ── Cosmos (NoSQL) (env) ─────────────────────────────────────────────────────
+# Cosmos (NoSQL) (env)
 cosno_total_throughput_limit = 400
 
-# ── Redis (env) ───────────────────────────────────────────────────────────────
+# Redis (env)
 redis_sku_name   = "Standard"                     # Basic | Standard | Premium
 redis_sku_family = "C"
 redis_capacity   = 1
 
-# ── App Service Plan / Functions (env; often off in Gov for apps) ────────────
+# App Service Plan / Functions (env; often off in Gov for apps)
 asp_os_type              = "Linux"
 func_linux_plan_sku_name = "P0v3"
