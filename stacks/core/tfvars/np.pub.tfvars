@@ -23,13 +23,13 @@ shared_state_enabled = true
 
 action_group_email_receivers = [
   {
-    name                    = "Primary On-Call"
+    name                    = "Ops Manager"
     email_address           = "francis.bachabi@intterragroup.com"
     # use_common_alert_schema defaults to true (omitted)
   },
   {
-    name                    = "Ops Manager"
-    email_address           = "francis.bachabi@intterragroup.com"
+    name                    = "Ops Azure Alerts"
+    email_address           = "azure-alerts@intterragroup.com"
     use_common_alert_schema = false
   }
 ]
