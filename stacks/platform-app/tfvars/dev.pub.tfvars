@@ -86,7 +86,15 @@ cdbpg_preferred_primary_zone          = "2"
 
 # PostgreSQL Flexible Server (env)
 pg_version               = "16"
-pg_sku_name              = "B_Standard_B1ms"
+pg_sku_name              = "GP_Standard_D2s_v3"
+# Suggested SKUs when you move up environments:
+#   dev:  "B_Standard_B2ms"        # Burstable, cheapest option — NO HA support
+#   QA:  "GP_Standard_D2s_v3"   # 2 vCores, General Purpose, HA-capable
+#   UAT: "GP_Standard_D4s_v3"   # 4 vCores, General Purpose, HA-capable
+#   Prod (option 1): "GP_Standard_D8s_v3"   # 8 vCores, GP, HA-capable
+#   Prod (option 2): "MO_Standard_E4s_v3"   # 4 vCores, Memory Optimized, HA-capable
+#
+# All GP_* / MO_* SKUs above support Flexible Server HA (SameZone/ZoneRedundant).
 pg_storage_mb            = 32768
 pg_geo_redundant_backup  = false
 pg_delegated_subnet_name = "pgflex"
@@ -104,9 +112,9 @@ pg_aad_auth_enabled      = true
 # - Azure Commercial:
 #       • pg_zone may be set explicitly (1/2/3) if SKU/region supports it.
 #       • HA may support SameZone or ZoneRedundant depending on SKU/region.
-pg_ha_enabled            = false
-pg_zone                  = "1"
-pg_ha_zone               = "2"
+pg_ha_enabled            = true  # HA ON/OFF
+pg_zone                  = "1"   # important change: no explicit AZ
+pg_ha_zone               = "2"   # effectively ignored while HA is off and no explicit AZ
 pg_firewall_rules        = []
 pg_databases             = ["appdb"]
 pg_replica_enabled       = false
