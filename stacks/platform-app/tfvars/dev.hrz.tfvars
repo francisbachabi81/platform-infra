@@ -86,7 +86,7 @@ cdbpg_preferred_primary_zone          = "2"
 
 # PostgreSQL Flexible Server (env)
 pg_version               = "16"
-pg_sku_name              = "GP_Standard_D2s_v3"
+pg_sku_name              = "B_Standard_B2ms"
 # Suggested SKUs when you move up environments:
 #   dev:  "B_Standard_B2ms"        # Burstable, cheapest option — NO HA support
 #   QA:  "GP_Standard_D2s_v3"   # 2 vCores, General Purpose, HA-capable
