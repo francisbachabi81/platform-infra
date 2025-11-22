@@ -1040,6 +1040,217 @@ resource "azurerm_network_security_rule" "deny_uat_to_prod_pr" {
   ]
 }
 
+# PostgreSQL Flexible Server HA (pgflex subnet) - allow TCP 5432 within VNet
+# This ensures HA replication between primary and standby in the delegated subnet.
+
+# Inbound allow (hub)
+resource "azurerm_network_security_rule" "pgflex_allow_ha_inbound_hub" {
+  for_each                    = { for k, v in local.workload_targets_hub : k => v if can(regex("pgflex$", k)) }
+  name                        = "allow-pg-ha-inbound"
+  priority                    = 220
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5432"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "VirtualNetwork"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+# Inbound allow (dev)
+resource "azurerm_network_security_rule" "pgflex_allow_ha_inbound_dev" {
+  provider                    = azurerm.dev
+  for_each                    = { for k, v in local.workload_targets_dev : k => v if can(regex("pgflex$", k)) }
+  name                        = "allow-pg-ha-inbound"
+  priority                    = 220
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5432"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "VirtualNetwork"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+# Inbound allow (qa)
+resource "azurerm_network_security_rule" "pgflex_allow_ha_inbound_qa" {
+  provider                    = azurerm.qa
+  for_each                    = { for k, v in local.workload_targets_qa : k => v if can(regex("pgflex$", k)) }
+  name                        = "allow-pg-ha-inbound"
+  priority                    = 220
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5432"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "VirtualNetwork"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+# Inbound allow (prod)
+resource "azurerm_network_security_rule" "pgflex_allow_ha_inbound_prod" {
+  provider                    = azurerm.prod
+  for_each                    = { for k, v in local.workload_targets_prod : k => v if can(regex("pgflex$", k)) }
+  name                        = "allow-pg-ha-inbound"
+  priority                    = 220
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5432"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "VirtualNetwork"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+# Inbound allow (uat)
+resource "azurerm_network_security_rule" "pgflex_allow_ha_inbound_uat" {
+  provider                    = azurerm.uat
+  for_each                    = { for k, v in local.workload_targets_uat : k => v if can(regex("pgflex$", k)) }
+  name                        = "allow-pg-ha-inbound"
+  priority                    = 220
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5432"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "VirtualNetwork"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+# Outbound allow (hub)
+resource "azurerm_network_security_rule" "pgflex_allow_ha_outbound_hub" {
+  for_each                    = { for k, v in local.workload_targets_hub : k => v if can(regex("pgflex$", k)) }
+  name                        = "allow-pg-ha-outbound"
+  priority                    = 320
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5432"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "VirtualNetwork"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+# Outbound allow (dev)
+resource "azurerm_network_security_rule" "pgflex_allow_ha_outbound_dev" {
+  provider                    = azurerm.dev
+  for_each                    = { for k, v in local.workload_targets_dev : k => v if can(regex("pgflex$", k)) }
+  name                        = "allow-pg-ha-outbound"
+  priority                    = 320
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5432"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "VirtualNetwork"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+# Outbound allow (qa)
+resource "azurerm_network_security_rule" "pgflex_allow_ha_outbound_qa" {
+  provider                    = azurerm.qa
+  for_each                    = { for k, v in local.workload_targets_qa : k => v if can(regex("pgflex$", k)) }
+  name                        = "allow-pg-ha-outbound"
+  priority                    = 320
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5432"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "VirtualNetwork"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+# Outbound allow (prod)
+resource "azurerm_network_security_rule" "pgflex_allow_ha_outbound_prod" {
+  provider                    = azurerm.prod
+  for_each                    = { for k, v in local.workload_targets_prod : k => v if can(regex("pgflex$", k)) }
+  name                        = "allow-pg-ha-outbound"
+  priority                    = 320
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5432"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "VirtualNetwork"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+# Outbound allow (uat)
+resource "azurerm_network_security_rule" "pgflex_allow_ha_outbound_uat" {
+  provider                    = azurerm.uat
+  for_each                    = { for k, v in local.workload_targets_uat : k => v if can(regex("pgflex$", k)) }
+  name                        = "allow-pg-ha-outbound"
+  priority                    = 320
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5432"
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "VirtualNetwork"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
 # baseline egress on workload nsgs (per subscription) ───────────────────────
 resource "azurerm_network_security_rule" "allow_dns_to_azure_hub" {
   for_each                    = local.workload_targets_hub
