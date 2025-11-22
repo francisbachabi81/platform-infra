@@ -399,30 +399,31 @@ locals {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "nsg" {
-  for_each                   = {
+  for_each = {
     for id, cats in data.azurerm_monitor_diagnostic_categories.nsg :
     id => cats
-    if length(try(cats.logs, [])) > 0 || length(try(cats.metrics, [])) > 0
+    if length(try(cats.log_category_types, [])) > 0 || length(try(cats.metrics, [])) > 0
   }
 
   name                       = var.diag_name
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
+  # Enable only the NSG-relevant log categories if they exist
   dynamic "enabled_log" {
     for_each = toset([
       for c in [
         "NetworkSecurityGroupEvent",
         "NetworkSecurityGroupRuleCounter",
       ] :
-      c if contains(try(each.value.logs, []), c)
+      c if contains(try(each.value.log_category_types, []), c)
     ])
     content {
       category = enabled_log.value
     }
   }
 
-  # NSGs typically don’t have metrics categories, but this keeps the pattern consistent
+  # (Optional) enable metrics if you want them and they're supported
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
     content {
