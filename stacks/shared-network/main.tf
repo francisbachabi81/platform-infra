@@ -22,9 +22,6 @@ locals {
 
   prod_sub = (var.prod_subscription_id != null && trimspace(var.prod_subscription_id) != "") ? var.prod_subscription_id : var.hub_subscription_id
   prod_ten = (var.prod_tenant_id       != null && trimspace(var.prod_tenant_id)       != "") ? var.prod_tenant_id       : var.hub_tenant_id
-
-  hub_rg_name  = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
-  hub_rg_scope = "/subscriptions/${var.hub_subscription_id}/resourceGroups/${local.hub_rg_name}"
 }
 
 # Default = HUB subscription
@@ -2208,35 +2205,4 @@ resource "azurerm_network_watcher" "uat" {
   })
 
   depends_on = [module.rg_uat]
-}
-
-data "azurerm_role_definition" "user_access_admin_hub" {
-  name  = "User Access Administrator"
-  scope = local.hub_rg_scope
-}
-
-data "azurerm_role_definition" "private_dns_zone_contributor" {
-  name  = "Private DNS Zone Contributor"
-  scope = local.hub_rg_scope
-}
-
-resource "azurerm_role_assignment" "github_sp_uaa_hub_pdns_rg" {
-  scope              = local.hub_rg_scope
-  role_definition_id = data.azurerm_role_definition.user_access_admin_hub.role_definition_id
-  principal_id       = var.github_sp_object_id
-  principal_type     = "ServicePrincipal"
-
-  # Role assignment condition - limit what this UAA can assign
-  condition_version  = "2.0"
-  condition          = <<-JSON
-  {
-    "Version": "2.0",
-    "Expression": 
-      "!(
-         actionMatches{'Microsoft.Authorization/roleAssignments/write'}
-         && !requestBodyContainsRoleDefinitionId('${data.azurerm_role_definition.private_dns_zone_contributor.role_definition_id}')
-       )",
-    "Description": "Limit this principal so it can only assign 'Private DNS Zone Contributor' in this scope."
-  }
-  JSON
 }
