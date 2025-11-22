@@ -86,26 +86,28 @@ resource "azurerm_postgresql_flexible_server" "pg" {
       error_message = "replica_enabled=true requires source_server_id."
     }
 
+    # HA constraints:
+    # - If HA is off, or this is a replica, no extra checks.
+    # - If HA is SameZone: let Azure validate (no explicit zone requirements).
+    # - If HA is ZoneRedundant: require zone + ha_zone set and different.
     precondition {
       condition = (
-        # replicas ignore HA
         var.replica_enabled ||
-        # HA not enabled → nothing to check
-        !var.ha_enabled ||
-        # HA enabled on primary:
+        !var.ha_enabled      ||
+        local.ha_mode_effective == "SameZone" ||
         (
-          # zone must always be set when HA is enabled
-          var.zone != null &&
-          (
-            # For ZoneRedundant: ha_zone must be set and different from zone
-            local.ha_mode_effective == "ZoneRedundant"
-              ? (var.ha_zone != null && var.zone != var.ha_zone)
-              # For SameZone: we only require zone; ha_zone is ignored
-              : true
-          )
+          local.ha_mode_effective == "ZoneRedundant" &&
+          var.zone    != null &&
+          var.ha_zone != null &&
+          var.zone    != var.ha_zone
         )
       )
-      error_message = "When ha_enabled=true on a primary: zone must be set; for ZoneRedundant, ha_zone must also be set and different from zone."
+
+      error_message = <<-EOM
+When ha_enabled=true on a primary:
+- For SameZone HA: zone/ha_zone are not validated by this module (Azure will enforce any limits).
+- For ZoneRedundant HA: both 'zone' and 'ha_zone' must be set and different.
+EOM
     }
   }
 
