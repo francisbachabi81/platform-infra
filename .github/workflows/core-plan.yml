@@ -220,7 +220,7 @@ jobs:
           terraform plan -input=false -lock-timeout=5m \
             -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
             -var "product=${{ steps.sel.outputs.PRODUCT }}" \
-            -var "env=${{ steps.sel.outputs.ENV }}" \
+            -var "plane=${{ steps.sel.outputs.PLANE }}" \
             -detailed-exitcode -out=tfplan \
             2>&1 | tee plan-raw.txt
           ec=${PIPESTATUS[0]}
