@@ -3,7 +3,7 @@ env             = "dev"                         # dev | qa | uat | prod
 product         = "pub"                         # hrz (Azure Gov) | pub (Azure Commercial)
 location        = "Central US"
 region          = "cus"
-rg_name         = "rg-pub-dev-cus-01"
+rg_name         = "rg-pub-dev-cus-100"
 subscription_id = "57f8aa30-981c-4764-94f6-6691c4d5c01c"   # ← dev subscription
 tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
