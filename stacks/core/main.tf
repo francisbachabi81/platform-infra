@@ -298,4 +298,6 @@ module "communication" {
   associate_custom_domain = var.associate_custom_domain        # turn this to true after DNS verification
 
   tags = merge(local.tags_common, { service = "communication" })
+
+  depends_on = [module.rg_core_platform]
 }
