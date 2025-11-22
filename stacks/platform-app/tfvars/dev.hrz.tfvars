@@ -5,7 +5,7 @@ location        = "USGov Arizona"
 region          = "usaz"
 rg_name         = "rg-hrz-dev-usaz-01"
 subscription_id = "62ae6908-cbcb-40cb-8773-54bd318ff7f9"  # ← dev subscription (NOT the shared nonprod)
-tenant_id       = " ed7990c3-61c2-477d-85e9-1a396c19ae94"
+tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
 # Hub overrides — shared-network (nonprod hub) usually lives in the shared nonprod sub.
 # Set these so data sources that use provider.azurerm.hub resolve correctly.
