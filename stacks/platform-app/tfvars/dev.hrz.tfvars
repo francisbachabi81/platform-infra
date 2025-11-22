@@ -113,7 +113,7 @@ pg_aad_auth_enabled      = true
 #       • pg_zone may be set explicitly (1/2/3) if SKU/region supports it.
 #       • HA may support SameZone or ZoneRedundant depending on SKU/region.
 pg_ha_enabled            = true  # HA ON
-pg_zone                  = "1"   # important change: no explicit AZ
+pg_zone                  = null  # important change: no explicit AZ
 pg_ha_zone               = null   # effectively ignored while HA is off and no explicit AZ
 pg_firewall_rules        = []
 pg_databases             = ["appdb"]
