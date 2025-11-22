@@ -5,6 +5,9 @@ location = "usgovarizona"           # canonical region name for azurerm provider
 region   = "usaz"                   # short code used in names
 seq      = "01"                     # sequence in names
 
+# hrz nonprod
+github_sp_object_id = "8dde7f44-f1a1-4b75-957e-ec06d83a4657"
+
 # Subscriptions / Tenants (cross-subscription support)
 # HUB (shared-network) subscription/tenant — REQUIRED
 hub_subscription_id = "df6dc63f-c4dc-4590-ba4b-f2ce9639ca6c"

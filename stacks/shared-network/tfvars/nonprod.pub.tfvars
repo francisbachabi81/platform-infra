@@ -5,6 +5,9 @@ location = "centralus"              # canonical azurerm region name
 region   = "cus"                    # short code used in names
 seq      = "01"                     # sequence in names
 
+# pub nonprod
+github_sp_object_id = "11111111-2222-3333-4444-555555555555"
+
 # Subscriptions / Tenants (cross-subscription support)
 # HUB (shared-network) subscription/tenant — REQUIRED
 hub_subscription_id = "ee8a4693-54d4-4de8-842b-b6f35fc0674d"

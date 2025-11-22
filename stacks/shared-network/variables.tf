@@ -414,3 +414,8 @@ variable "fd_sku_name" {
     error_message = "fd_sku_name must be Standard_AzureFrontDoor or Premium_AzureFrontDoor."
   }
 }
+
+variable "github_sp_object_id" {
+  type        = string
+  description = "Object ID of the service principal used by GitHub Actions for this product."
+}
