@@ -1036,6 +1036,8 @@ module "postgres" {
   ha_enabled = var.pg_ha_enabled
   ha_zone    = var.pg_ha_zone
 
+  ha_mode = var.product == "hrz" ? "SameZone" : "ZoneRedundant"
+
   network_mode        = "private"
   delegated_subnet_id = coalesce(local.pgflex_subnet_id, var.pg_delegated_subnet_id, null)
   private_dns_zone_id = local.pg_private_zone_id
@@ -1072,6 +1074,8 @@ module "postgres_replica" {
 
   replica_enabled  = true
   source_server_id = module.postgres[0].id
+
+  ha_mode = var.product == "hrz" ? "SameZone" : "ZoneRedundant"
 
   tags       = merge(local.tags_common, local.tags_postgres, var.tags, { role = "replica" })
   depends_on  = [data.azurerm_resource_group.env, module.postgres]

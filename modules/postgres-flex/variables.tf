@@ -61,6 +61,18 @@ variable "ha_zone" {
   default     = "2"
 }
 
+variable "ha_mode" {
+  type        = string
+  default     = null
+  description = <<EOT
+PostgreSQL Flexible Server HA mode:
+- "ZoneRedundant" (default when null)
+- "SameZone"
+
+Note: In Azure Gov ("hrz" product) you should use "SameZone". In Azure Commercial ("pub"), use "ZoneRedundant".
+EOT
+}
+
 variable "backup_retention_days" {
   description = "Backup retention in days."
   type        = number
@@ -170,3 +182,4 @@ variable "aad_tenant_id" {
   type        = string
   default     = null
 }
+

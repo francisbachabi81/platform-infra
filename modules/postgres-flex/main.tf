@@ -14,6 +14,8 @@ locals {
 
   # Auto-naming for replicas (only if enabled)
   effective_name = var.replica_enabled && var.auto_replica_name ? "${var.name}${var.replica_name_suffix}" : var.name
+
+  ha_mode_effective = coalesce(var.ha_mode, "ZoneRedundant")
 }
 
 resource "azurerm_postgresql_flexible_server" "pg" {
@@ -42,8 +44,13 @@ resource "azurerm_postgresql_flexible_server" "pg" {
   dynamic "high_availability" {
     for_each = (!var.replica_enabled && var.ha_enabled) ? [1] : []
     content {
-      mode                      = "ZoneRedundant"
-      standby_availability_zone = var.ha_zone
+      # In Azure Gov (hrz): use SameZone
+      # In Azure Commercial (pub): use ZoneRedundant
+      mode = local.ha_mode_effective
+
+      # standby_availability_zone is only valid for ZoneRedundant.
+      # For SameZone, keep it null so the API doesn’t complain.
+      standby_availability_zone = local.ha_mode_effective == "ZoneRedundant" ? var.ha_zone : null
     }
   }
 
@@ -73,13 +80,32 @@ resource "azurerm_postgresql_flexible_server" "pg" {
       condition     = !local.is_private || (var.delegated_subnet_id != null && var.private_dns_zone_id != null)
       error_message = "network_mode=private requires delegated_subnet_id and private_dns_zone_id."
     }
+
     precondition {
       condition     = !var.replica_enabled || (var.source_server_id != null)
       error_message = "replica_enabled=true requires source_server_id."
     }
+
     precondition {
-      condition     = var.replica_enabled || !var.ha_enabled || (var.zone != null && var.ha_zone != null && var.zone != var.ha_zone)
-      error_message = "When ha_enabled=true on a primary, zone and ha_zone must be set and different."
+      condition = (
+        # replicas ignore HA
+        var.replica_enabled ||
+        # HA not enabled → nothing to check
+        !var.ha_enabled ||
+        # HA enabled on primary:
+        (
+          # zone must always be set when HA is enabled
+          var.zone != null &&
+          (
+            # For ZoneRedundant: ha_zone must be set and different from zone
+            local.ha_mode_effective == "ZoneRedundant"
+              ? (var.ha_zone != null && var.zone != var.ha_zone)
+              # For SameZone: we only require zone; ha_zone is ignored
+              : true
+          )
+        )
+      )
+      error_message = "When ha_enabled=true on a primary: zone must be set; for ZoneRedundant, ha_zone must also be set and different from zone."
     }
   }
 
