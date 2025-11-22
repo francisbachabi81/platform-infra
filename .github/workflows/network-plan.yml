@@ -310,7 +310,8 @@ jobs:
           echo "HAS_PIPELINE_FAILURE=true" >> "$GITHUB_ENV"
 
       - name: Upload plan
-        if: ${{ success() && (steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true') }}
+        if: ${{ success() && (steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2') }}
+        # if: ${{ success() && (steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true') }}
         uses: actions/upload-artifact@v4
         with:
           name: shared-network-plan-${{ github.run_id }}
@@ -326,7 +327,8 @@ jobs:
         # - or parse detected changes
         # - or any step failed (HAS_PIPELINE_FAILURE)
         # - or plan.txt contained Error: lines
-        if: ${{ always() && (steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true' || env.HAS_PIPELINE_FAILURE == 'true' || steps.status.outputs.error_count != '0') }}
+        if: ${{ always() }}
+        # if: ${{ always() && (steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true' || env.HAS_PIPELINE_FAILURE == 'true' || steps.status.outputs.error_count != '0') }}
         uses: actions/github-script@v7
         env:
           APPROVERS_CSV: ${{ env.APPROVERS_CSV }}
