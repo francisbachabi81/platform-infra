@@ -230,16 +230,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Run plan, capture ALL output (including errors) in plan-raw.txt
           set +e
           terraform plan -input=false -lock-timeout=5m \
             -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
             -var "product=${{ steps.sel.outputs.PRODUCT }}" \
             -var "env=${{ steps.sel.outputs.ENV }}" \
-            -detailed-exitcode -out=tfplan
-          ec=$?
+            -detailed-exitcode -out=tfplan \
+            2>&1 | tee plan-raw.txt
+          ec=${PIPESTATUS[0]}
           set -e
           echo "exitcode=${ec}" >> "$GITHUB_OUTPUT"
-          terraform show -no-color tfplan > plan.txt
+
+          # If plan succeeded or had changes (0 or 2), generate a clean plan.txt from tfplan
+          if [ "$ec" = "0" ] || [ "$ec" = "2" ]; then
+            terraform show -no-color tfplan > plan.txt
+          else
+            # Fallback: if tfplan doesn't exist, ensure plan.txt at least has the raw output
+            if [ ! -f tfplan ]; then
+              cp plan-raw.txt plan.txt
+            fi
+          fi
 
       - name: Sanity check plan output (no embedded errors)
         id: sanity
@@ -305,12 +316,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          ERR_COUNT=0
-          if [ -f "plan.txt" ]; then
-            ERR_COUNT=$(grep -c '^Error:' plan.txt || true)
+          # Prefer raw output for error detection; fallback to plan.txt if needed
+          SRC_FILE="plan-raw.txt"
+          if [ ! -f "$SRC_FILE" ] && [ -f "plan.txt" ]; then
+            SRC_FILE="plan.txt"
           fi
 
+          ERR_COUNT=0
+          if [ -f "$SRC_FILE" ]; then
+            ERR_COUNT=$(grep -c '^Error:' "$SRC_FILE" || true)
+          fi
           echo "error_count=${ERR_COUNT}" >> "$GITHUB_OUTPUT"
 
       - name: Mark pipeline had errors
