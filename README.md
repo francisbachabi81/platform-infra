@@ -13,6 +13,7 @@ The project is organized into reusable **modules**, environment/plane-specific *
 
 ### Documentation
 
+- **Subscription Architecture Overview**: [`docs/subscription_architecture.md`](docs/subscription_architecture.md)
 - **Repo structure & stacks**: [`docs/folder_structure.md`](docs/folder_structure.md)
 - **Workflows & execution order**: [`docs/workflows_documentation.md`](docs/workflows_documentation.md)
 - **Secrets schema / GitHub secrets notes**: [`docs/wiki-gh-secrets-hrz-pub.md`](docs/wiki-gh-secrets-hrz-pub.md)
