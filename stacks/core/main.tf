@@ -123,13 +123,14 @@ resource "azurerm_recovery_services_vault" "plane" {
 
 locals {
   action_group_name = "ag-${var.product}-${local.plane_code}-${var.region}-core-01"
+  action_group_short_name = "${upper(var.product)}CoreAG"
 }
 
 resource "azurerm_monitor_action_group" "core" {
   count               = (var.create_action_group && local.create_scope_both) ? 1 : 0
   name                = local.action_group_name
   resource_group_name = local.rg_name_core
-  short_name          = var.action_group_short_name
+  short_name          = local.action_group_short_name
   enabled             = true
   tags                = merge(local.tags_common, { service = "monitor-action-group", plane = local.plane_code })
 
