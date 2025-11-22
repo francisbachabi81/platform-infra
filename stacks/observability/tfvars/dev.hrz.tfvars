@@ -11,7 +11,7 @@ ag_name  = "ag-obs-hrz-dev-cus-01"
 action_group_email_receivers = [
   {
     name                    = "Ops"
-    email_address           = "francis.bachabi@intterragroup.com"
+    email_address           = "azure-alerts@intterragroup.com"
     use_common_alert_schema = true
   },
   {

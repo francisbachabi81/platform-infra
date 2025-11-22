@@ -53,12 +53,6 @@ locals {
     "CacheDelete",
   ]
 
-  # Recovery Services Vault
-  rsv_log_categories = [
-    "AzureSiteRecoveryJobs",
-    "AzureSiteRecoveryEvents",
-  ]
-
   # Application Insights component
   appi_log_categories = [
     "AppRequests",
@@ -620,7 +614,6 @@ resource "azurerm_monitor_diagnostic_setting" "rsv" {
 
   # Enable the categories you care about.
   # Get the exact strings from the Portal JSON view.
-  enabled_log { category = "AzureBackupOperations" }
   enabled_log { category = "AzureSiteRecoveryJobs" }
   enabled_log { category = "AzureSiteRecoveryEvents" }
   enabled_log { category = "CoreAzureBackup" }
