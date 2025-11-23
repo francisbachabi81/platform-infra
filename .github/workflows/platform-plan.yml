@@ -72,11 +72,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           ENV_IN="${{ inputs.env }}"
           PRODUCT_IN="${{ inputs.product }}"
           if [ -z "${ENV_IN:-}" ]; then ENV_IN="prod"; fi
           if [ -z "${PRODUCT_IN:-}" ]; then PRODUCT_IN="hrz"; fi
 
+          # Derive plane from env (for TF_VAR_plane)
           case "$ENV_IN" in
             dev|qa|np)   PLANE="nonprod" ;;
             uat|prod|pr) PLANE="prod" ;;
@@ -84,49 +86,85 @@ jobs:
           esac
 
           if [ "$PRODUCT_IN" = "hrz" ]; then
-            CLOUD_ENV="AzureUSGovernment"; ARM_ENV="usgovernment"
+            CLOUD_ENV="AzureUSGovernment"
+            ARM_ENV="usgovernment"
             TENANT='${{ secrets.AZ_TENANT_HRZ }}'
             CLIENT_ID='${{ secrets.AZURE_CLIENT_ID_HRZ }}'
             AUDIENCE="api://AzureADTokenExchangeUSGov"
-            STATE_SUB='${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}'
-            if [ "$PLANE" = "prod" ]; then TARGET_SUB='${{ secrets.AZ_SUB_HRZ_PROD }}'; else TARGET_SUB='${{ secrets.AZ_SUB_HRZ_NONPROD }}'; fi
+
+            # State backend subscription
+            STATE_SUB='${{ secrets.AZ_SUB_STATE_HRZ }}'
+            # Core/hub subscription (shared-network/core)
+            HUB_SUB='${{ secrets.AZ_SUB_HRZ_CORE }}'
+
+            # Platform-app target subscription is per-environment
+            case "$ENV_IN" in
+              dev)  TARGET_SUB='${{ secrets.AZ_SUB_HRZ_DEV }}' ;;
+              qa)   TARGET_SUB='${{ secrets.AZ_SUB_HRZ_QA }}' ;;
+              uat)  TARGET_SUB='${{ secrets.AZ_SUB_HRZ_PROD }}' ;;  # adjust if you create a dedicated UAT sub
+              prod) TARGET_SUB='${{ secrets.AZ_SUB_HRZ_PROD }}' ;;
+              *) echo "Unknown env for HRZ: $ENV_IN"; exit 1 ;;
+            esac
+
             # HRZ DB secrets (environment secrets)
             CDBPG_ADMIN_PASSWORD='${{ secrets.CDBPG_ADMIN_PASSWORD_HRZ }}'
             PG_ADMIN_PASSWORD='${{ secrets.PG_ADMIN_PASSWORD_HRZ }}'
+
           else
-            CLOUD_ENV="AzureCloud"; ARM_ENV="public"
+            CLOUD_ENV="AzureCloud"
+            ARM_ENV="public"
             TENANT='${{ secrets.AZ_TENANT_PUB }}'
             CLIENT_ID='${{ secrets.AZURE_CLIENT_ID_PUB }}'
             AUDIENCE="api://AzureADTokenExchange"
-            STATE_SUB='${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}'
-            if [ "$PLANE" = "prod" ]; then TARGET_SUB='${{ secrets.AZ_SUB_PUB_PROD }}'; else TARGET_SUB='${{ secrets.AZ_SUB_PUB_NONPROD }}'; fi
+
+            # State backend subscription
+            STATE_SUB='${{ secrets.AZ_SUB_STATE_PUB }}'
+            # Core/hub subscription (shared-network/core)
+            HUB_SUB='${{ secrets.AZ_SUB_PUB_CORE }}'
+
+            # Platform-app target subscription is per-environment
+            case "$ENV_IN" in
+              dev)  TARGET_SUB='${{ secrets.AZ_SUB_PUB_DEV }}' ;;
+              qa)   TARGET_SUB='${{ secrets.AZ_SUB_PUB_QA }}' ;;
+              uat)  TARGET_SUB='${{ secrets.AZ_SUB_PUB_UAT }}' ;;
+              prod) TARGET_SUB='${{ secrets.AZ_SUB_PUB_PROD }}' ;;
+              *) echo "Unknown env for PUB: $ENV_IN"; exit 1 ;;
+            esac
+
             # PUB DB secrets (environment secrets)
             CDBPG_ADMIN_PASSWORD='${{ secrets.CDBPG_ADMIN_PASSWORD_PUB }}'
             PG_ADMIN_PASSWORD='${{ secrets.PG_ADMIN_PASSWORD_PUB }}'
           fi
 
           echo "ENV=$ENV_IN"            >> "$GITHUB_OUTPUT"
-          echo "PRODUCT=$PRODUCT_IN"     >> "$GITHUB_OUTPUT"
-          echo "PLANE=$PLANE"            >> "$GITHUB_OUTPUT"
-          echo "CLOUD_ENV=$CLOUD_ENV"    >> "$GITHUB_OUTPUT"
-          echo "ARM_ENV=$ARM_ENV"        >> "$GITHUB_OUTPUT"
-          echo "TENANT=$TENANT"          >> "$GITHUB_OUTPUT"
-          echo "CLIENT_ID=$CLIENT_ID"    >> "$GITHUB_OUTPUT"
-          echo "AUDIENCE=$AUDIENCE"      >> "$GITHUB_OUTPUT"
-          echo "STATE_SUB=$STATE_SUB"    >> "$GITHUB_OUTPUT"
-          echo "TARGET_SUB=$TARGET_SUB"  >> "$GITHUB_OUTPUT"
+          echo "PRODUCT=$PRODUCT_IN"    >> "$GITHUB_OUTPUT"
+          echo "PLANE=$PLANE"           >> "$GITHUB_OUTPUT"
+          echo "CLOUD_ENV=$CLOUD_ENV"   >> "$GITHUB_OUTPUT"
+          echo "ARM_ENV=$ARM_ENV"       >> "$GITHUB_OUTPUT"
+          echo "TENANT=$TENANT"         >> "$GITHUB_OUTPUT"
+          echo "CLIENT_ID=$CLIENT_ID"   >> "$GITHUB_OUTPUT"
+          echo "AUDIENCE=$AUDIENCE"     >> "$GITHUB_OUTPUT"
+          echo "STATE_SUB=$STATE_SUB"   >> "$GITHUB_OUTPUT"
+          echo "TARGET_SUB=$TARGET_SUB" >> "$GITHUB_OUTPUT"
+          echo "HUB_SUB=$HUB_SUB"       >> "$GITHUB_OUTPUT"
 
           {
             echo "ARM_ENVIRONMENT=$ARM_ENV"
             echo "ARM_TENANT_ID=$TENANT"
             echo "ARM_CLIENT_ID=$CLIENT_ID"
+
             echo "TF_VAR_tenant_id=$TENANT"
             echo "TF_VAR_product=$PRODUCT_IN"
             echo "TF_VAR_env=$ENV_IN"
             echo "TF_VAR_plane=$PLANE"
+
+            # Env subscription for platform-app resources
             echo "TF_VAR_subscription_id=$TARGET_SUB"
+
+            # Core/hub subscription for shared-network/core lookups
             echo "TF_VAR_hub_tenant_id=$TENANT"
-            echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
+            echo "TF_VAR_hub_subscription_id=$HUB_SUB"
+
             echo "TF_VAR_cdbpg_admin_password=$CDBPG_ADMIN_PASSWORD"
             echo "TF_VAR_pg_admin_password=$PG_ADMIN_PASSWORD"
           } >> "$GITHUB_ENV"
