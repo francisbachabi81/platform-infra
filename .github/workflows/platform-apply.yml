@@ -57,7 +57,7 @@ jobs:
             case "$ENV_IN" in
               dev)  TARGET_SUB="${{ secrets.AZ_SUB_HRZ_DEV }}" ;;
               qa)   TARGET_SUB="${{ secrets.AZ_SUB_HRZ_QA }}" ;;
-              uat)  TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}" ;;  # adjust if you split UAT
+              uat)  TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}" ;;
               prod) TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}" ;;
               *) echo "Unknown env for HRZ: $ENV_IN"; exit 1 ;;
             esac
