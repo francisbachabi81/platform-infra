@@ -94,17 +94,53 @@ jobs:
             TENANT_RAW='${{ secrets.AZ_TENANT_HRZ }}'
             CLIENT_ID_RAW='${{ secrets.AZURE_CLIENT_ID_HRZ }}'
             AUDIENCE="api://AzureADTokenExchangeUSGov"
+
             STATE_SUB_RAW='${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}'
             CORE_SUB_RAW='${{ secrets.AZ_SUB_HRZ_CORE }}'
+
+            # env-specific subs
+            DEV_SUB_RAW='${{ secrets.AZ_SUB_HRZ_DEV }}'
+            QA_SUB_RAW='${{ secrets.AZ_SUB_HRZ_QA }}'
+            UAT_SUB_RAW='${{ secrets.AZ_SUB_HRZ_UAT }}'
+            PROD_SUB_RAW='${{ secrets.AZ_SUB_HRZ_PROD }}'
+
+            # plane-based target sub (keep existing logic)
             TARGET_SUB_RAW=$([ "$PLANE" = "prod" ] && echo '${{ secrets.AZ_SUB_HRZ_PROD }}' || echo '${{ secrets.AZ_SUB_HRZ_NONPROD }}')
+
+            # env-sub mapping (NEW: env_subscription_id should follow env)
+            case "$ENV_IN" in
+              dev)  ENV_SUB_RAW="$DEV_SUB_RAW"  ;;
+              qa)   ENV_SUB_RAW="$QA_SUB_RAW"   ;;
+              uat)  ENV_SUB_RAW="$UAT_SUB_RAW"  ;;
+              prod) ENV_SUB_RAW="$PROD_SUB_RAW" ;;
+              *) echo "Unknown env for ENV_SUB mapping: $ENV_IN"; exit 1 ;;
+            esac
           else
             CLOUD_ENV="AzureCloud"; ARM_ENV="public"
             TENANT_RAW='${{ secrets.AZ_TENANT_PUB }}'
             CLIENT_ID_RAW='${{ secrets.AZURE_CLIENT_ID_PUB }}'
             AUDIENCE="api://AzureADTokenExchange"
+
             STATE_SUB_RAW='${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}'
             CORE_SUB_RAW='${{ secrets.AZ_SUB_PUB_CORE }}'
+
+            # env-specific subs
+            DEV_SUB_RAW='${{ secrets.AZ_SUB_PUB_DEV }}'
+            QA_SUB_RAW='${{ secrets.AZ_SUB_PUB_QA }}'
+            UAT_SUB_RAW='${{ secrets.AZ_SUB_PUB_UAT }}'
+            PROD_SUB_RAW='${{ secrets.AZ_SUB_PUB_PROD }}'
+
+            # plane-based target sub (keep existing logic)
             TARGET_SUB_RAW=$([ "$PLANE" = "prod" ] && echo '${{ secrets.AZ_SUB_PUB_PROD }}' || echo '${{ secrets.AZ_SUB_PUB_NONPROD }}')
+
+            # env-sub mapping (NEW)
+            case "$ENV_IN" in
+              dev)  ENV_SUB_RAW="$DEV_SUB_RAW"  ;;
+              qa)   ENV_SUB_RAW="$QA_SUB_RAW"   ;;
+              uat)  ENV_SUB_RAW="$UAT_SUB_RAW"  ;;
+              prod) ENV_SUB_RAW="$PROD_SUB_RAW" ;;
+              *) echo "Unknown env for ENV_SUB mapping: $ENV_IN"; exit 1 ;;
+            esac
           fi
 
           TENANT=$(trim "$TENANT_RAW")
@@ -112,6 +148,7 @@ jobs:
           STATE_SUB=$(trim "$STATE_SUB_RAW")
           CORE_SUB=$(trim "$CORE_SUB_RAW")
           TARGET_SUB=$(trim "$TARGET_SUB_RAW")
+          ENV_SUB=$(trim "$ENV_SUB_RAW")
 
           # step outputs
           write_output ENV        "$ENV_IN"
@@ -125,6 +162,7 @@ jobs:
           write_output STATE_SUB  "$STATE_SUB"
           write_output CORE_SUB   "$CORE_SUB"
           write_output TARGET_SUB "$TARGET_SUB"
+          write_output ENV_SUB    "$ENV_SUB"
 
           # env for following steps / terraform
           write_env ARM_ENVIRONMENT "$ARM_ENV"
@@ -135,7 +173,9 @@ jobs:
           write_env TF_VAR_core_tenant_id        "$TENANT"
           write_env TF_VAR_core_subscription_id  "$CORE_SUB"
           write_env TF_VAR_env_tenant_id         "$TENANT"
-          write_env TF_VAR_env_subscription_id   "$TARGET_SUB"
+
+          # IMPORTANT: env_subscription_id is *env-based* now
+          write_env TF_VAR_env_subscription_id   "$ENV_SUB"
 
           # base provider fallback (if platform meta.subscription is missing)
           write_env TF_VAR_subscription_id       "$TARGET_SUB"
@@ -153,7 +193,7 @@ jobs:
           maskless() { v="$(printf '%s' "$1" | tr -d '[:space:]')"; printf '%s…%s' "${v:0:8}" "${v: -6}"; }
           shortsha() { printf '%s' "$1" | tr -d '[:space:]' | shasum -a 256 | cut -c1-12; }
       
-          echo "BASE sub:  $(maskless "$TF_VAR_subscription_id")   (sha12: $(shortsha "$TF_VAR_subscription_id"))"
+          echo "BASE sub:  $(maskless "$TF_VAR_subscription_id")       (sha12: $(shortsha "$TF_VAR_subscription_id"))"
           echo "ENV  sub:  $(maskless "$TF_VAR_env_subscription_id")   (sha12: $(shortsha "$TF_VAR_env_subscription_id"))"
           echo "CORE sub:  $(maskless "$TF_VAR_core_subscription_id")  (sha12: $(shortsha "$TF_VAR_core_subscription_id"))"
           echo "Tenant:    $(maskless "$TF_VAR_env_tenant_id")         (sha12: $(shortsha "$TF_VAR_env_tenant_id"))"
@@ -380,13 +420,7 @@ jobs:
             ${{ github.workspace }}/stacks/observability/plan.json
 
       - name: Open approval issue
-        # open an issue if:
-        # - plan had changes (exitcode 2)
-        # - or parse detected changes
-        # - or any step failed (HAS_PIPELINE_FAILURE)
-        # - or plan.txt contained Error: lines
         if: ${{ always() }}
-        # if: ${{ always() && (steps.plan.outputs.exitcode == '2' || steps.parse.outputs.has_changes == 'true' || env.HAS_PIPELINE_FAILURE == 'true' || steps.status.outputs.error_count != '0') }}
         uses: actions/github-script@v7
         env:
           APPROVERS_CSV: ${{ env.APPROVERS_CSV }}
