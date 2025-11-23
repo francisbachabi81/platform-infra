@@ -37,8 +37,20 @@ jobs:
             CLOUD_ENV="AzureUSGovernment"; ARM_ENV="usgovernment"
             TENANT="${{ secrets.AZ_TENANT_HRZ }}"; CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
             AUDIENCE="api://AzureADTokenExchangeUSGov"
+
+            # State lives in the infra/state sub
             STATE_SUB="${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}"
-            if [ "$PLANE" = "prod" ]; then TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}"; else TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}"; fi
+
+            # Platform-app target sub (env subscription)
+            if [ "$PLANE" = "prod" ]; then
+              TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}"
+            else
+              TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}"
+            fi
+
+            # Hub/Core subscription (shared-network/core)
+            HUB_SUB="${{ secrets.AZ_SUB_HRZ_CORE }}"
+
             # HRZ DB secrets (environment secrets)
             CDBPG_ADMIN_PASSWORD='${{ secrets.CDBPG_ADMIN_PASSWORD_HRZ }}'
             PG_ADMIN_PASSWORD='${{ secrets.PG_ADMIN_PASSWORD_HRZ }}'
@@ -46,8 +58,20 @@ jobs:
             CLOUD_ENV="AzureCloud"; ARM_ENV="public"
             TENANT="${{ secrets.AZ_TENANT_PUB }}"; CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
             AUDIENCE="api://AzureADTokenExchange"
+
+            # State lives in the infra/state sub
             STATE_SUB="${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}"
-            if [ "$PLANE" = "prod" ]; then TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}"; else TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}"; fi
+
+            # Platform-app target sub (env subscription)
+            if [ "$PLANE" = "prod" ]; then
+              TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}"
+            else
+              TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}"
+            fi
+
+            # Hub/Core subscription (shared-network/core)
+            HUB_SUB="${{ secrets.AZ_SUB_PUB_CORE }}"
+
             # PUB DB secrets (environment secrets)
             CDBPG_ADMIN_PASSWORD='${{ secrets.CDBPG_ADMIN_PASSWORD_PUB }}'
             PG_ADMIN_PASSWORD='${{ secrets.PG_ADMIN_PASSWORD_PUB }}'
@@ -63,18 +87,27 @@ jobs:
           echo "AUDIENCE=$AUDIENCE"     >> $GITHUB_OUTPUT
           echo "STATE_SUB=$STATE_SUB"   >> $GITHUB_OUTPUT
           echo "TARGET_SUB=$TARGET_SUB" >> $GITHUB_OUTPUT
+          echo "HUB_SUB=$HUB_SUB"       >> $GITHUB_OUTPUT
 
           {
             echo "ARM_ENVIRONMENT=$ARM_ENV"
             echo "ARM_TENANT_ID=$TENANT"
             echo "ARM_CLIENT_ID=$CLIENT_ID"
+
+            # Core TF vars
             echo "TF_VAR_tenant_id=$TENANT"
             echo "TF_VAR_product=$PRODUCT"
             echo "TF_VAR_env=$ENV_IN"
             echo "TF_VAR_plane=$PLANE"
+
+            # Env subscription (where platform-app resources live)
             echo "TF_VAR_subscription_id=$TARGET_SUB"
+
+            # Hub/core subscription (for azurerm.hub provider)
             echo "TF_VAR_hub_tenant_id=$TENANT"
-            echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
+            echo "TF_VAR_hub_subscription_id=$HUB_SUB"
+
+            # DB passwords
             echo "TF_VAR_cdbpg_admin_password=$CDBPG_ADMIN_PASSWORD"
             echo "TF_VAR_pg_admin_password=$PG_ADMIN_PASSWORD"
           } >> $GITHUB_ENV
