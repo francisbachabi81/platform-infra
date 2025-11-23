@@ -34,42 +34,55 @@ jobs:
           set -euo pipefail
           PLANE="${{ inputs.plane }}"
           PRODUCT="${{ inputs.product }}"
+
+          # Sensible defaults if somehow empty
+          if [ -z "${PLANE:-}" ]; then PLANE="prod"; fi
+          if [ -z "${PRODUCT:-}" ]; then PRODUCT="hrz"; fi
+
           if [ "$PRODUCT" = "hrz" ]; then
             CLOUD_ENV="AzureUSGovernment"; ARM_ENV="usgovernment"
-            TENANT="${{ secrets.AZ_TENANT_HRZ }}"; CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
+            TENANT='${{ secrets.AZ_TENANT_HRZ }}'
+            CLIENT_ID='${{ secrets.AZURE_CLIENT_ID_HRZ }}'
             AUDIENCE="api://AzureADTokenExchangeUSGov"
-            STATE_SUB="${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}"
+            STATE_SUB='${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}'
             case "$PLANE" in
-              nonprod) TARGET_SUB="${{ secrets.AZ_SUB_HRZ_NONPROD }}";;
-              prod)    TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}";;
+              nonprod) TARGET_SUB='${{ secrets.AZ_SUB_HRZ_NONPROD }}' ;;
+              prod)    TARGET_SUB='${{ secrets.AZ_SUB_HRZ_PROD }}'    ;;
+              *) echo "Unknown plane: $PLANE"; exit 1 ;;
             esac
           else
             CLOUD_ENV="AzureCloud"; ARM_ENV="public"
-            TENANT="${{ secrets.AZ_TENANT_PUB }}"; CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
+            TENANT='${{ secrets.AZ_TENANT_PUB }}'
+            CLIENT_ID='${{ secrets.AZURE_CLIENT_ID_PUB }}'
             AUDIENCE="api://AzureADTokenExchange"
-            STATE_SUB="${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}"
+            STATE_SUB='${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}'
             case "$PLANE" in
-              nonprod) TARGET_SUB="${{ secrets.AZ_SUB_PUB_NONPROD }}";;
-              prod)    TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}";;
+              nonprod) TARGET_SUB='${{ secrets.AZ_SUB_PUB_NONPROD }}' ;;
+              prod)    TARGET_SUB='${{ secrets.AZ_SUB_PUB_PROD }}'    ;;
+              *) echo "Unknown plane: $PLANE"; exit 1 ;;
             esac
           fi
-          echo "CLOUD_ENV=$CLOUD_ENV"   >> $GITHUB_OUTPUT
-          echo "ARM_ENV=$ARM_ENV"       >> $GITHUB_OUTPUT
-          echo "TENANT=$TENANT"         >> $GITHUB_OUTPUT
-          echo "CLIENT_ID=$CLIENT_ID"   >> $GITHUB_OUTPUT
-          echo "AUDIENCE=$AUDIENCE"     >> $GITHUB_OUTPUT
-          echo "STATE_SUB=$STATE_SUB"   >> $GITHUB_OUTPUT
-          echo "TARGET_SUB=$TARGET_SUB" >> $GITHUB_OUTPUT
+
+          echo "PLANE=$PLANE"           >> "$GITHUB_OUTPUT"
+          echo "PRODUCT=$PRODUCT"       >> "$GITHUB_OUTPUT"
+          echo "CLOUD_ENV=$CLOUD_ENV"   >> "$GITHUB_OUTPUT"
+          echo "ARM_ENV=$ARM_ENV"       >> "$GITHUB_OUTPUT"
+          echo "TENANT=$TENANT"         >> "$GITHUB_OUTPUT"
+          echo "CLIENT_ID=$CLIENT_ID"   >> "$GITHUB_OUTPUT"
+          echo "AUDIENCE=$AUDIENCE"     >> "$GITHUB_OUTPUT"
+          echo "STATE_SUB=$STATE_SUB"   >> "$GITHUB_OUTPUT"
+          echo "TARGET_SUB=$TARGET_SUB" >> "$GITHUB_OUTPUT"
+
           {
             echo "ARM_ENVIRONMENT=$ARM_ENV"
             echo "ARM_TENANT_ID=$TENANT"
             echo "ARM_CLIENT_ID=$CLIENT_ID"
+
+            # Terraform vars (no subscription_id needed for shared-network)
             echo "TF_VAR_tenant_id=$TENANT"
-            echo "TF_VAR_product=${PRODUCT}"
-            echo "TF_VAR_subscription_id=$TARGET_SUB"
-            echo "TF_VAR_hub_tenant_id=$TENANT"
-            echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
-          } >> $GITHUB_ENV
+            echo "TF_VAR_product=$PRODUCT"
+            echo "TF_VAR_plane=$PLANE"
+          } >> "$GITHUB_ENV"
 
       - name: Resolve tfvars & backend key
         id: paths
