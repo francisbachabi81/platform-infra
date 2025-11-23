@@ -130,6 +130,37 @@ jobs:
             fi
           } >> "$GITHUB_ENV"
 
+      - name: Debug - subscriptions (partial + hash)
+        shell: bash
+        run: |
+          set -euo pipefail
+          maskless() { v="$(printf '%s' "$1" | tr -d '[:space:]')"; printf '%s…%s' "${v:0:8}" "${v: -6}"; }
+          shortsha() { printf '%s' "$1" | tr -d '[:space:]' | shasum -a 256 | cut -c1-12; }
+
+          PLANE="${{ steps.sel.outputs.PLANE }}"
+
+          echo "=== High-level context ==="
+          echo "Product:   ${{ steps.sel.outputs.PRODUCT }}"
+          echo "Plane:     ${PLANE}"
+          echo
+
+          echo "=== Core subs ==="
+          echo "STATE sub: $(maskless "${{ steps.sel.outputs.STATE_SUB }}")  (sha12: $(shortsha "${{ steps.sel.outputs.STATE_SUB }}"))"
+          echo "TARGET sub:$(maskless "${{ steps.sel.outputs.TARGET_SUB }}") (sha12: $(shortsha "${{ steps.sel.outputs.TARGET_SUB }}"))"
+          echo "Tenant:    $(maskless "$TF_VAR_tenant_id")                   (sha12: $(shortsha "$TF_VAR_tenant_id"))"
+          echo
+
+          echo "=== Hub / env subscriptions (from TF_VAR_*) ==="
+          echo "Hub sub:   $(maskless "$TF_VAR_hub_subscription_id")         (sha12: $(shortsha "$TF_VAR_hub_subscription_id"))"
+
+          if [ "$PLANE" = "nonprod" ]; then
+            echo "Dev sub:   $(maskless "$TF_VAR_dev_subscription_id")         (sha12: $(shortsha "$TF_VAR_dev_subscription_id"))"
+            echo "QA  sub:   $(maskless "$TF_VAR_qa_subscription_id")          (sha12: $(shortsha "$TF_VAR_qa_subscription_id"))"
+          else
+            echo "Prod sub:  $(maskless "$TF_VAR_prod_subscription_id")        (sha12: $(shortsha "$TF_VAR_prod_subscription_id"))"
+            echo "UAT sub:   $(maskless "$TF_VAR_uat_subscription_id")         (sha12: $(shortsha "$TF_VAR_uat_subscription_id"))"
+          fi
+
       - name: Resolve tfvars & backend key
         id: paths
         shell: bash
