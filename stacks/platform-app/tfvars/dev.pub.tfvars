@@ -4,13 +4,13 @@ product         = "pub"                         # hrz (Azure Gov) | pub (Azure C
 location        = "Central US"
 region          = "cus"
 # rg_name         = "rg-pub-dev-cus-01"
-subscription_id = "57f8aa30-981c-4764-94f6-6691c4d5c01c"   # ← dev subscription
-tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
+# subscription_id = "57f8aa30-981c-4764-94f6-6691c4d5c01c"   # ← dev subscription
+# tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
 # Hub overrides — shared-network (nonprod hub) usually lives in the shared nonprod sub.
 # Set these so data sources that use provider.azurerm.hub resolve correctly.
-hub_subscription_id = "ee8a4693-54d4-4de8-842b-b6f35fc0674d"  # ← shared nonprod
-hub_tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
+# hub_subscription_id = "ee8a4693-54d4-4de8-842b-b6f35fc0674d"  # ← shared nonprod
+# hub_tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
 # Provider alias overrides used by AKS routing logic (shared nonprod)
 shared_nonprod_subscription_id = "ee8a4693-54d4-4de8-842b-b6f35fc0674d"

@@ -1,10 +1,10 @@
 output "meta" {
   value = {
-    product        = var.product
-    plane_code     = local.plane_code
-    lane           = local.lane
-    region_code    = var.region
-    location       = var.location
+    product            = var.product
+    plane_code         = local.plane_code
+    lane               = local.lane
+    region_code        = var.region
+    location           = var.location
     hub_subscription_id = var.hub_subscription_id
     hub_tenant_id       = var.hub_tenant_id
   }
@@ -12,25 +12,25 @@ output "meta" {
 
 output "features" {
   value = {
-    is_nonprod             = local.is_nonprod
-    is_prod                = local.is_prod
-    create_vpn_gateway     = var.create_vpn_gateway
-    create_vpng_public_ip  = var.create_vpng_public_ip
-    create_app_gateway     = var.create_app_gateway
+    is_nonprod              = local.is_nonprod
+    is_prod                 = local.is_prod
+    create_vpn_gateway      = var.create_vpn_gateway
+    create_vpng_public_ip   = var.create_vpng_public_ip
+    create_app_gateway      = var.create_app_gateway
     appgw_public_ip_enabled = var.appgw_public_ip_enabled
-    create_dns_resolver    = var.create_dns_resolver
-    fd_create_frontdoor    = var.fd_create_frontdoor
-    appgw_enabled          = local.appgw_enabled
+    create_dns_resolver     = var.create_dns_resolver
+    fd_create_frontdoor     = var.fd_create_frontdoor
+    appgw_enabled           = local.appgw_enabled
   }
 }
 
 output "resource_groups" {
   value = {
-    hub  = { name = (local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg), id = try(module.rg_hub.id, null) }
-    dev  = try({ name = var.dev_spoke.rg,  id = module.rg_dev[0].id },  null)
-    qa   = try({ name = var.qa_spoke.rg,   id = module.rg_qa[0].id },   null)
-    prod = try({ name = var.prod_spoke.rg, id = module.rg_prod[0].id }, null)
-    uat  = try({ name = var.uat_spoke.rg,  id = module.rg_uat[0].id },  null)
+    hub  = { name = local.hub_rg_name,  id = try(module.rg_hub.id, null) }
+    dev  = try({ name = local.dev_rg_name,  id = module.rg_dev[0].id },  null)
+    qa   = try({ name = local.qa_rg_name,   id = module.rg_qa[0].id },   null)
+    prod = try({ name = local.prod_rg_name, id = module.rg_prod[0].id }, null)
+    uat  = try({ name = local.uat_rg_name,  id = module.rg_uat[0].id },  null)
   }
 }
 
@@ -80,28 +80,28 @@ output "private_dns" {
 
 output "vpn_gateway" {
   value = try({
-    id              = module.vpng[0].id
-    name            = module.vpng[0].name
-    resource_group  = (local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg)
-    public_ip_id    = try(azurerm_public_ip.vpngw[0].id, null)
-    public_ip       = try(azurerm_public_ip.vpngw[0].ip_address, null)
+    id               = module.vpng[0].id
+    name             = module.vpng[0].name
+    resource_group   = local.vpng_hub_rg
+    public_ip_id     = try(azurerm_public_ip.vpngw[0].id, null)
+    public_ip        = try(azurerm_public_ip.vpngw[0].ip_address, null)
     gateway_subnet_id = local.vpng_gateway_subnet_id
-    sku             = var.vpn_sku
+    sku              = var.vpn_sku
   }, null)
 }
 
 output "app_gateway" {
   value = try({
-    id                 = module.appgw[0].id
-    name               = module.appgw[0].name
-    resource_group     = (local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg)
-    public_ip          = try(module.appgw[0].frontend_public_ip, null)
-    subnet_id          = local.appgw_subnet_id
-    sku_name           = var.appgw_sku_name
-    sku_tier           = var.appgw_sku_tier
-    capacity           = var.appgw_capacity
-    waf_policy_id      = try(module.waf[0].id, null)
-    nsg_id             = try(azurerm_network_security_group.appgw_nsg[0].id, null)
+    id             = module.appgw[0].id
+    name           = module.appgw[0].name
+    resource_group = local.appgw_hub_rg
+    public_ip      = try(module.appgw[0].frontend_public_ip, null)
+    subnet_id      = local.appgw_subnet_id
+    sku_name       = var.appgw_sku_name
+    sku_tier       = var.appgw_sku_tier
+    capacity       = var.appgw_capacity
+    waf_policy_id  = try(module.waf[0].id, null)
+    nsg_id         = try(azurerm_network_security_group.appgw_nsg[0].id, null)
   }, null)
 }
 
@@ -139,18 +139,18 @@ output "network_watcher" {
   value = {
     id   = try(azurerm_network_watcher.hub.id, null)
     name = try(azurerm_network_watcher.hub.name, null)
-    rg   = (local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg)
+    rg   = local.hub_rg_name
   }
 }
 
 # convenience projections for common subnet lookups
 output "subnet_ids_by_env" {
   value = {
-    hub   = try(module.vnet_hub.subnet_ids, {})
-    dev   = try(module.vnet_dev[0].subnet_ids, {})
-    qa    = try(module.vnet_qa[0].subnet_ids, {})
-    prod  = try(module.vnet_prod[0].subnet_ids, {})
-    uat   = try(module.vnet_uat[0].subnet_ids, {})
+    hub  = try(module.vnet_hub.subnet_ids, {})
+    dev  = try(module.vnet_dev[0].subnet_ids, {})
+    qa   = try(module.vnet_qa[0].subnet_ids, {})
+    prod = try(module.vnet_prod[0].subnet_ids, {})
+    uat  = try(module.vnet_uat[0].subnet_ids, {})
   }
 }
 

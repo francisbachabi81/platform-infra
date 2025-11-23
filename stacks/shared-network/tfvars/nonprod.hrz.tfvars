@@ -6,7 +6,7 @@ region   = "usaz"                   # short code used in names
 seq      = "01"                     # sequence in names
 
 # hrz nonprod
-github_sp_object_id = "8dde7f44-f1a1-4b75-957e-ec06d83a4657"
+# github_sp_object_id = "8dde7f44-f1a1-4b75-957e-ec06d83a4657"
 
 # Subscriptions / Tenants (cross-subscription support)
 # HUB (shared-network) subscription/tenant — REQUIRED
@@ -56,8 +56,8 @@ public_dns_zones = [
 
 # VNets — NONPROD plane: hub + dev + qa
 nonprod_hub = {
-  rg    = "rg-hrz-np-usaz-net-01"
-  vnet  = "vnet-hrz-np-hub-usaz-01"
+  # rg    = "rg-hrz-np-usaz-net-01"
+  # vnet  = "vnet-hrz-np-hub-usaz-01"
   cidrs = ["10.10.0.0/16"]
 
   subnets = {
@@ -101,8 +101,8 @@ nonprod_hub = {
 }
 
 dev_spoke = {
-  rg    = "rg-hrz-dev-usaz-net-01"
-  vnet  = "vnet-hrz-dev-usaz-01"
+  # rg    = "rg-hrz-dev-usaz-net-01"
+  # vnet  = "vnet-hrz-dev-usaz-01"
   cidrs = ["10.11.0.0/16"]
 
   subnets = {
@@ -197,8 +197,8 @@ dev_spoke = {
 }
 
 qa_spoke = {
-  rg    = "rg-hrz-qa-usaz-net-01"
-  vnet  = "vnet-hrz-qa-usaz-01"
+  # rg    = "rg-hrz-qa-usaz-net-01"
+  # vnet  = "vnet-hrz-qa-usaz-01"
   cidrs = ["10.12.0.0/16"]
 
   subnets = {

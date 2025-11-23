@@ -6,7 +6,7 @@ region   = "cus"                    # short code used in names
 seq      = "01"                     # sequence in names
 
 # pub nonprod
-github_sp_object_id = "11111111-2222-3333-4444-555555555555"
+# github_sp_object_id = "11111111-2222-3333-4444-555555555555"
 
 # Subscriptions / Tenants (cross-subscription support)
 # HUB (shared-network) subscription/tenant — REQUIRED
@@ -55,8 +55,8 @@ public_dns_zones = [
 
 # VNets — NONPROD plane: hub + dev + qa
 nonprod_hub = {
-  rg    = "rg-pub-np-cus-net-01"
-  vnet  = "vnet-pub-np-hub-cus-01"
+  # rg    = "rg-pub-np-cus-net-01"
+  # vnet  = "vnet-pub-np-hub-cus-01"
   cidrs = ["172.10.0.0/16"]
 
   subnets = {
@@ -100,8 +100,8 @@ nonprod_hub = {
 }
 
 dev_spoke = {
-  rg    = "rg-pub-dev-cus-net-01"
-  vnet  = "vnet-pub-dev-cus-01"
+  # rg    = "rg-pub-dev-cus-net-01"
+  # vnet  = "vnet-pub-dev-cus-01"
   cidrs = ["172.11.0.0/16"]
 
   subnets = {
@@ -196,8 +196,8 @@ dev_spoke = {
 }
 
 qa_spoke = {
-  rg    = "rg-pub-qa-cus-net-01"
-  vnet  = "vnet-pub-qa-cus-01"
+  # rg    = "rg-pub-qa-cus-net-01"
+  # vnet  = "vnet-pub-qa-cus-01"
   cidrs = ["172.12.0.0/16"]
 
   subnets = {

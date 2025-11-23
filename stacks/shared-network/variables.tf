@@ -124,8 +124,8 @@ variable "uat_tenant_id" {
 variable "nonprod_hub" {
   description = "nonprod hub vnet definition"
   type = object({
-    rg    = string
-    vnet  = string
+    rg    = optional(string)
+    vnet  = optional(string)
     cidrs = list(string)
     subnets = map(object({
       address_prefixes                      = optional(list(string))
@@ -149,8 +149,8 @@ variable "nonprod_hub" {
 variable "dev_spoke" {
   description = "dev spoke vnet definition"
   type = object({
-    rg    = string
-    vnet  = string
+    rg    = optional(string)
+    vnet  = optional(string)
     cidrs = list(string)
     subnets = map(object({
       address_prefixes                      = optional(list(string))
@@ -174,8 +174,8 @@ variable "dev_spoke" {
 variable "qa_spoke" {
   description = "qa spoke vnet definition"
   type = object({
-    rg    = string
-    vnet  = string
+    rg    = optional(string)
+    vnet  = optional(string)
     cidrs = list(string)
     subnets = map(object({
       address_prefixes                      = optional(list(string))
@@ -199,8 +199,8 @@ variable "qa_spoke" {
 variable "prod_hub" {
   description = "prod hub vnet definition"
   type = object({
-    rg    = string
-    vnet  = string
+    rg    = optional(string)
+    vnet  = optional(string)
     cidrs = list(string)
     subnets = map(object({
       address_prefixes                      = optional(list(string))
@@ -224,8 +224,8 @@ variable "prod_hub" {
 variable "prod_spoke" {
   description = "prod spoke vnet definition"
   type = object({
-    rg    = string
-    vnet  = string
+    rg    = optional(string)
+    vnet  = optional(string)
     cidrs = list(string)
     subnets = map(object({
       address_prefixes                      = optional(list(string))
@@ -249,8 +249,8 @@ variable "prod_spoke" {
 variable "uat_spoke" {
   description = "uat spoke vnet definition"
   type = object({
-    rg    = string
-    vnet  = string
+    rg    = optional(string)
+    vnet  = optional(string)
     cidrs = list(string)
     subnets = map(object({
       address_prefixes                      = optional(list(string))

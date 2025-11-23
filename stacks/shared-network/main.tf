@@ -173,10 +173,43 @@ locals {
   hub_key = local.is_nonprod ? "nphub" : "prhub"
 }
 
+locals {
+  # ---------- canonical RG names (overrideable via vars if set) ----------
+  hub_rg_name = local.is_nonprod ? coalesce(try(var.nonprod_hub.rg, null), "rg-${var.product}-${local.plane_code}-${var.region}-core-01") : coalesce(try(var.prod_hub.rg,    null), "rg-${var.product}-${local.plane_code}-${var.region}-core-01")
+  dev_rg_name  = local.is_nonprod ? coalesce(try(var.dev_spoke.rg,  null), "rg-${var.product}-dev-${var.region}-01")  : null
+  qa_rg_name   = local.is_nonprod ? coalesce(try(var.qa_spoke.rg,   null), "rg-${var.product}-qa-${var.region}-01")   : null
+  prod_rg_name = local.is_prod    ? coalesce(try(var.prod_spoke.rg, null), "rg-${var.product}-prod-${var.region}-01") : null
+  uat_rg_name  = local.is_prod    ? coalesce(try(var.uat_spoke.rg,  null), "rg-${var.product}-uat-${var.region}-01")  : null
+
+  # ---------- canonical VNet names (overrideable via vars if set) ----------
+  hub_vnet_name  = local.is_nonprod ? coalesce(try(var.nonprod_hub.vnet, null), "vnet-${var.product}-${local.plane_code}-hub-${var.region}-${var.seq}") : coalesce(try(var.prod_hub.vnet,    null), "vnet-${var.product}-${local.plane_code}-hub-${var.region}-${var.seq}")
+  dev_vnet_name  = local.is_nonprod ? coalesce(try(var.dev_spoke.vnet,  null), "vnet-${var.product}-dev-${var.region}-${var.seq}")  : null
+  qa_vnet_name   = local.is_nonprod ? coalesce(try(var.qa_spoke.vnet,   null), "vnet-${var.product}-qa-${var.region}-${var.seq}")   : null
+  prod_vnet_name = local.is_prod    ? coalesce(try(var.prod_spoke.vnet, null), "vnet-${var.product}-prod-${var.region}-${var.seq}") : null
+  uat_vnet_name  = local.is_prod    ? coalesce(try(var.uat_spoke.vnet,  null), "vnet-${var.product}-uat-${var.region}-${var.seq}")  : null
+
+  # ---------- helper maps by environment key ----------
+  rg_by_env = {
+    hub  = local.hub_rg_name
+    dev  = local.dev_rg_name
+    qa   = local.qa_rg_name
+    prod = local.prod_rg_name
+    uat  = local.uat_rg_name
+  }
+
+  vnet_by_env = {
+    hub  = local.hub_vnet_name
+    dev  = local.dev_vnet_name
+    qa   = local.qa_vnet_name
+    prod = local.prod_vnet_name
+    uat  = local.uat_vnet_name
+  }
+}
+
 # resource groups (per-env with proper provider)
 module "rg_hub" {
   source   = "../../modules/resource-group"
-  name     = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
+  name     = local.hub_rg_name
   location = var.location
   tags     = merge(local.tag_base, local.plane_tags, { layer = local.is_nonprod ? local.rg_layer_by_key["nphub"] : local.rg_layer_by_key["prhub"] })
 }
@@ -185,7 +218,8 @@ module "rg_dev" {
   count     = local.is_nonprod ? 1 : 0
   providers = { azurerm = azurerm.dev }
   source    = "../../modules/resource-group"
-  name      = var.dev_spoke.rg
+  # name      = local.dev_rg_name
+  name      = local.dev_rg_name
   location  = var.location
   tags      = merge(local.tag_base, local.dev_only_tags, { layer = local.rg_layer_by_key["dev"] })
 }
@@ -194,7 +228,8 @@ module "rg_qa" {
   count     = local.is_nonprod ? 1 : 0
   providers = { azurerm = azurerm.qa }
   source    = "../../modules/resource-group"
-  name      = var.qa_spoke.rg
+  # name      = local.qa_rg_name
+  name      = local.qa_rg_name
   location  = var.location
   tags      = merge(local.tag_base, local.qa_only_tags, { layer = local.rg_layer_by_key["qa"] })
 }
@@ -203,7 +238,8 @@ module "rg_prod" {
   count     = local.is_prod ? 1 : 0
   providers = { azurerm = azurerm.prod }
   source    = "../../modules/resource-group"
-  name      = var.prod_spoke.rg
+  # name      = local.prod_rg_name
+  name      = local.prod_rg_name
   location  = var.location
   tags      = merge(local.tag_base, local.prod_only_tags, { layer = local.rg_layer_by_key["prod"] })
 }
@@ -212,7 +248,8 @@ module "rg_uat" {
   count     = local.is_prod ? 1 : 0
   providers = { azurerm = azurerm.uat }
   source    = "../../modules/resource-group"
-  name      = var.uat_spoke.rg
+  # name      = local.uat_rg_name
+  name      = local.uat_rg_name
   location  = var.location
   tags      = merge(local.tag_base, local.uat_only_tags, { layer = local.rg_layer_by_key["uat"] })
 }
@@ -220,8 +257,10 @@ module "rg_uat" {
 # vnets (per-env with proper provider)
 module "vnet_hub" {
   source              = "../../modules/vnet"
-  name                = local.is_nonprod ? var.nonprod_hub.vnet : var.prod_hub.vnet
-  resource_group_name = local.is_nonprod ? var.nonprod_hub.rg   : var.prod_hub.rg
+  # name                = local.is_nonprod ? var.nonprod_hub.vnet : var.prod_hub.vnet
+  # resource_group_name = local.is_nonprod ? local.hub_rg_name   : var.prod_hub.rg
+  name                = local.hub_vnet_name
+  resource_group_name = local.hub_rg_name
   location            = var.location
   address_space       = (local.is_nonprod ? var.nonprod_hub : var.prod_hub).cidrs
   subnets             = (local.is_nonprod ? var.nonprod_hub : var.prod_hub).subnets
@@ -233,8 +272,10 @@ module "vnet_dev" {
   count               = local.is_nonprod ? 1 : 0
   providers           = { azurerm = azurerm.dev }
   source              = "../../modules/vnet"
-  name                = var.dev_spoke.vnet
-  resource_group_name = var.dev_spoke.rg
+  # name                = var.dev_spoke.vnet
+  # resource_group_name = local.dev_rg_name
+  name                = local.dev_vnet_name
+  resource_group_name = local.dev_rg_name
   location            = var.location
   address_space       = var.dev_spoke.cidrs
   subnets             = var.dev_spoke.subnets
@@ -246,8 +287,10 @@ module "vnet_qa" {
   count               = local.is_nonprod ? 1 : 0
   providers           = { azurerm = azurerm.qa }
   source              = "../../modules/vnet"
-  name                = var.qa_spoke.vnet
-  resource_group_name = var.qa_spoke.rg
+  # name                = var.qa_spoke.vnet
+  # resource_group_name = local.qa_rg_name
+  name                = local.qa_vnet_name
+  resource_group_name = local.qa_rg_name
   location            = var.location
   address_space       = var.qa_spoke.cidrs
   subnets             = var.qa_spoke.subnets
@@ -259,8 +302,10 @@ module "vnet_prod" {
   count               = local.is_prod ? 1 : 0
   providers           = { azurerm = azurerm.prod }
   source              = "../../modules/vnet"
-  name                = var.prod_spoke.vnet
-  resource_group_name = var.prod_spoke.rg
+  # name                = var.prod_spoke.vnet
+  # resource_group_name = local.prod_rg_name
+  name                = local.prod_vnet_name
+  resource_group_name = local.prod_rg_name
   location            = var.location
   address_space       = var.prod_spoke.cidrs
   subnets             = var.prod_spoke.subnets
@@ -272,8 +317,10 @@ module "vnet_uat" {
   count               = local.is_prod ? 1 : 0
   providers           = { azurerm = azurerm.uat }
   source              = "../../modules/vnet"
-  name                = var.uat_spoke.vnet
-  resource_group_name = var.uat_spoke.rg
+  # name                = var.uat_spoke.vnet
+  # resource_group_name = local.uat_rg_name
+  name                = local.uat_vnet_name
+  resource_group_name = local.uat_rg_name
   location            = var.location
   address_space       = var.uat_spoke.cidrs
   subnets             = var.uat_spoke.subnets
@@ -285,7 +332,7 @@ module "vnet_uat" {
 resource "azurerm_virtual_network_peering" "hub_to_dev" {
   count                         = local.is_nonprod ? 1 : 0
   name                          = "peer-hub-to-dev"
-  resource_group_name           = var.nonprod_hub.rg
+  resource_group_name           = local.hub_rg_name
   virtual_network_name          = module.vnet_hub.name
   remote_virtual_network_id     = module.vnet_dev[0].id
   allow_gateway_transit         = true
@@ -298,7 +345,7 @@ resource "azurerm_virtual_network_peering" "dev_to_hub" {
   count                         = local.is_nonprod ? 1 : 0
   provider                      = azurerm.dev
   name                          = "peer-dev-to-hub"
-  resource_group_name           = var.dev_spoke.rg
+  resource_group_name           = local.dev_rg_name
   virtual_network_name          = module.vnet_dev[0].name
   remote_virtual_network_id     = module.vnet_hub.id
   allow_gateway_transit         = false
@@ -310,7 +357,7 @@ resource "azurerm_virtual_network_peering" "dev_to_hub" {
 resource "azurerm_virtual_network_peering" "hub_to_qa" {
   count                         = local.is_nonprod ? 1 : 0
   name                          = "peer-hub-to-qa"
-  resource_group_name           = var.nonprod_hub.rg
+  resource_group_name           = local.hub_rg_name
   virtual_network_name          = module.vnet_hub.name
   remote_virtual_network_id     = module.vnet_qa[0].id
   allow_gateway_transit         = true
@@ -323,7 +370,7 @@ resource "azurerm_virtual_network_peering" "qa_to_hub" {
   count                         = local.is_nonprod ? 1 : 0
   provider                      = azurerm.qa
   name                          = "peer-qa-to-hub"
-  resource_group_name           = var.qa_spoke.rg
+  resource_group_name           = local.qa_rg_name
   virtual_network_name          = module.vnet_qa[0].name
   remote_virtual_network_id     = module.vnet_hub.id
   allow_gateway_transit         = false
@@ -335,7 +382,7 @@ resource "azurerm_virtual_network_peering" "qa_to_hub" {
 resource "azurerm_virtual_network_peering" "hub_to_prod" {
   count                         = local.is_prod ? 1 : 0
   name                          = "peer-hub-to-prod"
-  resource_group_name           = var.prod_hub.rg
+  resource_group_name           = local.hub_rg_name
   virtual_network_name          = module.vnet_hub.name
   remote_virtual_network_id     = module.vnet_prod[0].id
   allow_gateway_transit         = true
@@ -348,7 +395,7 @@ resource "azurerm_virtual_network_peering" "prod_to_hub" {
   count                         = local.is_prod ? 1 : 0
   provider                      = azurerm.prod
   name                          = "peer-prod-to-hub"
-  resource_group_name           = var.prod_spoke.rg
+  resource_group_name           = local.prod_rg_name
   virtual_network_name          = module.vnet_prod[0].name
   remote_virtual_network_id     = module.vnet_hub.id
   allow_gateway_transit         = false
@@ -360,7 +407,7 @@ resource "azurerm_virtual_network_peering" "prod_to_hub" {
 resource "azurerm_virtual_network_peering" "hub_to_uat" {
   count                         = local.is_prod ? 1 : 0
   name                          = "peer-hub-to-uat"
-  resource_group_name           = var.prod_hub.rg
+  resource_group_name           = local.hub_rg_name
   virtual_network_name          = module.vnet_hub.name
   remote_virtual_network_id     = module.vnet_uat[0].id
   allow_gateway_transit         = true
@@ -373,7 +420,7 @@ resource "azurerm_virtual_network_peering" "uat_to_hub" {
   count                         = local.is_prod ? 1 : 0
   provider                      = azurerm.uat
   name                          = "peer-uat-to-hub"
-  resource_group_name           = var.uat_spoke.rg
+  resource_group_name           = local.uat_rg_name
   virtual_network_name          = module.vnet_uat[0].name
   remote_virtual_network_id     = module.vnet_hub.id
   allow_gateway_transit         = false
@@ -437,7 +484,7 @@ locals {
 
 module "pdns" {
   source              = "../../modules/private-dns"
-  resource_group_name = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
+  resource_group_name = local.hub_rg_name
   zones               = var.private_zones
   vnet_links          = local.vnet_links
   tags                = merge(local.tag_base, { purpose = "private-dns" })
@@ -447,7 +494,7 @@ module "pdns" {
 # connectivity: vpn gateway
 locals {
   create_vpng_effective     = var.create_vpn_gateway
-  vpng_hub_rg               = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
+  vpng_hub_rg               = local.hub_rg_name
   vpng_gateway_subnet_id    = try(module.vnet_hub.subnet_ids["GatewaySubnet"], null)
   create_external_vpng_pip  = local.create_vpng_effective && !var.create_vpng_public_ip
 }
@@ -492,7 +539,7 @@ module "vpng" {
 
 # ingress: waf & appgw
 locals {
-  appgw_hub_rg     = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
+  appgw_hub_rg     = local.hub_rg_name
   has_appgw_subnet = local.is_nonprod ? contains(keys(var.nonprod_hub.subnets), "appgw") : contains(keys(var.prod_hub.subnets), "appgw")
   appgw_subnet_id  = try(module.vnet_hub.subnet_ids["appgw"], null)
   appgw_enabled    = var.create_app_gateway && local.has_appgw_subnet && local.appgw_subnet_id != null
@@ -635,12 +682,12 @@ locals {
   nsg_rg_by_key = {
     for k in local.nsg_keys :
     k => (
-      can(regex("^hub-",  k)) ? (local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg) :
-      can(regex("^dev-",  k)) ? var.dev_spoke.rg  :
-      can(regex("^qa-",   k)) ? var.qa_spoke.rg   :
-      can(regex("^prod-", k)) ? var.prod_spoke.rg :
-      can(regex("^uat-",  k)) ? var.uat_spoke.rg  :
-      (local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg)
+      can(regex("^hub-",  k)) ? local.hub_rg_name  :
+      can(regex("^dev-",  k)) ? local.dev_rg_name  :
+      can(regex("^qa-",   k)) ? local.qa_rg_name   :
+      can(regex("^prod-", k)) ? local.prod_rg_name :
+      can(regex("^uat-",  k)) ? local.uat_rg_name  :
+      local.hub_rg_name
     )
   }
 
@@ -661,7 +708,7 @@ locals {
 module "nsg_hub" {
   source              = "../../modules/network/nsg"
   location            = var.location
-  resource_group_name = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
+  resource_group_name = local.hub_rg_name
   subnet_nsgs         = local.nsgs_hub
   tags                = merge(local.tag_base, { lane = local.lane })
 }
@@ -671,7 +718,7 @@ module "nsg_dev" {
   providers           = { azurerm = azurerm.dev }
   source              = "../../modules/network/nsg"
   location            = var.location
-  resource_group_name = var.dev_spoke.rg
+  resource_group_name = local.dev_rg_name
   subnet_nsgs         = local.nsgs_dev
   tags                = merge(local.tag_base, local.dev_only_tags, { lane = "nonprod" })
 }
@@ -681,7 +728,7 @@ module "nsg_qa" {
   providers           = { azurerm = azurerm.qa }
   source              = "../../modules/network/nsg"
   location            = var.location
-  resource_group_name = var.qa_spoke.rg
+  resource_group_name = local.qa_rg_name
   subnet_nsgs         = local.nsgs_qa
   tags                = merge(local.tag_base, local.qa_only_tags, { lane = "nonprod" })
 }
@@ -691,7 +738,7 @@ module "nsg_prod" {
   providers           = { azurerm = azurerm.prod }
   source              = "../../modules/network/nsg"
   location            = var.location
-  resource_group_name = var.prod_spoke.rg
+  resource_group_name = local.prod_rg_name
   subnet_nsgs         = local.nsgs_prod
   tags                = merge(local.tag_base, local.prod_only_tags, { lane = "prod" })
 }
@@ -701,7 +748,7 @@ module "nsg_uat" {
   providers           = { azurerm = azurerm.uat }
   source              = "../../modules/network/nsg"
   location            = var.location
-  resource_group_name = var.uat_spoke.rg
+  resource_group_name = local.uat_rg_name
   subnet_nsgs         = local.nsgs_uat
   tags                = merge(local.tag_base, local.uat_only_tags, { lane = "prod" })
 }
@@ -2242,7 +2289,7 @@ resource "azurerm_network_security_rule" "pe_cdbpg_deny_internet_uat" {
 # dns: private resolver
 locals {
   dnsr_name         = "pdnsr-${var.product}-${local.plane_code}-${var.region}-01"
-  dnsr_hub_rg       = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
+  dnsr_hub_rg       = local.hub_rg_name
   dnsr_hub_vnet_id  = module.vnet_hub.id
   dnsr_inbound_sid  = try(module.vnet_hub.subnet_ids["dns-inbound"], null)
   dnsr_outbound_sid = try(module.vnet_hub.subnet_ids["dns-outbound"], null)
@@ -2286,7 +2333,7 @@ locals {
 resource "azurerm_dns_zone" "public" {
   for_each            = local.public_dns_zones_active
   name                = each.value
-  resource_group_name = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
+  resource_group_name = local.hub_rg_name
   tags = merge(local.tag_base, {
     purpose     = "public-dns-zone"
     environment = local.public_dns_env
@@ -2328,7 +2375,7 @@ locals {
 module "fd" {
   count               = var.fd_create_frontdoor ? 1 : 0
   source              = "../../modules/frontdoor-profile"
-  resource_group_name = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
+  resource_group_name = local.hub_rg_name
   profile_name        = local.fd_profile_name
   endpoint_name       = local.fd_endpoint_name
   sku_name            = var.fd_sku_name
@@ -2341,7 +2388,7 @@ module "fd" {
 resource "azurerm_network_watcher" "hub" {
   name                = "nw-${var.product}-${local.plane_code}-${var.region}-01"
   location            = var.location
-  resource_group_name = local.is_nonprod ? var.nonprod_hub.rg : var.prod_hub.rg
+  resource_group_name = local.hub_rg_name
 
   tags = merge(local.tag_base, {
     purpose = "network-watcher"
@@ -2360,7 +2407,7 @@ resource "azurerm_network_watcher" "dev" {
   provider            = azurerm.dev
   name                = "nw-${var.product}-dev-${var.region}-01"
   location            = var.location
-  resource_group_name = var.dev_spoke.rg
+  resource_group_name = local.dev_rg_name
 
   tags = merge(local.tag_base, local.dev_only_tags, {
     purpose = "network-watcher"
@@ -2376,7 +2423,7 @@ resource "azurerm_network_watcher" "qa" {
   provider            = azurerm.qa
   name                = "nw-${var.product}-qa-${var.region}-01"
   location            = var.location
-  resource_group_name = var.qa_spoke.rg
+  resource_group_name = local.qa_rg_name
 
   tags = merge(local.tag_base, local.qa_only_tags, {
     purpose = "network-watcher"
@@ -2392,7 +2439,7 @@ resource "azurerm_network_watcher" "prod" {
   provider            = azurerm.prod
   name                = "nw-${var.product}-prod-${var.region}-01"
   location            = var.location
-  resource_group_name = var.prod_spoke.rg
+  resource_group_name = local.prod_rg_name
 
   tags = merge(local.tag_base, local.prod_only_tags, {
     purpose = "network-watcher"
@@ -2408,7 +2455,7 @@ resource "azurerm_network_watcher" "uat" {
   provider            = azurerm.uat
   name                = "nw-${var.product}-uat-${var.region}-01"
   location            = var.location
-  resource_group_name = var.uat_spoke.rg
+  resource_group_name = local.uat_rg_name
 
   tags = merge(local.tag_base, local.uat_only_tags, {
     purpose = "network-watcher"
