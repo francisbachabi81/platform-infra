@@ -90,7 +90,8 @@ jobs:
             esac
 
             # Hub sub == shared-network sub for this plane
-            HUB_SUB="$TARGET_SUB"
+            # HUB_SUB="$TARGET_SUB"
+            HUB_SUB='${{ secrets.AZ_SUB_HRZ_CORE }}'
             HUB_TENANT="$TENANT"
 
             # Env subscriptions for HRZ
@@ -111,7 +112,8 @@ jobs:
             esac
 
             # Hub sub == shared-network sub for this plane
-            HUB_SUB="$TARGET_SUB"
+            # HUB_SUB="$TARGET_SUB"
+            HUB_SUB='${{ secrets.AZ_SUB_PUB_CORE }}'
             HUB_TENANT="$TENANT"
 
             # Env subscriptions for PUB
