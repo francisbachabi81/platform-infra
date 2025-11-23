@@ -44,7 +44,18 @@ jobs:
             TENANT='${{ secrets.AZ_TENANT_HRZ }}'
             CLIENT_ID='${{ secrets.AZURE_CLIENT_ID_HRZ }}'
             AUDIENCE="api://AzureADTokenExchangeUSGov"
+
+            # State subscription (for backend)
             STATE_SUB='${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}'
+
+            # Per-role subscriptions
+            HUB_SUB='${{ secrets.AZ_SUB_HRZ_CORE }}'
+            DEV_SUB='${{ secrets.AZ_SUB_HRZ_DEV }}'
+            QA_SUB='${{ secrets.AZ_SUB_HRZ_QA }}'
+            UAT_SUB='${{ secrets.AZ_SUB_HRZ_UAT }}'
+            PROD_SUB='${{ secrets.AZ_SUB_HRZ_PROD }}'
+
+            # Target subscription for actual shared-network resources (by plane)
             case "$PLANE" in
               nonprod) TARGET_SUB='${{ secrets.AZ_SUB_HRZ_NONPROD }}' ;;
               prod)    TARGET_SUB='${{ secrets.AZ_SUB_HRZ_PROD }}'    ;;
@@ -55,7 +66,18 @@ jobs:
             TENANT='${{ secrets.AZ_TENANT_PUB }}'
             CLIENT_ID='${{ secrets.AZURE_CLIENT_ID_PUB }}'
             AUDIENCE="api://AzureADTokenExchange"
+
+            # State subscription (for backend)
             STATE_SUB='${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}'
+
+            # Per-role subscriptions
+            HUB_SUB='${{ secrets.AZ_SUB_PUB_CORE }}'
+            DEV_SUB='${{ secrets.AZ_SUB_PUB_DEV }}'
+            QA_SUB='${{ secrets.AZ_SUB_PUB_QA }}'
+            UAT_SUB='${{ secrets.AZ_SUB_PUB_UAT }}'
+            PROD_SUB='${{ secrets.AZ_SUB_PUB_PROD }}'
+
+            # Target subscription for actual shared-network resources (by plane)
             case "$PLANE" in
               nonprod) TARGET_SUB='${{ secrets.AZ_SUB_PUB_NONPROD }}' ;;
               prod)    TARGET_SUB='${{ secrets.AZ_SUB_PUB_PROD }}'    ;;
@@ -72,6 +94,11 @@ jobs:
           echo "AUDIENCE=$AUDIENCE"     >> "$GITHUB_OUTPUT"
           echo "STATE_SUB=$STATE_SUB"   >> "$GITHUB_OUTPUT"
           echo "TARGET_SUB=$TARGET_SUB" >> "$GITHUB_OUTPUT"
+          echo "HUB_SUB=$HUB_SUB"       >> "$GITHUB_OUTPUT"
+          echo "DEV_SUB=$DEV_SUB"       >> "$GITHUB_OUTPUT"
+          echo "QA_SUB=$QA_SUB"         >> "$GITHUB_OUTPUT"
+          echo "UAT_SUB=$UAT_SUB"       >> "$GITHUB_OUTPUT"
+          echo "PROD_SUB=$PROD_SUB"     >> "$GITHUB_OUTPUT"
 
           {
             echo "ARM_ENVIRONMENT=$ARM_ENV"
@@ -83,19 +110,22 @@ jobs:
             echo "TF_VAR_product=$PRODUCT"
             echo "TF_VAR_plane=$PLANE"
 
-            # Hub + per-env subscription mapping for the shared-network stack
-            echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
+            # Hub subscription/tenant
+            echo "TF_VAR_hub_subscription_id=$HUB_SUB"
             echo "TF_VAR_hub_tenant_id=$TENANT"
 
+            # Per-env mappings (mimic plan)
             if [ "$PLANE" = "nonprod" ]; then
-              echo "TF_VAR_dev_subscription_id=$TARGET_SUB"
+              # Nonprod plane: dev + qa envs
+              echo "TF_VAR_dev_subscription_id=$DEV_SUB"
               echo "TF_VAR_dev_tenant_id=$TENANT"
-              echo "TF_VAR_qa_subscription_id=$TARGET_SUB"
+              echo "TF_VAR_qa_subscription_id=$QA_SUB"
               echo "TF_VAR_qa_tenant_id=$TENANT"
             else
-              echo "TF_VAR_prod_subscription_id=$TARGET_SUB"
+              # Prod plane: prod + uat envs
+              echo "TF_VAR_prod_subscription_id=$PROD_SUB"
               echo "TF_VAR_prod_tenant_id=$TENANT"
-              echo "TF_VAR_uat_subscription_id=$TARGET_SUB"
+              echo "TF_VAR_uat_subscription_id=$UAT_SUB"
               echo "TF_VAR_uat_tenant_id=$TENANT"
             fi
           } >> "$GITHUB_ENV"
