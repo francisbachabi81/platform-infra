@@ -3,7 +3,7 @@ env             = "dev"                         # dev | qa | uat | prod
 product         = "pub"                         # hrz (Azure Gov) | pub (Azure Commercial)
 location        = "Central US"
 region          = "cus"
-rg_name         = "rg-pub-dev-cus-100"
+# rg_name         = "rg-pub-dev-cus-01"
 subscription_id = "57f8aa30-981c-4764-94f6-6691c4d5c01c"   # ← dev subscription
 tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
@@ -48,15 +48,6 @@ aks_service_cidr   = "172.110.0.0/16"
 aks_dns_service_ip = "172.110.0.10"
 aks_sku_tier       = "Free"                       # Free | Standard | Premium
 
-# ACR (hub)
-acr_sku                        = "Basic"         # Basic | Standard | Premium
-admin_enabled                  = true
-public_network_access_enabled  = false           # honored on Premium only
-acr_network_rule_bypass_option = "AzureServices" # None | AzureServices
-acr_anonymous_pull_enabled     = false
-acr_data_endpoint_enabled      = false
-acr_zone_redundancy_enabled    = false
-
 # Service Bus (env)
 create_servicebus             = true
 servicebus_sku                = "Standard"       # Basic | Standard | Premium
@@ -85,8 +76,8 @@ cdbpg_preferred_primary_zone          = "2"
 # cdbpg_admin_password via TF_VAR_cdbpg_admin_password
 
 # PostgreSQL Flexible Server (env)
-pg_version               = "16"
-pg_sku_name              = "GP_Standard_D2s_v3"
+pg_version               = "17"
+pg_sku_name              = "B_Standard_B2ms"
 # Suggested SKUs when you move up environments:
 #   dev:  "B_Standard_B2ms"        # Burstable, cheapest option — NO HA support
 #   QA:  "GP_Standard_D2s_v3"   # 2 vCores, General Purpose, HA-capable

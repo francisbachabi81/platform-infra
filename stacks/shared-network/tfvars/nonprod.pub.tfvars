@@ -10,15 +10,15 @@ github_sp_object_id = "11111111-2222-3333-4444-555555555555"
 
 # Subscriptions / Tenants (cross-subscription support)
 # HUB (shared-network) subscription/tenant — REQUIRED
-hub_subscription_id = "ee8a4693-54d4-4de8-842b-b6f35fc0674d"
-hub_tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
+# hub_subscription_id = "ee8a4693-54d4-4de8-842b-b6f35fc0674d"
+# hub_tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
-# If DEV/QA VNets live in different subscriptions, set these
-dev_subscription_id = "57f8aa30-981c-4764-94f6-6691c4d5c01c" 
-dev_tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
+# # If DEV/QA VNets live in different subscriptions, set these
+# dev_subscription_id = "57f8aa30-981c-4764-94f6-6691c4d5c01c" 
+# dev_tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
-qa_subscription_id  = "647feab6-e53a-4db2-99ab-55d04a5997d7"
-qa_tenant_id        = "dd58f16c-b85a-4d66-99e1-f86905453853"
+# qa_subscription_id  = "647feab6-e53a-4db2-99ab-55d04a5997d7"
+# qa_tenant_id        = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
 # Private DNS zones (Azure Commercial)
 private_zones = [

@@ -40,7 +40,6 @@ output "ids" {
     kv1      = try(module.kv1[0].id, null)
     sa1      = try(module.sa1[0].id, null)
     cosmos1  = try(module.cosmos1[0].id, null)
-    # pick the AKS id from the locals unified above
     aks1     = local.aks_id
     aks      = local.aks_id
     sbns1    = try(module.sbns1[0].id, null)
@@ -63,7 +62,6 @@ output "names" {
     kv1           = try(module.kv1[0].name, null)
     sa1           = try(module.sa1[0].name, null)
     cosmos1       = try(module.cosmos1[0].name, null)
-    # unified name from locals
     aks1          = local.aks_name
     sbns1         = try(module.sbns1[0].name, null)
     eventhub_ns   = try(module.eventhub[0].namespace_name, null)
@@ -103,6 +101,10 @@ output "aks" {
     node_resource_group = local.aks_node_rg
     service_cidr        = local.aks_service_cidr
     dns_service_ip      = local.aks_dns_service_ip
+    subscription_id     = local.aks_subscription_id
+    tenant_id           = local.aks_tenant_id
+    resource_group      = local.aks_rg_name
+    provider_alias      = local.aks_provider_alias
   } : null
 }
 

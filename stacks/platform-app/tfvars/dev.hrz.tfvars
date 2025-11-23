@@ -3,14 +3,14 @@ env             = "dev"                         # dev | qa | uat | prod
 product         = "hrz"                         # hrz (Azure Gov) | pub (Azure Commercial)
 location        = "USGov Arizona"
 region          = "usaz"
-rg_name         = "rg-hrz-dev-usaz-01"
-subscription_id = "62ae6908-cbcb-40cb-8773-54bd318ff7f9"  # ← dev subscription (NOT the shared nonprod)
-tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
+# rg_name         = "rg-hrz-dev-usaz-01"
+# subscription_id = "62ae6908-cbcb-40cb-8773-54bd318ff7f9"  # ← dev subscription (NOT the shared nonprod)
+# tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
 # Hub overrides — shared-network (nonprod hub) usually lives in the shared nonprod sub.
 # Set these so data sources that use provider.azurerm.hub resolve correctly.
-hub_subscription_id = "df6dc63f-c4dc-4590-ba4b-f2ce9639ca6c"
-hub_tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
+# hub_subscription_id = "df6dc63f-c4dc-4590-ba4b-f2ce9639ca6c"
+# hub_tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
 # Provider alias overrides used by AKS routing logic (shared nonprod)
 shared_nonprod_subscription_id = "df6dc63f-c4dc-4590-ba4b-f2ce9639ca6c"
@@ -48,15 +48,6 @@ aks_service_cidr   = "10.110.0.0/16"
 aks_dns_service_ip = "10.110.0.10"
 aks_sku_tier       = "Free"                      # Free | Standard | Premium
 
-# ACR (hub) 
-acr_sku                        = "Basic"         # Basic | Standard | Premium
-admin_enabled                  = true
-public_network_access_enabled  = false           # honored on Premium only
-acr_network_rule_bypass_option = "AzureServices" # None | AzureServices
-acr_anonymous_pull_enabled     = false
-acr_data_endpoint_enabled      = false
-acr_zone_redundancy_enabled    = false
-
 # Service Bus (env)
 create_servicebus             = true
 servicebus_sku                = "Standard"       # Basic | Standard | Premium
@@ -85,7 +76,7 @@ cdbpg_preferred_primary_zone          = "2"
 # cdbpg_admin_password via TF_VAR_cdbpg_admin_password
 
 # PostgreSQL Flexible Server (env)
-pg_version               = "16"
+pg_version               = "17"
 pg_sku_name              = "B_Standard_B2ms"
 # Suggested SKUs when you move up environments:
 #   dev:  "B_Standard_B2ms"        # Burstable, cheapest option — NO HA support

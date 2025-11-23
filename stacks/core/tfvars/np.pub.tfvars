@@ -3,8 +3,8 @@ product         = "pub"
 location        = "Central US"
 region          = "cus"
 
-subscription_id = "ee8a4693-54d4-4de8-842b-b6f35fc0674d"
-tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
+# subscription_id = "ee8a4693-54d4-4de8-842b-b6f35fc0674d"
+# tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
 tags = {
   plane   = "np"

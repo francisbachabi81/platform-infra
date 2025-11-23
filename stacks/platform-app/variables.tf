@@ -159,57 +159,6 @@ variable "sa_replication_type" {
   }
 }
 
-# acr
-variable "acr_sku" {
-  description = "azure container registry sku"
-  type        = string
-  default     = "Basic"
-  validation {
-    condition     = contains(["Basic","Standard","Premium"], var.acr_sku)
-    error_message = "acr_sku invalid."
-  }
-}
-
-variable "admin_enabled" {
-  description = "enable acr admin user"
-  type        = bool
-  default     = false
-}
-
-variable "public_network_access_enabled" {
-  description = "enable public network access"
-  type        = bool
-  default     = true
-}
-
-variable "acr_network_rule_bypass_option" {
-  description = "acr bypass option"
-  type        = string
-  default     = "AzureServices"
-  validation {
-    condition     = contains(["None","AzureServices"], var.acr_network_rule_bypass_option)
-    error_message = "acr bypass invalid."
-  }
-}
-
-variable "acr_anonymous_pull_enabled" {
-  description = "enable anonymous pull"
-  type        = bool
-  default     = false
-}
-
-variable "acr_data_endpoint_enabled" {
-  description = "enable data endpoint"
-  type        = bool
-  default     = false
-}
-
-variable "acr_zone_redundancy_enabled" {
-  description = "enable zone redundancy"
-  type        = bool
-  default     = false
-}
-
 # service bus
 variable "create_servicebus" {
   description = "create service bus resources"

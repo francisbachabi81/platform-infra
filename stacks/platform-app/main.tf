@@ -1,9 +1,17 @@
 # Providers
 terraform {
   required_version = ">= 1.6.5"
+
   required_providers {
-    azurerm = { source = "hashicorp/azurerm", version = "~> 4.14.0" }
-    random  = { source = "hashicorp/random",  version = "~> 3.6" }
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 4.14.0"
+    }
+
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
   }
 }
 
@@ -75,9 +83,9 @@ locals {
 
   # sa1_name  = substr("sa${var.product}${var.env}${var.region}01${local.uniq}", 0, 24)
   sa1_name  = substr("sa${var.product}${var.env}${var.region}01", 0, 24)
-  aks1_name = "aks-${var.product}-${var.env}-${var.region}-100"
+  aks1_name = "aks-${var.product}-${var.env}-${var.region}-01"
 
-  rg_hub = coalesce(var.rg_plane_name, "rg-${var.product}-${local.plane_code}-${var.region}-core-100")
+  rg_hub = coalesce(var.rg_plane_name, "rg-${var.product}-${local.plane_code}-${var.region}-core-01")
 
   org_base_tags = {
     product      = var.product
@@ -100,6 +108,8 @@ locals {
 
   # Default: create AKS for all envs except 'qa'; still overridable via var.create_aks
   create_aks = var.create_aks == null ? (var.env != "qa") : var.create_aks
+
+  env_rg_name = "rg-${var.product}-${var.env}-${var.region}-01"
 }
 
 # Remote state: shared-network + core
@@ -206,7 +216,8 @@ locals {
 module "rg_dev" {
   count     = local.is_dev ? 1 : 0
   source    = "../../modules/resource-group"
-  name      = "rg-${var.product}-${var.env}-${var.region}-100"
+  # name      = "rg-${var.product}-${var.env}-${var.region}-01"
+  name      = local.env_rg_name
   location  = var.location
   tags      = merge(local.tags_common, local.dev_only_tags, { layer = local.rg_layer_by_key["dev"] })
 }
@@ -214,7 +225,8 @@ module "rg_dev" {
 module "rg_qa" {
   count     = local.is_qa ? 1 : 0
   source    = "../../modules/resource-group"
-  name      = "rg-${var.product}-${var.env}-${var.region}-100"
+  # name      = "rg-${var.product}-${var.env}-${var.region}-01"
+  name      = local.env_rg_name
   location  = var.location
   tags      = merge(local.tags_common, local.qa_only_tags, { layer = local.rg_layer_by_key["qa"] })
 }
@@ -222,7 +234,8 @@ module "rg_qa" {
 module "rg_prod" {
   count     = local.is_prod ? 1 : 0
   source    = "../../modules/resource-group"
-  name      = "rg-${var.product}-${var.env}-${var.region}-100"
+  # name      = "rg-${var.product}-${var.env}-${var.region}-01"
+  name      = local.env_rg_name
   location  = var.location
   tags      = merge(local.tags_common, local.prod_only_tags, { layer = local.rg_layer_by_key["prod"] })
 }
@@ -230,13 +243,15 @@ module "rg_prod" {
 module "rg_uat" {
   count     = local.is_uat ? 1 : 0
   source    = "../../modules/resource-group"
-  name      = "rg-${var.product}-${var.env}-${var.region}-100"
+  # name      = "rg-${var.product}-${var.env}-${var.region}-01"
+  name      = local.env_rg_name
   location  = var.location
   tags      = merge(local.tags_common, local.uat_only_tags, { layer = local.rg_layer_by_key["uat"] })
 }
 
 data "azurerm_resource_group" "env" {
-  name = var.rg_name
+  # name = var.rg_name
+  name = local.env_rg_name
   depends_on = [
     module.rg_dev,
     module.rg_qa,
@@ -262,7 +277,7 @@ check "private_net_basics_present" {
 
 # ---- AKS env routing & resolution (NEW) ----
 locals {
-  # Pull the shared nonprod subscription + core RG (…-core-100) from CORE state (for auditing)
+  # Pull the shared nonprod subscription + core RG (…-core-01) from CORE state (for auditing)
   shared_np_subscription_id = try(data.terraform_remote_state.core[0].outputs.meta.subscription, null)
   shared_np_tenant_id       = try(data.terraform_remote_state.core[0].outputs.meta.tenant,       var.tenant_id)
   shared_np_core_rg_name    = try(data.terraform_remote_state.core[0].outputs.resource_group.name, null)
@@ -301,10 +316,11 @@ locals {
   )
 
   # AKS Resource Group:
-  # - dev → shared nonprod core RG (…-core-100)
-  # - prod/uat → current env RG (var.rg_name)
+  # - dev → shared nonprod core RG (…-core-01)
+  # - prod/uat → current env RG (var.rg_name -> local.env_rg_name)
   aks_rg_name = (
-    var.env == "dev" ? local.shared_np_core_rg_name : var.rg_name
+    # var.env == "dev" ? local.shared_np_core_rg_name : var.rg_name
+    var.env == "dev" ? local.shared_np_core_rg_name : local.env_rg_name
   )
 
   # AKS nodepool subnet:
@@ -354,7 +370,7 @@ check "aks_pdz_exists" {
 
 # Key Vault (env)
 locals {
-  kv1_base_name    = "kvt-${var.product}-${var.env}-${var.region}-100"
+  kv1_base_name    = "kvt-${var.product}-${var.env}-${var.region}-01"
   kv1_name_cleaned = replace(lower(trimspace(local.kv1_base_name)), "-", "")
 }
 
@@ -363,7 +379,8 @@ module "kv1" {
   source               = "../../modules/keyvault"
   name                 = local.kv1_base_name
   location             = var.location
-  resource_group_name  = var.rg_name
+  # resource_group_name  = var.rg_name
+  resource_group_name  = local.env_rg_name
   tenant_id            = var.tenant_id
   pe_subnet_id         = local.pe_subnet_id_effective
   private_dns_zone_ids = local.zone_ids_effective
@@ -387,7 +404,8 @@ module "sa1" {
   source               = "../../modules/storage-account"
   name                 = local.sa1_name
   location             = var.location
-  resource_group_name  = var.rg_name
+  # resource_group_name  = var.rg_name
+  resource_group_name  = local.env_rg_name
   replication_type     = var.sa_replication_type
   container_names      = ["json-image-storage", "video-data"]
   pe_subnet_id         = local.pe_subnet_id_effective
@@ -406,7 +424,7 @@ module "sa1" {
 
 # Cosmos (NoSQL) (env)
 locals {
-  cosmos1_name         = "cosno-${var.product}-${var.env}-${var.region}-100"
+  cosmos1_name         = "cosno-${var.product}-${var.env}-${var.region}-01"
   cosmos1_name_cleaned = replace(lower(trimspace(local.cosmos1_name)), "-", "")
   cosmos_enabled       = local.enable_public_features
 }
@@ -416,7 +434,8 @@ module "cosmos1" {
   source                 = "../../modules/cosmos-account"
   name                   = local.cosmos1_name
   location               = var.location
-  resource_group_name    = var.rg_name
+  # resource_group_name    = var.rg_name
+  resource_group_name    = local.env_rg_name
   pe_subnet_id           = local.pe_subnet_id_effective
   private_dns_zone_ids   = local.zone_ids_effective
   total_throughput_limit = var.cosno_total_throughput_limit
@@ -435,7 +454,8 @@ module "cosmos1" {
 resource "azurerm_cosmosdb_sql_database" "app" {
   count               = local.enable_public_features ? 1 : 0
   name                = "cosnodb-${var.product}"
-  resource_group_name = var.rg_name
+  # resource_group_name = var.rg_name
+  resource_group_name = local.env_rg_name
   account_name        = local.cosmos1_name
   throughput          = 400
   depends_on          = [data.azurerm_resource_group.env, module.cosmos1]
@@ -444,7 +464,8 @@ resource "azurerm_cosmosdb_sql_database" "app" {
 resource "azurerm_cosmosdb_sql_container" "items" {
   count                 = local.enable_public_features ? 1 : 0
   name                  = "notification_jobs"
-  resource_group_name   = var.rg_name
+  # resource_group_name   = var.rg_name
+  resource_group_name = local.env_rg_name
   account_name          = local.cosmos1_name
   database_name         = azurerm_cosmosdb_sql_database.app[0].name
   partition_key_paths   = ["/shard_id"]
@@ -455,7 +476,8 @@ resource "azurerm_cosmosdb_sql_container" "items" {
 resource "azurerm_cosmosdb_sql_container" "events" {
   count                 = local.enable_public_features ? 1 : 0
   name                  = "notification_history"
-  resource_group_name   = var.rg_name
+  # resource_group_name   = var.rg_name
+  resource_group_name   = local.env_rg_name
   account_name          = local.cosmos1_name
   database_name         = azurerm_cosmosdb_sql_database.app[0].name
   partition_key_paths   = ["/user_id"]
@@ -502,7 +524,7 @@ locals {
 resource "azurerm_user_assigned_identity" "aks_env_shared_nonprod" {
   count               = local.aks_enabled_env && var.env == "dev" ? 1 : 0
   provider            = azurerm.shared_nonprod
-  name                = "uai-${var.product}-${local.plane_code}-${var.region}-aks-100"
+  name                = "uai-${var.product}-${local.plane_code}-${var.region}-aks-01"
   location            = var.location
   resource_group_name = local.aks_rg_name_effective
   tags                = merge(local.tags_common, { purpose = "aks-control-plane-identity" }, var.tags)
@@ -511,7 +533,7 @@ resource "azurerm_user_assigned_identity" "aks_env_shared_nonprod" {
 resource "azurerm_user_assigned_identity" "aks_env_prod" {
   count               = local.aks_enabled_env && var.env == "prod" ? 1 : 0
   provider            = azurerm.prod
-  name                = "uai-${var.product}-${var.env}-${var.region}-aks-100"
+  name                = "uai-${var.product}-${var.env}-${var.region}-aks-01"
   location            = var.location
   resource_group_name = local.aks_rg_name_effective
   tags                = merge(local.tags_common, { purpose = "aks-control-plane-identity" }, var.tags)
@@ -520,7 +542,7 @@ resource "azurerm_user_assigned_identity" "aks_env_prod" {
 resource "azurerm_user_assigned_identity" "aks_env_uat" {
   count               = local.aks_enabled_env && var.env == "uat" ? 1 : 0
   provider            = azurerm.uat
-  name                = "uai-${var.product}-${var.env}-${var.region}-aks-100"
+  name                = "uai-${var.product}-${var.env}-${var.region}-aks-01"
   location            = var.location
   resource_group_name = local.aks_rg_name_effective
   tags                = merge(local.tags_common, { purpose = "aks-control-plane-identity" }, var.tags)
@@ -588,10 +610,10 @@ module "aks1_env_shared_nonprod" {
   source    = "../../modules/aks"
   providers = { azurerm = azurerm.shared_nonprod }
 
-  name                        = "aks-${var.product}-${local.plane_code}-${var.region}-100"
+  name                        = "aks-${var.product}-${local.plane_code}-${var.region}-01"
   location                    = var.location
   resource_group_name         = local.aks_rg_name_effective
-  node_resource_group         = "rg-${var.product}-${local.plane_code}-${var.region}-aksn-100"
+  node_resource_group         = "rg-${var.product}-${local.plane_code}-${var.region}-aksn-01"
   default_nodepool_subnet_id  = local.aks_default_nodepool_subnet_id
 
   kubernetes_version = var.kubernetes_version
@@ -618,7 +640,7 @@ module "aks1_env_prod" {
   name                        = local.aks1_name
   location                    = var.location
   resource_group_name         = local.aks_rg_name_effective
-  node_resource_group         = "rg-${var.product}-${var.env}-${var.region}-aksn-100"
+  node_resource_group         = "rg-${var.product}-${var.env}-${var.region}-aksn-01"
   default_nodepool_subnet_id  = local.aks_default_nodepool_subnet_id
 
   kubernetes_version = var.kubernetes_version
@@ -645,7 +667,7 @@ module "aks1_env_uat" {
   name                        = local.aks1_name
   location                    = var.location
   resource_group_name         = local.aks_rg_name_effective
-  node_resource_group         = "rg-${var.product}-${var.env}-${var.region}-aksn-100"
+  node_resource_group         = "rg-${var.product}-${var.env}-${var.region}-aksn-01"
   default_nodepool_subnet_id  = local.aks_default_nodepool_subnet_id
 
   kubernetes_version = var.kubernetes_version
@@ -688,99 +710,6 @@ locals {
   ) : null
 }
 
-# Diagnostics (AKS → LA)
-# locals {
-#   env_norm   = lower(var.env)
-#   plane_ovrd = var.plane_override == null ? null : lower(var.plane_override)
-
-#   # dev/qa ⇒ np, uat ⇒ uat, prod ⇒ pr (np/pr passthrough)
-#   plane_from_env = lookup({
-#     dev  = "np",
-#     qa   = "np",
-#     uat  = "uat",
-#     prod = "pr",
-#     np   = "np",
-#     pr   = "pr",
-#   }, local.env_norm, "np")
-
-#   # Normalize override safely (avoid contains(null))
-#   plane_override_norm = local.plane_ovrd == null ? null : lookup({
-#     nonprod = "np", np  = "np",
-#     prod    = "pr", pr  = "pr",
-#     uat     = "uat",
-#   }, local.plane_ovrd, null)
-
-#   # Final plane code
-#   plane_effective_code = coalesce(local.plane_override_norm, local.plane_from_env)
-
-#   want_aks_diag = local.aks_enabled_env
-
-#   # Name uses the normalized plane code (np | pr | uat)
-#   diag_name = "diag-${var.product}-${local.plane_effective_code}-${var.region}"
-
-#   # Pick the single diag resource by plane (dev/qa collapse to np)
-#   aks_diag_id = local.want_aks_diag ? (
-#     local.plane_effective_code == "np"  ? try(azurerm_monitor_diagnostic_setting.aks_shared_nonprod[0].id, null) :
-#     local.plane_effective_code == "pr"  ? try(azurerm_monitor_diagnostic_setting.aks_prod[0].id,           null) :
-#     local.plane_effective_code == "uat" ? try(azurerm_monitor_diagnostic_setting.aks_uat[0].id,            null) :
-#                                           null
-#   ) : null
-# }
-
-# resource "azurerm_monitor_diagnostic_setting" "aks_shared_nonprod" {
-#   count                      = local.want_aks_diag && var.env == "dev" ? 1 : 0
-#   provider                   = azurerm.shared_nonprod
-#   name                       = local.diag_name
-#   target_resource_id         = local.aks_id
-#   log_analytics_workspace_id = local.law_workspace_id
-#   enabled_log { category = "kube-audit" }
-#   enabled_log { category = "kube-audit-admin" }
-#   enabled_log { category = "guard" }
-
-#   lifecycle {
-#     precondition {
-#       condition     = local.aks_id != null && local.law_workspace_id != null
-#       error_message = "AKS diagnostics requires AKS id and Log Analytics workspace id."
-#     }
-#   }
-# }
-
-# resource "azurerm_monitor_diagnostic_setting" "aks_prod" {
-#   count                      = local.want_aks_diag && var.env == "prod" ? 1 : 0
-#   provider                   = azurerm.prod
-#   name                       = local.diag_name
-#   target_resource_id         = local.aks_id
-#   log_analytics_workspace_id = local.law_workspace_id
-#   enabled_log { category = "kube-audit" }
-#   enabled_log { category = "kube-audit-admin" }
-#   enabled_log { category = "guard" }
-
-#   lifecycle {
-#     precondition {
-#       condition     = local.aks_id != null && local.law_workspace_id != null
-#       error_message = "AKS diagnostics requires AKS id and Log Analytics workspace id."
-#     }
-#   }
-# }
-
-# resource "azurerm_monitor_diagnostic_setting" "aks_uat" {
-#   count                      = local.want_aks_diag && var.env == "uat" ? 1 : 0
-#   provider                   = azurerm.uat
-#   name                       = local.diag_name
-#   target_resource_id         = local.aks_id
-#   log_analytics_workspace_id = local.law_workspace_id
-#   enabled_log { category = "kube-audit" }
-#   enabled_log { category = "kube-audit-admin" }
-#   enabled_log { category = "guard" }
-
-#   lifecycle {
-#     precondition {
-#       condition     = local.aks_id != null && local.law_workspace_id != null
-#       error_message = "AKS diagnostics requires AKS id and Log Analytics workspace id."
-#     }
-#   }
-# }
-
 # Service Bus (env)
 locals { sb_is_premium = lower(var.servicebus_sku) == "premium" }
 
@@ -788,9 +717,10 @@ module "sbns1" {
   count  = (local.enable_both && var.create_servicebus) ? 1 : 0
   source = "../../modules/servicebus"
 
-  name                = "svb-${var.product}-${var.env}-${var.region}-100"
+  name                = "svb-${var.product}-${var.env}-${var.region}-01"
   location            = var.location
-  resource_group_name = var.rg_name
+  # resource_group_name = var.rg_name
+  resource_group_name = local.env_rg_name
 
   sku                           = var.servicebus_sku
   capacity                      = var.servicebus_capacity
@@ -821,9 +751,10 @@ module "sbns1" {
 module "plan1_func" {
   count               = local.enable_both ? 1 : 0
   source              = "../../modules/app-service-plan"
-  name                = "asp-${var.product}-${var.env}-${var.region}-100"
+  name                = "asp-${var.product}-${var.env}-${var.region}-01"
   location            = var.location
-  resource_group_name = var.rg_name
+  # resource_group_name = var.rg_name
+  resource_group_name = local.env_rg_name
   os_type             = var.asp_os_type
   sku_name            = var.func_linux_plan_sku_name
   tags                = merge(local.tags_common, { component = "app-service-plan", os = "linux" }, var.tags)
@@ -832,9 +763,9 @@ module "plan1_func" {
 }
 
 locals {
-  funcapp1_name       = "func-${var.product}-${var.env}-${var.region}-100"
+  funcapp1_name       = "func-${var.product}-${var.env}-${var.region}-01"
   funcapp1_name_clean = replace(lower(trimspace(local.funcapp1_name)), "-", "")
-  funcapp2_name       = "func-${var.product}-${var.env}-${var.region}-102"
+  funcapp2_name       = "func-${var.product}-${var.env}-${var.region}-02"
   funcapp2_name_clean = replace(lower(trimspace(local.funcapp2_name)), "-", "")
 }
 
@@ -843,7 +774,8 @@ module "funcapp1" {
   source                     = "../../modules/function-app"
   name                       = local.funcapp1_name
   location                   = var.location
-  resource_group_name        = var.rg_name
+  # resource_group_name        = var.rg_name
+  resource_group_name        = local.env_rg_name
   service_plan_id            = module.plan1_func[0].id
   plan_sku_name              = module.plan1_func[0].sku_name
   storage_account_name       = module.sa1[0].name
@@ -884,7 +816,8 @@ module "funcapp2" {
   source                     = "../../modules/function-app"
   name                       = local.funcapp2_name
   location                   = var.location
-  resource_group_name        = var.rg_name
+  # resource_group_name        = var.rg_name
+  resource_group_name        = local.env_rg_name
   service_plan_id            = module.plan1_func[0].id
   plan_sku_name              = module.plan1_func[0].sku_name
   storage_account_name       = module.sa1[0].name
@@ -924,7 +857,7 @@ module "funcapp2" {
 # Event Hubs (env)
 locals {
   create_eventhub      = var.env == "dev" || var.env == "prod"
-  eh1_namespace        = "evhns-${var.product}-${var.env}-${var.region}-100"
+  eh1_namespace        = "evhns-${var.product}-${var.env}-${var.region}-01"
   eh1_name_clean       = replace(lower(trimspace(local.eh1_namespace)), "-", "")
   eh1_pe_name          = "pep-${local.eh1_name_clean}-namespace"
   eh1_psc_name         = "psc-${local.eh1_name_clean}-namespace"
@@ -938,7 +871,8 @@ module "eventhub" {
   namespace_name                = local.eh1_namespace
   eventhub_name                 = "locations-eh"
   location                      = var.location
-  resource_group_name           = var.rg_name
+  # resource_group_name           = var.rg_name
+  resource_group_name           = local.env_rg_name
   namespace_sku                 = var.servicebus_sku
   namespace_capacity            = var.servicebus_capacity
   auto_inflate_enabled          = true
@@ -958,7 +892,8 @@ module "eventhub" {
 module "eventhub_cgs" {
   count                   = (local.enable_public_features && local.create_eventhub) ? 1 : 0
   source                  = "../../modules/event-hub-consumer-groups"
-  resource_group_name     = var.rg_name
+  # resource_group_name     = var.rg_name
+  resource_group_name     = local.env_rg_name
   namespace_name          = module.eventhub[0].namespace_name
   eventhub_name           = module.eventhub[0].eventhub_name
   consumer_group_names    = ["af1-cg", "af2-cg"]
@@ -968,7 +903,7 @@ module "eventhub_cgs" {
 
 # Cosmos DB for PostgreSQL (Citus) (env)
 locals {
-  cdbpg_name         = "cdbpg-${var.product}-${var.env}-${var.region}-100"
+  cdbpg_name         = "cdbpg-${var.product}-${var.env}-${var.region}-01"
   cdbpg_name_cleaned = replace(lower(trimspace(local.cdbpg_name)), "-", "")
 }
 
@@ -978,7 +913,8 @@ module "cdbpg1" {
 
   name                = local.cdbpg_name
   location            = var.location
-  resource_group_name = var.rg_name
+  # resource_group_name = var.rg_name
+  resource_group_name = local.env_rg_name
 
   coordinator_vcore_count         = var.cdbpg_coordinator_vcore_count
   coordinator_storage_quota_in_mb = var.cdbpg_coordinator_storage_quota_in_mb
@@ -1016,7 +952,7 @@ locals {
   pgflex_subnet_id        = try(local.subnet_ids_from_state[var.pg_delegated_subnet_name], null)
   pg_private_zone_id      = try(local.zone_ids_effective[local._pg_pdz_name], null)
   # pg_private_zone_id      = try(local.zone_ids_effective["privatelink.postgres.database.azure.com"], null)
-  pg_name1                = "pgflex-${var.product}-${var.env}-${var.region}-100"
+  pg_name1                = "pgflex-${var.product}-${var.env}-${var.region}-01"
   pg_geo_backup_effective = var.env == "prod" ? true : var.pg_geo_redundant_backup
 }
 
@@ -1024,7 +960,8 @@ module "postgres" {
   count               = local.enable_both ? 1 : 0
   source              = "../../modules/postgres-flex"
   name                = local.pg_name1
-  resource_group_name = var.rg_name
+  # resource_group_name = var.rg_name
+  resource_group_name = local.env_rg_name
   location            = var.location
 
   pg_version                   = var.pg_version
@@ -1060,7 +997,8 @@ module "postgres_replica" {
   source = "../../modules/postgres-flex"
 
   name                = local.pg_name1
-  resource_group_name = var.rg_name
+  # resource_group_name = var.rg_name
+  resource_group_name = local.env_rg_name
   location            = var.location
 
   pg_version                   = var.pg_version
@@ -1083,8 +1021,8 @@ module "postgres_replica" {
 
 # Redis (env)
 locals {
-  # redis1_name       = "redis-${var.product}-${var.env}-${var.region}-100-${local.uniq}"
-  redis1_name       = "redis-${var.product}-${var.env}-${var.region}-100"
+  # redis1_name       = "redis-${var.product}-${var.env}-${var.region}-01-${local.uniq}"
+  redis1_name       = "redis-${var.product}-${var.env}-${var.region}-01"
   redis1_name_clean = replace(lower(trimspace(local.redis1_name)), "-", "")
 }
 
@@ -1093,8 +1031,8 @@ module "redis1" {
   source              = "../../modules/redis"
   name                = local.redis1_name
   location            = var.location
-  resource_group_name = var.rg_name
-
+  # resource_group_name = var.rg_name
+  resource_group_name = local.env_rg_name
   sku_name         = var.redis_sku_name
   redis_sku_family = var.redis_sku_family
   capacity         = var.redis_capacity
@@ -1110,35 +1048,3 @@ module "redis1" {
 
   depends_on  = [data.azurerm_resource_group.env, module.postgres, module.postgres_replica]
 }
-
-# ############################################
-# # env rbac (example: dev/qa)
-# ############################################
-# locals {
-#   is_dev_or_qa   = local.is_dev || local.is_qa
-#   env_to_rg      = { dev = "rg-${var.product}-dev-cus-01", qa = "rg-${var.product}-qa-cus-01" }
-#   target_rg_name = local.is_dev ? local.env_to_rg.dev : local.is_qa ? local.env_to_rg.qa : null
-#
-#   dev_team_principals = ["e7d56a14-7c2d-4802-827b-bc81db286bf0"]
-#   qa_team_principals  = ["e7d56a14-7c2d-4802-827b-bc81db286bf0"]
-#   team_principals     = local.is_dev ? local.dev_team_principals : local.is_qa ? local.qa_team_principals : []
-# }
-#
-# data "azurerm_resource_group" "scope" {
-#   count = local.is_dev_or_qa ? 1 : 0
-#   name  = local.target_rg_name
-# }
-#
-# module "rbac_team_env" {
-#   count                 = (local.enable_both && local.is_dev_or_qa) ? 1 : 0
-#   source                = "../../modules/rbac"
-#   scope_id              = data.azurerm_resource_group.scope[0].id
-#   principal_object_ids  = local.team_principals
-#   role_definition_names = [
-#     "Azure Kubernetes Service RBAC Cluster Admin",
-#     "Key Vault Secrets User",
-#     "Storage Blob Data Contributor",
-#     "Azure Service Bus Data Owner"
-#   ]
-#   depends_on = [module.redis1]
-# }
