@@ -488,7 +488,15 @@ module "pdns" {
   zones               = var.private_zones
   vnet_links          = local.vnet_links
   tags                = merge(local.tag_base, { purpose = "private-dns" })
-  depends_on          = [module.rg_hub]
+  depends_on = [
+    module.rg_hub,
+    module.vnet_hub,
+    module.vnet_dev,
+    module.vnet_qa,
+    module.vnet_prod,
+    module.vnet_uat,
+    module.vpng
+  ]
 }
 
 # connectivity: vpn gateway
@@ -553,7 +561,7 @@ module "waf" {
   resource_group_name = local.appgw_hub_rg
   mode                = var.waf_mode
   tags                = merge(local.tag_base, { purpose = "app-gateway-waf-policy", service = "ingress", lane = local.lane })
-  depends_on          = [module.rg_hub]
+  depends_on = [module.rg_hub, module.vnet_hub]
 }
 
 resource "azurerm_network_security_group" "appgw_nsg" {
@@ -562,7 +570,7 @@ resource "azurerm_network_security_group" "appgw_nsg" {
   location            = var.location
   resource_group_name = local.appgw_hub_rg
   tags                = merge(local.tag_base, { purpose = "app-gateway-subnet-nsg", lane = local.lane })
-  depends_on          = [module.rg_hub]
+  depends_on = [module.rg_hub, module.vnet_hub]
 }
 
 resource "azurerm_network_security_rule" "appgw_allow_gwmgr" {
@@ -711,6 +719,7 @@ module "nsg_hub" {
   resource_group_name = local.hub_rg_name
   subnet_nsgs         = local.nsgs_hub
   tags                = merge(local.tag_base, { lane = local.lane })
+  depends_on          = [module.vnet_hub]
 }
 
 module "nsg_dev" {
@@ -721,6 +730,7 @@ module "nsg_dev" {
   resource_group_name = local.dev_rg_name
   subnet_nsgs         = local.nsgs_dev
   tags                = merge(local.tag_base, local.dev_only_tags, { lane = "nonprod" })
+  depends_on          = [module.vnet_dev]
 }
 
 module "nsg_qa" {
@@ -731,6 +741,7 @@ module "nsg_qa" {
   resource_group_name = local.qa_rg_name
   subnet_nsgs         = local.nsgs_qa
   tags                = merge(local.tag_base, local.qa_only_tags, { lane = "nonprod" })
+  depends_on          = [module.vnet_qa]
 }
 
 module "nsg_prod" {
@@ -741,6 +752,7 @@ module "nsg_prod" {
   resource_group_name = local.prod_rg_name
   subnet_nsgs         = local.nsgs_prod
   tags                = merge(local.tag_base, local.prod_only_tags, { lane = "prod" })
+  depends_on          = [module.vnet_prod]
 }
 
 module "nsg_uat" {
@@ -751,6 +763,7 @@ module "nsg_uat" {
   resource_group_name = local.uat_rg_name
   subnet_nsgs         = local.nsgs_uat
   tags                = merge(local.tag_base, local.uat_only_tags, { lane = "prod" })
+  depends_on          = [module.vnet_uat]
 }
 
 # nsg rules: isolation & baseline (provider-correct per subscription) ───────
@@ -925,9 +938,9 @@ resource "azurerm_network_security_rule" "deny_all_to_internet_hub" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  depends_on = [
+    module.rg_hub,
+    module.nsg_hub
   ]
 }
 resource "azurerm_network_security_rule" "deny_all_to_internet_dev" {
@@ -944,9 +957,9 @@ resource "azurerm_network_security_rule" "deny_all_to_internet_dev" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  depends_on = [
+    module.rg_dev,
+    module.nsg_dev
   ]
 }
 resource "azurerm_network_security_rule" "deny_all_to_internet_qa" {
@@ -963,9 +976,9 @@ resource "azurerm_network_security_rule" "deny_all_to_internet_qa" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  depends_on = [
+    module.rg_qa,
+    module.nsg_qa
   ]
 }
 resource "azurerm_network_security_rule" "deny_all_to_internet_prod" {
@@ -982,9 +995,9 @@ resource "azurerm_network_security_rule" "deny_all_to_internet_prod" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  depends_on = [
+    module.rg_prod,
+    module.nsg_prod
   ]
 }
 resource "azurerm_network_security_rule" "deny_all_to_internet_uat" {
@@ -1001,9 +1014,9 @@ resource "azurerm_network_security_rule" "deny_all_to_internet_uat" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  depends_on = [
+    module.rg_uat,
+    module.nsg_uat
   ]
 }
 
@@ -1707,9 +1720,9 @@ resource "azurerm_network_security_rule" "pe_allow_lane_hub" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.nsg_rg
   network_security_group_name = each.value.nsg_name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  depends_on = [
+    module.rg_hub,
+    module.nsg_hub
   ]
 }
 resource "azurerm_network_security_rule" "pe_allow_lane_dev" {
@@ -1726,9 +1739,9 @@ resource "azurerm_network_security_rule" "pe_allow_lane_dev" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.nsg_rg
   network_security_group_name = each.value.nsg_name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  depends_on = [
+    module.rg_dev,
+    module.nsg_dev
   ]
 }
 resource "azurerm_network_security_rule" "pe_allow_lane_qa" {
@@ -1745,9 +1758,9 @@ resource "azurerm_network_security_rule" "pe_allow_lane_qa" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.nsg_rg
   network_security_group_name = each.value.nsg_name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  depends_on = [
+    module.rg_qa,
+    module.nsg_qa
   ]
 }
 resource "azurerm_network_security_rule" "pe_allow_lane_prod" {
@@ -1764,9 +1777,9 @@ resource "azurerm_network_security_rule" "pe_allow_lane_prod" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.nsg_rg
   network_security_group_name = each.value.nsg_name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  depends_on = [
+    module.rg_prod,
+    module.nsg_prod
   ]
 }
 resource "azurerm_network_security_rule" "pe_allow_lane_uat" {
@@ -1783,9 +1796,9 @@ resource "azurerm_network_security_rule" "pe_allow_lane_uat" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.nsg_rg
   network_security_group_name = each.value.nsg_name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  depends_on = [
+    module.rg_uat,
+    module.nsg_uat
   ]
 }
 
@@ -1802,9 +1815,9 @@ resource "azurerm_network_security_rule" "pe_deny_other_vnets_hub" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.nsg_rg
   network_security_group_name = each.value.nsg_name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  depends_on = [
+    module.rg_hub,
+    module.nsg_hub
   ]
 }
 resource "azurerm_network_security_rule" "pe_deny_other_vnets_dev" {
@@ -1821,9 +1834,9 @@ resource "azurerm_network_security_rule" "pe_deny_other_vnets_dev" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.nsg_rg
   network_security_group_name = each.value.nsg_name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  depends_on = [
+    module.rg_dev,
+    module.nsg_dev
   ]
 }
 resource "azurerm_network_security_rule" "pe_deny_other_vnets_qa" {
@@ -1840,9 +1853,9 @@ resource "azurerm_network_security_rule" "pe_deny_other_vnets_qa" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.nsg_rg
   network_security_group_name = each.value.nsg_name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  depends_on = [
+    module.rg_qa,
+    module.nsg_qa
   ]
 }
 resource "azurerm_network_security_rule" "pe_deny_other_vnets_prod" {
@@ -1859,9 +1872,9 @@ resource "azurerm_network_security_rule" "pe_deny_other_vnets_prod" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.nsg_rg
   network_security_group_name = each.value.nsg_name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  depends_on = [
+    module.rg_prod,
+    module.nsg_prod
   ]
 }
 resource "azurerm_network_security_rule" "pe_deny_other_vnets_uat" {
@@ -1878,9 +1891,9 @@ resource "azurerm_network_security_rule" "pe_deny_other_vnets_uat" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.nsg_rg
   network_security_group_name = each.value.nsg_name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  depends_on = [
+    module.rg_uat,
+    module.nsg_uat
   ]
 }
 
@@ -2320,7 +2333,7 @@ module "dns_resolver" {
   tags                = local.dnsr_tags
   depends_on = [
     module.vnet_hub,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat, module.vpng
   ]
 }
 

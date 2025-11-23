@@ -29,4 +29,4 @@ tags_extra = {
 }
 
 # env_rg_name = "rg-hrz-dev-cus-01"
-env_subscription_id = "62ae6908-cbcb-40cb-8773-54bd318ff7f9"
+# env_subscription_id = "62ae6908-cbcb-40cb-8773-54bd318ff7f9"
