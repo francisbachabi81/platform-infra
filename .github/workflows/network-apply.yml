@@ -78,10 +78,26 @@ jobs:
             echo "ARM_TENANT_ID=$TENANT"
             echo "ARM_CLIENT_ID=$CLIENT_ID"
 
-            # Terraform vars (no subscription_id needed for shared-network)
+            # Base Terraform vars
             echo "TF_VAR_tenant_id=$TENANT"
             echo "TF_VAR_product=$PRODUCT"
             echo "TF_VAR_plane=$PLANE"
+
+            # Hub + per-env subscription mapping for the shared-network stack
+            echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
+            echo "TF_VAR_hub_tenant_id=$TENANT"
+
+            if [ "$PLANE" = "nonprod" ]; then
+              echo "TF_VAR_dev_subscription_id=$TARGET_SUB"
+              echo "TF_VAR_dev_tenant_id=$TENANT"
+              echo "TF_VAR_qa_subscription_id=$TARGET_SUB"
+              echo "TF_VAR_qa_tenant_id=$TENANT"
+            else
+              echo "TF_VAR_prod_subscription_id=$TARGET_SUB"
+              echo "TF_VAR_prod_tenant_id=$TENANT"
+              echo "TF_VAR_uat_subscription_id=$TARGET_SUB"
+              echo "TF_VAR_uat_tenant_id=$TENANT"
+            fi
           } >> "$GITHUB_ENV"
 
       - name: Resolve tfvars & backend key
