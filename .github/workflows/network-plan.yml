@@ -88,6 +88,16 @@ jobs:
               prod)    TARGET_SUB='${{ secrets.AZ_SUB_HRZ_PROD }}'    ;;
               *) echo "Unknown plane: $PLANE"; exit 1 ;;
             esac
+
+            # Hub sub == shared-network sub for this plane
+            HUB_SUB="$TARGET_SUB"
+            HUB_TENANT="$TENANT"
+
+            # Env subscriptions for HRZ
+            DEV_SUB='${{ secrets.AZ_SUB_HRZ_DEV }}'
+            QA_SUB='${{ secrets.AZ_SUB_HRZ_QA }}'
+            PROD_SUB='${{ secrets.AZ_SUB_HRZ_PROD }}'
+            UAT_SUB='${{ secrets.AZ_SUB_HRZ_UAT }}'
           else
             CLOUD_ENV="AzureCloud"; ARM_ENV="public"
             TENANT='${{ secrets.AZ_TENANT_PUB }}'
@@ -99,6 +109,16 @@ jobs:
               prod)    TARGET_SUB='${{ secrets.AZ_SUB_PUB_PROD }}'    ;;
               *) echo "Unknown plane: $PLANE"; exit 1 ;;
             esac
+
+            # Hub sub == shared-network sub for this plane
+            HUB_SUB="$TARGET_SUB"
+            HUB_TENANT="$TENANT"
+
+            # Env subscriptions for PUB
+            DEV_SUB='${{ secrets.AZ_SUB_PUB_DEV }}'
+            QA_SUB='${{ secrets.AZ_SUB_PUB_QA }}'
+            PROD_SUB='${{ secrets.AZ_SUB_PUB_PROD }}'
+            UAT_SUB='${{ secrets.AZ_SUB_PUB_UAT }}'
           fi
 
           echo "PLANE=$PLANE"           >> "$GITHUB_OUTPUT"
@@ -116,10 +136,28 @@ jobs:
             echo "ARM_TENANT_ID=$TENANT"
             echo "ARM_CLIENT_ID=$CLIENT_ID"
 
-            # Terraform vars (no subscription_id needed for shared-network stack)
+            # Core TF vars
             echo "TF_VAR_tenant_id=$TENANT"
             echo "TF_VAR_product=$PRODUCT"
             echo "TF_VAR_plane=$PLANE"
+
+            # Hub (shared-network) subscription
+            echo "TF_VAR_hub_subscription_id=$HUB_SUB"
+            echo "TF_VAR_hub_tenant_id=$HUB_TENANT"
+
+            if [ "$PLANE" = "nonprod" ]; then
+              # Nonprod plane: dev + qa envs
+              echo "TF_VAR_dev_subscription_id=$DEV_SUB"
+              echo "TF_VAR_dev_tenant_id=$TENANT"
+              echo "TF_VAR_qa_subscription_id=$QA_SUB"
+              echo "TF_VAR_qa_tenant_id=$TENANT"
+            else
+              # Prod plane: prod + uat envs
+              echo "TF_VAR_prod_subscription_id=$PROD_SUB"
+              echo "TF_VAR_prod_tenant_id=$TENANT"
+              echo "TF_VAR_uat_subscription_id=$UAT_SUB"
+              echo "TF_VAR_uat_tenant_id=$TENANT"
+            fi
           } >> "$GITHUB_ENV"
 
       - name: Debug - subscriptions (partial + hash)
