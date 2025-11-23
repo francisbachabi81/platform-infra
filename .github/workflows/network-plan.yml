@@ -115,12 +115,11 @@ jobs:
             echo "ARM_ENVIRONMENT=$ARM_ENV"
             echo "ARM_TENANT_ID=$TENANT"
             echo "ARM_CLIENT_ID=$CLIENT_ID"
+
+            # Terraform vars (no subscription_id needed for shared-network stack)
             echo "TF_VAR_tenant_id=$TENANT"
             echo "TF_VAR_product=$PRODUCT"
             echo "TF_VAR_plane=$PLANE"
-            echo "TF_VAR_subscription_id=$TARGET_SUB"
-            echo "TF_VAR_hub_tenant_id=$TENANT"
-            echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
           } >> "$GITHUB_ENV"
 
       - name: Debug - subscriptions (partial + hash)
@@ -129,9 +128,10 @@ jobs:
           set -euo pipefail
           maskless() { v="$(printf '%s' "$1" | tr -d '[:space:]')"; printf '%s…%s' "${v:0:8}" "${v: -6}"; }
           shortsha() { printf '%s' "$1" | tr -d '[:space:]' | shasum -a 256 | cut -c1-12; }
-          echo "BASE sub:  $(maskless "$TF_VAR_subscription_id") (sha12: $(shortsha "$TF_VAR_subscription_id"))"
-          echo "STATE sub: $(maskless "${{ steps.sel.outputs.STATE_SUB }}") (sha12: $(shortsha "${{ steps.sel.outputs.STATE_SUB }}"))"
-          echo "Tenant:    $(maskless "$TF_VAR_tenant_id")       (sha12: $(shortsha "$TF_VAR_tenant_id"))"
+
+          echo "TARGET sub: $(maskless "${{ steps.sel.outputs.TARGET_SUB }}") (sha12: $(shortsha "${{ steps.sel.outputs.TARGET_SUB }}"))"
+          echo "STATE  sub: $(maskless "${{ steps.sel.outputs.STATE_SUB }}")  (sha12: $(shortsha "${{ steps.sel.outputs.STATE_SUB }}"))"
+          echo "Tenant:     $(maskless "$TF_VAR_tenant_id")                    (sha12: $(shortsha "$TF_VAR_tenant_id"))"
 
       - name: Resolve tfvars & backend key
         id: paths
