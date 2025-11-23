@@ -36,31 +36,67 @@ jobs:
           set -euo pipefail
           ENV_IN="${{ inputs.env }}"
           PRODUCT="${{ inputs.product }}"
-      
+
           case "$ENV_IN" in
             dev|qa)   PLANE="nonprod" ;;
             uat|prod) PLANE="prod"    ;;
             *) echo "Unknown env: $ENV_IN"; exit 1 ;;
           esac
-      
+
           if [ "$PRODUCT" = "hrz" ]; then
             CLOUD_ENV="AzureUSGovernment"; ARM_ENV="usgovernment"
             TENANT_RAW='${{ secrets.AZ_TENANT_HRZ }}'
             CLIENT_ID_RAW='${{ secrets.AZURE_CLIENT_ID_HRZ }}'
             AUDIENCE="api://AzureADTokenExchangeUSGov"
+
             STATE_SUB_RAW='${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}'
             CORE_SUB_RAW='${{ secrets.AZ_SUB_HRZ_CORE != '' && secrets.AZ_SUB_HRZ_CORE || secrets.AZ_SUB_HRZ_PROD }}'
+
+            # env-specific subs
+            DEV_SUB_RAW='${{ secrets.AZ_SUB_HRZ_DEV }}'
+            QA_SUB_RAW='${{ secrets.AZ_SUB_HRZ_QA }}'
+            UAT_SUB_RAW='${{ secrets.AZ_SUB_HRZ_UAT }}'
+            PROD_SUB_RAW='${{ secrets.AZ_SUB_HRZ_PROD }}'
+
+            # plane-based target sub (nonprod/prod)
             TARGET_SUB_RAW=$([ "$PLANE" = "prod" ] && echo '${{ secrets.AZ_SUB_HRZ_PROD }}' || echo '${{ secrets.AZ_SUB_HRZ_NONPROD }}')
+
+            # env-sub mapping (env_subscription_id should follow env)
+            case "$ENV_IN" in
+              dev)  ENV_SUB_RAW="$DEV_SUB_RAW"  ;;
+              qa)   ENV_SUB_RAW="$QA_SUB_RAW"   ;;
+              uat)  ENV_SUB_RAW="$UAT_SUB_RAW"  ;;
+              prod) ENV_SUB_RAW="$PROD_SUB_RAW" ;;
+              *) echo "Unknown env for ENV_SUB mapping: $ENV_IN"; exit 1 ;;
+            esac
           else
             CLOUD_ENV="AzureCloud"; ARM_ENV="public"
             TENANT_RAW='${{ secrets.AZ_TENANT_PUB }}'
             CLIENT_ID_RAW='${{ secrets.AZURE_CLIENT_ID_PUB }}'
             AUDIENCE="api://AzureADTokenExchange"
+
             STATE_SUB_RAW='${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}'
             CORE_SUB_RAW='${{ secrets.AZ_SUB_PUB_CORE != '' && secrets.AZ_SUB_PUB_CORE || secrets.AZ_SUB_PUB_PROD }}'
+
+            # env-specific subs
+            DEV_SUB_RAW='${{ secrets.AZ_SUB_PUB_DEV }}'
+            QA_SUB_RAW='${{ secrets.AZ_SUB_PUB_QA }}'
+            UAT_SUB_RAW='${{ secrets.AZ_SUB_PUB_UAT }}'
+            PROD_SUB_RAW='${{ secrets.AZ_SUB_PUB_PROD }}'
+
+            # plane-based target sub (nonprod/prod)
             TARGET_SUB_RAW=$([ "$PLANE" = "prod" ] && echo '${{ secrets.AZ_SUB_PUB_PROD }}' || echo '${{ secrets.AZ_SUB_PUB_NONPROD }}')
+
+            # env-sub mapping (env_subscription_id should follow env)
+            case "$ENV_IN" in
+              dev)  ENV_SUB_RAW="$DEV_SUB_RAW"  ;;
+              qa)   ENV_SUB_RAW="$QA_SUB_RAW"   ;;
+              uat)  ENV_SUB_RAW="$UAT_SUB_RAW"  ;;
+              prod) ENV_SUB_RAW="$PROD_SUB_RAW" ;;
+              *) echo "Unknown env for ENV_SUB mapping: $ENV_IN"; exit 1 ;;
+            esac
           fi
-      
+
           # Hard trim to avoid InvalidSubscriptionId or 404s with stray whitespace/newlines
           trim(){ printf "%s" "$1" | tr -d '[:space:]'; }
           TENANT=$(trim "$TENANT_RAW")
@@ -68,9 +104,11 @@ jobs:
           STATE_SUB=$(trim "$STATE_SUB_RAW")
           CORE_SUB=$(trim "$CORE_SUB_RAW")
           TARGET_SUB=$(trim "$TARGET_SUB_RAW")
-      
+          ENV_SUB=$(trim "$ENV_SUB_RAW")
+
           echo "ENV=$ENV_IN"            >> $GITHUB_OUTPUT
           echo "PRODUCT=$PRODUCT"       >> $GITHUB_OUTPUT
+          echo "PLANE=$PLANE"           >> $GITHUB_OUTPUT
           echo "CLOUD_ENV=$CLOUD_ENV"   >> $GITHUB_OUTPUT
           echo "ARM_ENV=$ARM_ENV"       >> $GITHUB_OUTPUT
           echo "TENANT=$TENANT"         >> $GITHUB_OUTPUT
@@ -79,30 +117,33 @@ jobs:
           echo "STATE_SUB=$STATE_SUB"   >> $GITHUB_OUTPUT
           echo "TARGET_SUB=$TARGET_SUB" >> $GITHUB_OUTPUT
           echo "CORE_SUB=$CORE_SUB"     >> $GITHUB_OUTPUT
-      
+          echo "ENV_SUB=$ENV_SUB"       >> $GITHUB_OUTPUT
+
           {
             echo "ARM_ENVIRONMENT=$ARM_ENV"
             echo "ARM_TENANT_ID=$TENANT"
             echo "ARM_CLIENT_ID=$CLIENT_ID"
-      
-            # base provider fallback
+
+            # base provider fallback (same logic as plan)
             echo "TF_VAR_subscription_id=$TARGET_SUB"
             echo "TF_VAR_tenant_id=$TENANT"
-      
-            # explicit aliases (DON'T comment these; they keep core/env separated)
-            echo "TF_VAR_env_subscription_id=$TARGET_SUB"
-            echo "TF_VAR_env_tenant_id=$TENANT"
-      
+
+            # explicit aliases (core/env split)
             echo "TF_VAR_core_subscription_id=$CORE_SUB"
             echo "TF_VAR_core_tenant_id=$TENANT"
-      
+
+            # IMPORTANT: env_subscription_id is env-based now
+            echo "TF_VAR_env_subscription_id=$ENV_SUB"
+            echo "TF_VAR_env_tenant_id=$TENANT"
+
             # optional hub passthroughs if any module still expects them
             echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
             echo "TF_VAR_hub_tenant_id=$TENANT"
-      
+
             # convenience vars used by your modules/locals
             echo "TF_VAR_product=$PRODUCT"
             echo "TF_VAR_env=$ENV_IN"
+            echo "TF_VAR_plane=$PLANE"
           } >> $GITHUB_ENV
 
       - name: Resolve backend key (env-based)
