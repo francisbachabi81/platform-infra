@@ -76,7 +76,7 @@ cdbpg_preferred_primary_zone          = "2"
 # cdbpg_admin_password via TF_VAR_cdbpg_admin_password
 
 # PostgreSQL Flexible Server (env)
-pg_version               = "17"
+pg_version               = "16"
 pg_sku_name              = "B_Standard_B2ms"
 # Suggested SKUs when you move up environments:
 #   dev:  "B_Standard_B2ms"        # Burstable, cheapest option — NO HA support
