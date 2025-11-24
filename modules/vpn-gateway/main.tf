@@ -11,7 +11,7 @@ locals {
   _p2s_tenant_id       = coalesce(var.p2s_aad_tenant_id_override, var.tenant_id)
 
   _audience_by_env = {
-    public       = "41b23e61-6c1e-4545-b367-cd054e0ed4b4"
+    public       = "c632b3df-fb67-4d84-bdcf-b95ad541b5c8"
     usgovernment = "51bb15d4-3a4f-4ebf-9dca-40096fe32426"
   }
 
