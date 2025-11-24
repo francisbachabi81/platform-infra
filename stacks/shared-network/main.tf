@@ -176,10 +176,10 @@ locals {
 locals {
   # ---------- canonical RG names (overrideable via vars if set) ----------
   hub_rg_name = local.is_nonprod ? coalesce(try(var.nonprod_hub.rg, null), "rg-${var.product}-${local.plane_code}-${var.region}-net-01") : coalesce(try(var.prod_hub.rg,    null), "rg-${var.product}-${local.plane_code}-${var.region}-net-01")
-  dev_rg_name  = local.is_nonprod ? coalesce(try(var.dev_spoke.rg,  null), "rg-${var.product}-dev-${var.region}-01")  : null
-  qa_rg_name   = local.is_nonprod ? coalesce(try(var.qa_spoke.rg,   null), "rg-${var.product}-qa-${var.region}-01")   : null
-  prod_rg_name = local.is_prod    ? coalesce(try(var.prod_spoke.rg, null), "rg-${var.product}-prod-${var.region}-01") : null
-  uat_rg_name  = local.is_prod    ? coalesce(try(var.uat_spoke.rg,  null), "rg-${var.product}-uat-${var.region}-01")  : null
+  dev_rg_name  = local.is_nonprod ? coalesce(try(var.dev_spoke.rg,  null), "rg-${var.product}-dev-${var.region}-net-01")  : null
+  qa_rg_name   = local.is_nonprod ? coalesce(try(var.qa_spoke.rg,   null), "rg-${var.product}-qa-${var.region}-net-01")   : null
+  prod_rg_name = local.is_prod    ? coalesce(try(var.prod_spoke.rg, null), "rg-${var.product}-prod-${var.region}-net-01") : null
+  uat_rg_name  = local.is_prod    ? coalesce(try(var.uat_spoke.rg,  null), "rg-${var.product}-uat-${var.region}-net-01")  : null
 
   # ---------- canonical VNet names (overrideable via vars if set) ----------
   hub_vnet_name  = local.is_nonprod ? coalesce(try(var.nonprod_hub.vnet, null), "vnet-${var.product}-${local.plane_code}-hub-${var.region}-${var.seq}") : coalesce(try(var.prod_hub.vnet,    null), "vnet-${var.product}-${local.plane_code}-hub-${var.region}-${var.seq}")
