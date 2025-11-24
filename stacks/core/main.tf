@@ -90,7 +90,10 @@ resource "azurerm_log_analytics_workspace" "plane" {
   sku                 = var.law_sku
   retention_in_days   = var.law_retention_days
   tags                = merge(local.tags_common, { service = "log-analytics", plane = local.plane_code })
-  depends_on          = [module.rg_core_platform]
+
+  depends_on = [
+    module.rg_core_platform
+  ]
 }
 
 resource "azurerm_application_insights" "plane" {
@@ -103,8 +106,8 @@ resource "azurerm_application_insights" "plane" {
   internet_ingestion_enabled = var.appi_internet_ingestion_enabled
   internet_query_enabled     = var.appi_internet_query_enabled
   tags                       = merge(local.tags_common, { service = "application-insights", plane = local.plane_code })
-  
-  depends_on                 = [
+
+  depends_on = [
     module.rg_core_platform,
     azurerm_log_analytics_workspace.plane
   ]
@@ -143,7 +146,9 @@ resource "azurerm_monitor_action_group" "core" {
     }
   }
 
-  depends_on = [module.rg_core_platform]
+  depends_on = [
+    module.rg_core_platform
+  ]
 }
 
 data "azurerm_resource_group" "core" {
@@ -261,9 +266,15 @@ Heartbeat
 | where TimeGenerated > ago(10m)
 | summarize hb = count()
 KQL
+
     time_aggregation_method = "Count"
     operator                = "LessThan"
     threshold               = 1
+
+    failing_periods {
+      minimum_failing_periods_to_trigger_alert = 1
+      number_of_evaluation_periods             = 1
+    }
   }
 
   dynamic "action" {
@@ -274,9 +285,9 @@ KQL
   }
 
   depends_on = [
-    module.rg_core_platform,                       # RG must exist first
-    azurerm_log_analytics_workspace.plane,         # Workspace must exist
-    azurerm_monitor_action_group.core              # Action group (if created) must exist
+    module.rg_core_platform,
+    azurerm_log_analytics_workspace.plane,
+    azurerm_monitor_action_group.core,
   ]
 }
 
