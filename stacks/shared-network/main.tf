@@ -175,7 +175,7 @@ locals {
 
 locals {
   # ---------- canonical RG names (overrideable via vars if set) ----------
-  hub_rg_name = local.is_nonprod ? coalesce(try(var.nonprod_hub.rg, null), "rg-${var.product}-${local.plane_code}-${var.region}-core-01") : coalesce(try(var.prod_hub.rg,    null), "rg-${var.product}-${local.plane_code}-${var.region}-core-01")
+  hub_rg_name = local.is_nonprod ? coalesce(try(var.nonprod_hub.rg, null), "rg-${var.product}-${local.plane_code}-${var.region}-net-01") : coalesce(try(var.prod_hub.rg,    null), "rg-${var.product}-${local.plane_code}-${var.region}-net-01")
   dev_rg_name  = local.is_nonprod ? coalesce(try(var.dev_spoke.rg,  null), "rg-${var.product}-dev-${var.region}-01")  : null
   qa_rg_name   = local.is_nonprod ? coalesce(try(var.qa_spoke.rg,   null), "rg-${var.product}-qa-${var.region}-01")   : null
   prod_rg_name = local.is_prod    ? coalesce(try(var.prod_spoke.rg, null), "rg-${var.product}-prod-${var.region}-01") : null
