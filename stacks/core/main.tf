@@ -101,7 +101,7 @@ resource "azurerm_log_analytics_workspace" "plane" {
 resource "time_sleep" "after_law" {
   count           = length(azurerm_log_analytics_workspace.plane)
   depends_on      = [azurerm_log_analytics_workspace.plane]
-  create_duration = "60s"
+  create_duration = "120s"
 }
 
 resource "azurerm_application_insights" "plane" {
