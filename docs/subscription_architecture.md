@@ -11,12 +11,12 @@ Each cloud (Azure Government / Azure Commercial) uses an identical subscription 
 
 | Plane | Subscription Name | Purpose |
 |-------|-------------------|---------|
-| **nonprod** | **Nonprod Core** | Shared-network + core resources for dev & qa |
-| **nonprod** | **Dev** | Application infrastructure for development workloads |
-| **nonprod** | **QA** | Application infrastructure for testing workloads |
-| **prod** | **Prod Core** | Shared-network + core resources for uat & prod |
-| **prod** | **UAT** | Application infrastructure for user acceptance testing |
-| **prod** | **Prod** | Application infrastructure for production |
+| **nonprod** | **Intterra NonProd Core** | Shared-network + core resources for dev & qa |
+| **nonprod** | **Intterra Dev** | Application infrastructure for development workloads |
+| **nonprod** | **Intterra QA** | Application infrastructure for testing workloads |
+| **prod** | **Intterra Prod Core** | Shared-network + core resources for uat & prod |
+| **prod** | **Intterra UAT** | Application infrastructure for user acceptance testing |
+| **prod** | **Intterra Prod** | Application infrastructure for production |
 
 This gives **6 total per cloud**, **12 total** across hrz + pub.
 
