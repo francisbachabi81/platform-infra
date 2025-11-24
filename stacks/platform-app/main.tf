@@ -630,6 +630,11 @@ module "aks1_env_shared_nonprod" {
   user_assigned_identity_id = local.aks_uai_id
 
   tags = merge(local.tags_common, local.tags_aks, var.tags)
+
+  depends_on = [
+    azurerm_user_assigned_identity.aks_env_shared_nonprod,
+    azurerm_role_assignment.aks_pdz_contrib_shared_nonprod
+  ]
 }
 
 module "aks1_env_prod" {
@@ -657,6 +662,11 @@ module "aks1_env_prod" {
   user_assigned_identity_id = local.aks_uai_id
 
   tags = merge(local.tags_common, local.tags_aks, var.tags)
+
+  depends_on = [
+    azurerm_user_assigned_identity.aks_env_prod,
+    azurerm_role_assignment.aks_pdz_contrib_prod
+  ]
 }
 
 module "aks1_env_uat" {
@@ -684,6 +694,11 @@ module "aks1_env_uat" {
   user_assigned_identity_id = local.aks_uai_id
 
   tags = merge(local.tags_common, local.tags_aks, var.tags)
+
+  depends_on = [
+    azurerm_user_assigned_identity.aks_env_uat,
+    azurerm_role_assignment.aks_pdz_contrib_uat
+  ]
 }
 
 # unify AKS ids/names for later references/outputs (env-conditional to avoid zero-count indexing)
@@ -743,7 +758,8 @@ module "sbns1" {
   })
   depends_on = [
     data.azurerm_resource_group.env,
-    module.funcapp2
+    module.funcapp2,
+    module.eventhub
   ]
   }
 
@@ -939,7 +955,11 @@ module "cdbpg1" {
 
   tags = merge(local.tags_common, { component = "cosmosdb-postgresql" }, var.tags)
 
-  depends_on  = [data.azurerm_resource_group.env, module.eventhub]
+  depends_on  = [
+    data.azurerm_resource_group.env, 
+    module.eventhub,
+    module.sbns1
+  ]
 }
 
 # PostgreSQL Flexible (env)
