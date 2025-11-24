@@ -7,6 +7,10 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.14.0"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = "~> 0.11"
+    }
   }
 }
 
@@ -94,6 +98,12 @@ resource "azurerm_log_analytics_workspace" "plane" {
   depends_on = [
     module.rg_core_platform
   ]
+}
+
+resource "time_sleep" "after_law" {
+  count           = length(azurerm_log_analytics_workspace.plane)
+  depends_on      = [azurerm_log_analytics_workspace.plane]
+  create_duration = "60s"
 }
 
 resource "azurerm_application_insights" "plane" {
@@ -287,6 +297,7 @@ KQL
   depends_on = [
     module.rg_core_platform,
     azurerm_log_analytics_workspace.plane,
+    time_sleep.after_law,
     azurerm_monitor_action_group.core,
   ]
 }
