@@ -3,14 +3,6 @@ env             = "dev"                         # dev | qa | uat | prod
 product         = "hrz"                         # hrz (Azure Gov) | pub (Azure Commercial)
 location        = "USGov Arizona"
 region          = "usaz"
-# rg_name         = "rg-hrz-dev-usaz-01"
-# subscription_id = "62ae6908-cbcb-40cb-8773-54bd318ff7f9"  # ← dev subscription (NOT the shared nonprod)
-# tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
-
-# Hub overrides — shared-network (nonprod hub) usually lives in the shared nonprod sub.
-# Set these so data sources that use provider.azurerm.hub resolve correctly.
-# hub_subscription_id = "df6dc63f-c4dc-4590-ba4b-f2ce9639ca6c"
-# hub_tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
 # Provider alias overrides used by AKS routing logic (shared nonprod)
 shared_nonprod_subscription_id = "df6dc63f-c4dc-4590-ba4b-f2ce9639ca6c"
@@ -79,7 +71,7 @@ cdbpg_preferred_primary_zone          = "2"
 pg_version               = "16"
 pg_sku_name              = "B_Standard_B2s"
 # Suggested SKUs when you move up environments:
-#   dev:  "B_Standard_B2ms"        # Burstable, cheapest option — NO HA support
+#   dev:  "B_Standard_B1ms" or "B_Standard_B2s"       # Burstable, cheapest option — NO HA support
 #   QA:  "GP_Standard_D2s_v3"   # 2 vCores, General Purpose, HA-capable
 #   UAT: "GP_Standard_D4s_v3"   # 4 vCores, General Purpose, HA-capable
 #   Prod (option 1): "GP_Standard_D8s_v3"   # 8 vCores, GP, HA-capable

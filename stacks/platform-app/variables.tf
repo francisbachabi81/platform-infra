@@ -37,11 +37,6 @@ variable "env" {
   }
 }
 
-# variable "rg_name" {
-#   description = "resource group name"
-#   type        = string
-# }
-
 variable "node_resource_group" {
   description = "aks managed resource group"
   type        = string

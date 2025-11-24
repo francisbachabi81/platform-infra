@@ -3,9 +3,6 @@ product         = "pub"
 location        = "Central US"
 region          = "cus"
 
-# subscription_id = "ee8a4693-54d4-4de8-842b-b6f35fc0674d"
-# tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
-
 tags = {
   plane   = "np"
   product = "pub"
@@ -25,15 +22,15 @@ action_group_email_receivers = [
   {
     name                    = "Ops Manager"
     email_address           = "francis.bachabi@intterragroup.com"
-    # use_common_alert_schema defaults to true (omitted)
+    use_common_alert_schema = true
   },
   {
     name                    = "Ops Azure Alerts"
     email_address           = "azure-alerts@intterragroup.com"
-    use_common_alert_schema = false
+    use_common_alert_schema = true
   }
 ]
 
 enable_custom_domain    = true
 custom_domain_name      = "dev.public.intterra.io"
-associate_custom_domain = false  # flip to true *after* DNS verification
+associate_custom_domain = false

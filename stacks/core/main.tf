@@ -1,4 +1,3 @@
-# terraform & providers
 terraform {
   required_version = ">= 1.6.5"
 
@@ -23,7 +22,6 @@ provider "azurerm" {
 
 # locals (plane-scoped)
 locals {
-  # product gates
   enable_public_features = var.product == "pub"
   enable_hrz_features    = var.product == "hrz"
   enable_both            = local.enable_public_features || local.enable_hrz_features
@@ -56,14 +54,14 @@ locals {
   acs_name        = "acs-${var.product}-${local.plane_code}-${var.region}-01"
   email_svc_name  = "acse-${var.product}-${local.plane_code}-${var.region}-01"
 
-  # - Azure Gov (hrz) > "usgov"
-  # - Azure Commercial (pub) > "United States"
+  # - Azure Gov (hrz) = "usgov"
+  # - Azure Commercial (pub) = "United States"
   acs_data_location = var.product == "hrz" ? "usgov" : "United States"
 
   email_data_location = local.acs_data_location
 }
 
-# shared-network state (optional)
+# shared-network state
 data "terraform_remote_state" "shared" {
   count   = var.shared_state_enabled ? 1 : 0
   backend = "azurerm"
@@ -167,7 +165,6 @@ data "azurerm_resource_group" "core" {
 }
 
 locals {
-  # Use the module RG id when we create it; otherwise use the data source id.
   core_rg_id = var.create_rg_core_platform ? module.rg_core_platform[0].id : data.azurerm_resource_group.core[0].id
 }
 

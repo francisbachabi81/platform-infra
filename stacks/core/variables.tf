@@ -54,17 +54,6 @@ variable "tenant_id" {
   }
 }
 
-# hub resource group
-variable "rg_name_core" {
-  description = "resource group for core/shared resources"
-  type        = string
-  default     = "rg-core-resources"
-  validation {
-    condition     = length(var.rg_name_core) <= 90
-    error_message = "rg_name_core must be 90 characters or fewer."
-  }
-}
-
 # tags
 variable "tags" {
   description = "base tags applied to all resources"
@@ -166,11 +155,6 @@ variable "create_recovery_vault" {
 variable "create_action_group" {
   type    = bool
   default = true
-}
-
-variable "action_group_short_name" {
-  type    = string
-  default = "coreag"
 }
 
 variable "action_group_email_receivers" {

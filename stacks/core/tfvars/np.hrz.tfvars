@@ -3,9 +3,6 @@ product         = "hrz"
 location        = "USGov Arizona"
 region          = "usaz"
 
-# subscription_id = "df6dc63f-c4dc-4590-ba4b-f2ce9639ca6c"
-# tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
-
 tags = {
   plane   = "np"
   product = "hrz"
@@ -25,15 +22,15 @@ action_group_email_receivers = [
   {
     name                    = "Ops Manager"
     email_address           = "francis.bachabi@intterragroup.com"
-    # use_common_alert_schema defaults to true (omitted)
+    use_common_alert_schema = true
   },
   {
     name                    = "Ops Azure Alerts"
     email_address           = "azure-alerts@intterragroup.com"
-    use_common_alert_schema = false
+    use_common_alert_schema = true
   }
 ]
 
 enable_custom_domain    = true
 custom_domain_name      = "dev.horizon.intterra.io"
-associate_custom_domain = false  # flip to true *after* DNS verification
+associate_custom_domain = false 

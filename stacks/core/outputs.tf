@@ -15,7 +15,7 @@ output "action_group" {
   value = try({
     id        = azurerm_monitor_action_group.core[0].id
     name      = azurerm_monitor_action_group.core[0].name
-    short_name= var.action_group_short_name
+    short_name= local.action_group_short_name
     rg_name   = local.rg_name_core
   }, null)
 }

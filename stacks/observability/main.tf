@@ -18,6 +18,8 @@ locals {
   plane_code = local.plane_effective == "nonprod" ? "np" : "pr"
 
   activity_alert_location = "Global"
+
+  ag_name_default = "ag-obs-${var.product}-${local.env_effective}-${var.region}-01"
 }
 
 locals {
@@ -409,7 +411,6 @@ resource "azurerm_monitor_diagnostic_setting" "nsg" {
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
-  # Enable only the NSG-relevant log categories if they exist
   dynamic "enabled_log" {
     for_each = toset([
       for c in [
@@ -423,7 +424,6 @@ resource "azurerm_monitor_diagnostic_setting" "nsg" {
     }
   }
 
-  # (Optional) enable metrics if you want them and they're supported
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
     content {
@@ -447,7 +447,6 @@ resource "azurerm_monitor_diagnostic_setting" "sub_env" {
   target_resource_id         = local.sub_env_target_id
   log_analytics_workspace_id = local.law_id
 
-  # Explicit categories required for subscription-level Activity Logs
   enabled_log { category = "Administrative" }
   enabled_log { category = "Security" }
   enabled_log { category = "ServiceHealth" }
@@ -613,12 +612,9 @@ resource "azurerm_monitor_diagnostic_setting" "rsv" {
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
-  # Enable the categories you care about.
-  # Get the exact strings from the Portal JSON view.
   enabled_log { category = "AzureSiteRecoveryJobs" }
   enabled_log { category = "AzureSiteRecoveryEvents" }
   enabled_log { category = "CoreAzureBackup" }
-  # ...add any of the Backup “Addon” categories you want...
 
   lifecycle {
     precondition {
@@ -772,14 +768,6 @@ resource "azurerm_monitor_diagnostic_setting" "cosmos" {
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
-  # dynamic "enabled_log" {
-  #   for_each = toset([
-  #     for c in var.cosmos_log_categories :
-  #     c if contains(try(each.value.logs, []), c)
-  #   ])
-  #   content { category = enabled_log.value }
-  # }
-
   enabled_log { category = "DataPlaneRequests" }
   enabled_log { category = "QueryRuntimeStatistics" }
   enabled_log { category = "PartitionKeyRUConsumption" }
@@ -810,7 +798,7 @@ locals {
 
 resource "azurerm_monitor_action_group" "fallback" {
   count               = local.action_group_id == null ? 1 : 0
-  name                = coalesce(var.ag_name, "ag-${var.product}-${local.env_effective}-${random_string.sfx.result}")
+  name                = local.ag_name_default
   resource_group_name = coalesce(local.rg_core_name, local.rg_app_name)
   short_name          = "obs${random_string.sfx.result}"
   location            = var.location
@@ -913,62 +901,6 @@ resource "azurerm_monitor_activity_log_alert" "rg_changes_core" {
   criteria { category = "Administrative" }
   action   { action_group_id = local.ag_id_core }
 }
-
-# resource "random_uuid" "wk_overview" {}
-
-# resource "azapi_resource" "monitor_workbook_overview" {
-#   count     = local.rg_core_name_resolved != null ? 1 : 0
-#   type      = "Microsoft.Insights/workbooks@2022-04-01"
-#   name      = random_uuid.wk_overview.result
-#   parent_id = data.azurerm_resource_group.core_rg[0].id
-#   location  = var.location
-
-#   tags = merge(
-#     {
-#       "hidden-title" = "Observability Overview (${var.product}-${local.plane_code})"
-#       "product"      = var.product
-#       "env"          = local.plane_code
-#       "plane"        = local.plane_code
-#       "managed_by"   = "terraform"
-#       "deployed_via" = "github-actions"
-#     },
-#     var.tags_extra
-#   )
-
-#   body = {
-#     properties = {
-#       displayName    = "Observability Overview (${var.product}-${local.plane_code})"
-#       version        = "1.0"
-#       sourceId       = "/subscriptions/${local.sub_core_resolved}"
-#       category       = "workbook"
-#       serializedData = jsonencode({
-#         version = "Notebook/1.0",
-#         items = [{
-#           type = 1,
-#           content = {
-#             json = {
-#               query         = "AppRequests | where TimeGenerated > ago(1h) | summarize Requests = count()"
-#               size          = 0
-#               queryType     = 0
-#               resourceType  = "microsoft.operationalinsights/workspaces"
-#               visualization = "tile"
-#               tileSettings  = { title = "Requests (1h)", subtitle = "" }
-#             }
-#           }
-#         }],
-#         isLocked = false
-#       })
-#     }
-#     kind = "shared"
-#   }
-
-#   lifecycle {
-#     precondition {
-#       condition     = local.rg_core_name_resolved != null
-#       error_message = "Core RG not resolved; cannot create workbook."
-#     }
-#   }
-# }
 
 # AKS diagnostics (env-gated)
 locals {

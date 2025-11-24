@@ -28,6 +28,11 @@ variable "location" {
   default = null
 }
 
+variable "region" {
+  description = "short region code, e.g. usaz or cus"
+  type        = string
+}
+
 variable "subscription_id" {
   type    = string
   default = null
@@ -59,13 +64,6 @@ variable "diag_name" {
   type        = string
   default     = "obs-diag"
   description = "Diagnostic setting name to apply to resources."
-}
-
-# Optional overrides
-variable "ag_name" {
-  type        = string
-  default     = null
-  description = "Optional Action Group name override."
 }
 
 variable "law_workspace_id_override" {
