@@ -1,51 +1,115 @@
-# Repository Folder Structure
+# Repository Structure Overview
 
-This document provides a high-level overview of the Terraform repository structure, focusing on how stacks, modules, and workflows are organized for Azure Government (`hrz`) and Azure Commercial (`pub`) deployments.
+This document provides a reorganized and clearer description of how the Terraform repository is structured for deployments across **Azure Government (hrz)** and **Azure Commercial (pub)**, while retaining all relevant technical details.
 
 ---
 
-## 1. Root Layout
+# 1. Top‑Level Repository Layout
 
-```text
-readme.md
-folder_structure.md              # (legacy, can be replaced by docs/folder_structure.md)
-workflows_documentation.md       # (legacy, can be replaced by docs/workflows_documentation.md)
-wiki-gh-secrets-hrz-pub.md
-modules/
-stacks/
-workflows/
+```
+.
+├── README.md
+├── docs/
+├── modules/
+├── stacks/
+└── .github/workflows/
 ```
 
-**Highlights**
+A quick summary of each folder:
 
-- **`modules/`** — Reusable Terraform modules for common building blocks.
-- **`stacks/`** — Top-level Terraform stacks (Shared Network, Core, Platform App, Observability, Provision-Secrets).
-- **`workflows/`** — GitHub Actions workflows (plan/apply + secrets + approvals).
-- **`wiki-gh-secrets-hrz-pub.md`** — Documentation describing secrets per environment/product.
-
-> Recommendation: keep all new architecture docs under `docs/` and link them from `readme.md`.
+- **docs/** — All architectural documents, VPN guides, workflow explanations, and secrets schemas.  
+- **modules/** — All reusable Terraform modules (network, storage, compute, security, observability, etc.).  
+- **stacks/** — Deployable Terraform stacks for shared networking, core infra, platform applications, registry, observability, and secret provisioning.  
+- **workflows/** — GitHub Actions automation for planning/applying infrastructure and governance.
 
 ---
 
-## 2. Stacks
+# 2. Documentation (`docs/`)
 
-All stacks live under `stacks/` and generally follow:
+```
+docs/
+  folder_structure.md
+  subscription_architecture.md
+  network_overview.md
+  network-diagram.png
+  nonprod-network-diagram.png
+  workflows_documentation.md
+  vpn_client_setup.md
+  wiki-gh-secrets-hrz-pub.md
+```
 
-```text
-stacks/<stack-name>/
-  backend.tf
+**Descriptions:**
+
+- **folder_structure.md** – Repository structure overview (this document).  
+- **subscription_architecture.md** – How subscriptions and planes (nonprod/prod) map across hrz and pub. 
+- **network_overview.md** – High-level hub/spoke architecture, shared-network stack purpose, VPN gateway layout, subnet model, DNS design, and VNet integration strategy for both Azure Gov and Azure Commercial.
+- **workflows_documentation.md** – Relationship between GitHub Actions workflows and Terraform stacks.  
+- **vpn_client_setup.md** – Azure VPN Client instructions (Windows/macOS/Linux) across planes and clouds.  
+- **wiki-gh-secrets-hrz-pub.md** – Full secrets schema and usage details for GitHub.
+
+Use this folder for all reference documentation and architecture notes.
+
+---
+
+# 3. Reusable Modules (`modules/`)
+
+Modules encapsulate resource-building logic that can be consumed by multiple stacks.
+
+Each module follows:
+
+```
+modules/<name>/
   main.tf
   variables.tf
   outputs.tf
-  tfvars/
-    <env/product>.tfvars
 ```
 
-### 2.1 Shared Network Stack
+Examples:
 
-```text
+```
+modules/
+  vnet/
+  nsg/
+  resource-group/
+  keyvault/
+  storage-account/
+  postgres-flex/
+  redis-cache/
+  app-service-plan/
+  communication/
+  dns-resolver/
+  servicebus/
+  event-hub/
+  rbac/
+  recovery-vault/
+  frontdoor-profile/
+  function-app/
+```
+
+Modules should remain **cloud-agnostic** unless explicitly required.
+
+---
+
+# 4. Stacks (`stacks/`)
+
+Stacks represent **deployable infrastructure units**.  
+Each stack has its own:
+
+```
+main.tf
+variables.tf
+outputs.tf
+backend.tf
+tfvars/
+README.md
+```
+
+---
+
+## 4.1 Shared Network Stack
+
+```
 stacks/shared-network/
-  backend.tf
   main.tf
   variables.tf
   outputs.tf
@@ -56,23 +120,16 @@ stacks/shared-network/
     prod.pub.tfvars
 ```
 
-**Purpose (structural)**  
-Defines **plane-level shared networking** (hub / shared network) per:
+**Purpose:** Provides hub/spoke VNets, NSGs, DNS, VPN gateways, App Gateway, and optional Front Door.
 
-- **Plane**: `nonprod`, `prod`
-- **Product**: `hrz` (Azure Gov), `pub` (Azure Commercial)
-
-**Notes**
-
-- This stack should be applied **before** `core`, `platform-app`, and `observability` for each plane.
+**Scope:** Plane-level, for both clouds.
 
 ---
 
-### 2.2 Core Stack
+## 4.2 Core Stack
 
-```text
+```
 stacks/core/
-  backend.tf
   main.tf
   variables.tf
   outputs.tf
@@ -83,201 +140,142 @@ stacks/core/
     pr.pub.tfvars
 ```
 
-**Purpose (structural)**  
-Defines **plane-level shared/core infrastructure** (e.g., common services used by multiple environments).
+**Purpose:** Log Analytics workspace, Application Insights, Recovery Services Vault, shared action groups, and other cross-environment foundational services.
 
-**Inputs via tfvars**
-
-- Plane is represented as:
-  - `np` → nonprod
-  - `pr` → prod
-- Product:
-  - `hrz`
-  - `pub`
-
-> Recommendation: consider renaming `np`/`pr` to `nonprod`/`prod` for consistency with `shared-network`.
-
-**Dependency**
-
-- Requires `shared-network` to be deployed for the same plane and product.
+**Dependency:** Requires Shared Network for the given plane/product.
 
 ---
 
-### 2.3 Platform Application Stack
+## 4.3 Platform Application Stack
 
-```text
+```
 stacks/platform-app/
-  backend.tf
   main.tf
   variables.tf
   outputs.tf
   tfvars/
-    dev.hrz.tfvars
-    dev.pub.tfvars
-    qa.hrz.tfvars
-    qa.pub.tfvars
-    uat.hrz.tfvars
-    uat.pub.tfvars
-    prod.hrz.tfvars
-    prod.pub.tfvars
+    dev.*
+    qa.*
+    uat.*
+    prod.*
 ```
 
-**Purpose (structural)**  
-Defines **environment-specific application infrastructure**, deployed per environment and product.
+**Purpose:** Environment-level application infrastructure (AKS, Service Bus, KV, storage, Redis, Event Hub, Function Apps, App Service Plans, databases, etc.).
 
-**Inputs via tfvars**
-
-- Env: `dev`, `qa`, `uat`, `prod`
-- Product: `hrz`, `pub`
-
-**Dependency**
-
-- Depends on:
-  - `shared-network` (plane networking)
-  - `core` (plane shared/core services)
+**Dependencies:**  
+Shared Network → Core → Platform App → Observability
 
 ---
 
-### 2.4 Observability Stack
+## 4.4 Platform Registry Stack
 
-```text
+```
+stacks/platform-registry/
+  main.tf
+  variables.tf
+  outputs.tf
+  tfvars/
+    pr.hrz.tfvars
+```
+
+**Purpose:**  
+Dedicated **Azure Container Registry (ACR)** living **only in Azure Government** and **only in production (pr)**.
+
+Provides a global, shared registry used by all hrz workloads.
+
+---
+
+## 4.5 Observability Stack
+
+```
 stacks/observability/
-  README.md
-  backend.tf
   main.tf
   variables.tf
   outputs.tf
   tfvars/
-    dev.hrz.tfvars
-    dev.pub.tfvars
-    qa.hrz.tfvars
-    qa.pub.tfvars
-    uat.hrz.tfvars
-    uat.pub.tfvars
-    prod.hrz.tfvars
-    prod.pub.tfvars
+    dev.*
+    qa.*
+    uat.*
+    prod.*
 ```
 
-**Purpose (structural)**  
-Defines **environment-specific observability and diagnostics** (e.g., diagnostic settings, log routing) per environment and product.
+**Purpose:**  
+Diagnostic settings, activity log routing, metric alerts, and action groups.
 
-**Inputs via tfvars**
-
-- Env: `dev`, `qa`, `uat`, `prod`
-- Product: `hrz`, `pub`
-
-**Dependency**
-
-- Typically applied **after** `platform-app` for the same environment, once core resources exist to attach diagnostics to.
+**Sequence:**  
+Applied after Platform App for the same environment.
 
 ---
 
-### 2.5 Provision-Secrets Stack
+## 4.6 Provision-Secrets Stack
 
-```text
+```
 stacks/provision-secrets/
-  hrz.secrets.schema.json
-  pub.secrets.schema.json
+  schemas/*.secrets.schema.json
 ```
 
-**Purpose (structural)**  
-
-- Stores **JSON schema definitions** describing required secrets for:
-  - `hrz` (Azure Gov)
-  - `pub` (Azure Commercial)
-- This stack is **not** a Terraform configuration; it is used by the secrets provisioning workflow to hydrate Key Vaults and/or GitHub secrets.
+**Purpose:**  
+Defines required secrets for hrz and pub.  
+Used by the **infra-secrets-provision** workflow to hydrate Key Vaults and GitHub secrets.  
+(Not a Terraform deployment stack.)
 
 ---
 
-## 3. Modules Library
+# 5. GitHub Workflows (`.github/workflows/`)
 
-```text
-modules/
-  acr/
-  aks/
-  app-gateway/
-  app-service-plan/
-  communication/
-  cosmos-account/
-  cosmosdb-postgresql/
-  dns-resolver/
-  event-hub/
-  event-hub-consumer-groups/
-  frontdoor-profile/
-  function-app/
-  keyvault/
-  network/
-    nsg/
-    peering/
-  postgres-flex/
-  private-dns/
-  rbac/
-  recovery-vault/
-  redis/
-  resource-group/
-  servicebus/
-  storage-account/
-  vnet/
-  vpn-gateway/
-  waf-policy/
-  .DS_Store        # local artifact, can be ignored
 ```
-
-Each module typically follows:
-
-```text
-modules/<name>/
-  main.tf
-  variables.tf
-  outputs.tf
-```
-
-**Notes**
-
-- `modules/network/` groups network-related submodules (`nsg`, `peering`).
-- Modules are consumed from stack `main.tf` files to encapsulate resource-level logic.
-
----
-
-## 4. Workflows
-
-All workflow files used for infrastructure are stored in:
-
-```text
 workflows/
-  core-apply.yml
-  core-plan.yml
-  govern-approval.yml
-  infra-secrets-provision.yml
-  network-apply.yml
   network-plan.yml
-  observability-apply.yml
-  observability-plan.yml
-  platform-apply.yml
+  network-apply.yml
+  core-plan.yml
+  core-apply.yml
   platform-plan.yml
+  platform-apply.yml
+  registry-plan.yml
+  registry-apply.yml
+  observability-plan.yml
+  observability-apply.yml
+  infra-secrets-provision.yml
+  govern-approval.yml
 ```
 
-These are documented in detail in [`docs/workflows_documentation.md`](./workflows_documentation.md).
+Functions:
+
+- Perform `terraform plan` & `apply` using OIDC  
+- Manage state subscription vs target subscription  
+- Upload & reuse tfplan artifacts  
+- Enforce `/approve` gating via the governance workflow  
+- Hydrate secrets into Key Vaults
+
+Registry workflows are significantly simpler since they target a single cloud + single plane.
 
 ---
 
-## 5. Recommended Improvements (Structure Only)
+# 6. Recommendations & Best Practices
 
-- **Normalize plane naming**  
-  Align `core` tfvars naming (`np`/`pr`) with `shared-network` (`nonprod`/`prod`) to reduce cognitive overhead.
+### Normalize naming
+Prefer full names (`nonprod`, `prod`) instead of abbreviations (`np`, `pr`) for consistency.
 
-- **Per-stack README files**  
-  Each stack folder should contain a concise `README.md` explaining:
-  - Purpose
-  - Inputs and tfvars mapping
-  - Dependencies
-  - Related workflows
+### Maintain per-stack README files
+Each should document:
+- Purpose & scope  
+- Dependencies  
+- Required tfvars  
+- Workflow usage  
 
-- **Docs folder**  
-  Store structural docs under `docs/`:
-  - `docs/folder_structure.md`
-  - `docs/workflows_documentation.md`
-  - Link them from the root `readme.md`.
+### Keep modules generic & reusable
+Stacks should orchestrate logic; modules should implement individual resource patterns.
 
-- **Ignore local artifacts**  
-  Ensure `.DS_Store` and `__MACOSX/` are in `.gitignore` or removed from source.
+### Maintain documentation in `docs/`
+Centralize everything here and link from the root README.
+
+---
+
+# Summary
+
+This repository is structured around:
+
+- **Reusable modules**  
+- **Deployable stacks per plane/environment**  
+- **Workflows for secure, approved deployments**  
+- **Documentation for all architecture and operational concerns**

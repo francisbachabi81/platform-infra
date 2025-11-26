@@ -32,7 +32,7 @@ Each stack has its own `README.md` with purpose, inputs, dependencies, and relat
 - **Platform App** – env-level application infrastructure  
   → [`stacks/platform-app/README.md`](stacks/platform-app/README.md)
 
-  - **Platform Registry** – shared Azure Container Registry (Azure Gov only, prod-only)
+- **Platform Registry** – shared ACR for container images (Azure Gov only)  
   → [`stacks/platform-registry/README.md`](stacks/platform-registry/README.md)
 
 - **Observability** – env-level diagnostics and monitoring  
@@ -54,7 +54,7 @@ docs/
 ```
 
 - **`modules/`** – Reusable Terraform modules (vnet, nsg, app-service-plan, postgres-flex, keyvault, storage, etc.).
-- **`stacks/`** – Top-level stacks that compose modules into deployable units per plane/environment.
+- **`stacks/`** – Top-level stacks that compose modules into deployable units per plane/environment (plus a shared registry stack).
 - **`workflows/`** – GitHub Actions YAML files for plan/apply + secrets + approvals.
 - **`docs/`** – Structural documentation for the repo and workflows.
 
@@ -81,6 +81,31 @@ That page includes:
 - Links for both **hrz (Gov)** and **pub (Commercial)**
 - Step-by-step import instructions  
 - Notes for tenant selection, certificate prompts, and split-tunnel behavior
+
+---
+
+## Platform-Registry Stack — Shared ACR (Azure Gov Only)
+
+The **Platform Registry** stack (`stacks/platform-registry/`) provisions a **single Azure Container Registry (ACR)** instance that is:
+
+- **Deployed only in Azure Government (`hrz`)**
+- **Always production plane** (no nonprod variant)
+- **Shared across workloads** (AKS, app services, jobs) that need to push or pull container images
+
+Key characteristics:
+
+- Lives in the **Azure Gov production subscription**.
+- Uses its own Terraform state key
+- Creates:
+  - One **resource group** dedicated to the registry (for example: `rg-core-pr-usaz-01-reg`).
+  - One **ACR** (for example: `acrintterra`).
+
+Typical usage pattern:
+
+- Deployed once via the **Platform Registry** GitHub workflows (for example `registry-plan.yml` / `registry-apply.yml`).  
+- Referenced by other stacks (e.g., `platform-app`, AKS modules, CI/CD pipelines) via its **outputs** (login server, ACR ID, name) or via environment-level configuration.
+
+There is **no Azure Commercial registry** in this design; all shared images are stored in the **Gov ACR**.
 
 ---
 
@@ -213,12 +238,17 @@ The typical end-to-end order is:
    - Stack: `stacks/core/`
    - Inputs: `product` (`hrz` or `pub`), `plane` (`np` or `pr` → nonprod/prod)
 
-4. **Platform App (Environment Level)**
+4. **Platform Registry (Gov Only, Shared)**
+   - Workflows: `registry-plan.yml` / `registry-apply.yml`
+   - Stack: `stacks/platform-registry/`
+   - Inputs: `subscription_id`, `tenant_id`, `location`, `registry_name`, `tags`
+
+5. **Platform App (Environment Level)**
    - Workflows: `platform-plan.yml` / `platform-apply.yml`
    - Stack: `stacks/platform-app/`
    - Inputs: `product` (`hrz` or `pub`), `env` (`dev`, `qa`, `uat`, `prod`)
 
-5. **Observability (Environment Level)**
+6. **Observability (Environment Level)**
    - Workflows: `observability-plan.yml` / `observability-apply.yml`
    - Stack: `stacks/observability/`
    - Inputs: `product` (`hrz` or `pub`), `env` (`dev`, `qa`, `uat`, `prod`)
@@ -236,6 +266,7 @@ When adding new infrastructure:
 1. **Decide where it lives:**
    - Reusable across stacks → create/update a module under `modules/`.
    - Specific to a plane/env → wire modules into the appropriate stack under `stacks/`.
+   - Shared/global (like ACR) → consider a dedicated stack like `stacks/platform-registry/`.
 
 2. **Update documentation:**
    - If you add a new stack, create a `README.md` following the existing pattern.
@@ -249,10 +280,11 @@ When adding new infrastructure:
 
 ## Getting Started (Very High Level)
 
-1. Ensure required secrets are configured (see `wiki-gh-secrets-hrz-pub.md` and the `provision-secrets` README).
+1. Deploy the **Platform Registry** (Azure Gov only)
 2. Run the **Shared Network** plan/apply for your target plane and product.
 3. Run the **Core** plan/apply for the same plane/product.
 4. For each environment (dev/qa/uat/prod) and product (hrz/pub), run **Platform App** and then **Observability**.
+5. Ensure required secrets are configured (see `wiki-gh-secrets-hrz-pub.md` and the `provision-secrets` README).
 
 For more details, start with:
 
