@@ -1,4 +1,4 @@
-name: "Plan | 03-Platform Registry (ACR)"
+name: "Plan | Platform Registry (ACR)"
 run-name: "${{ format('🧩 {0} | registry | {1} | #{2}', github.workflow, github.ref_name, github.run_number) }}"
 
 concurrency:
