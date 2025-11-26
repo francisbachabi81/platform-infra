@@ -15,3 +15,5 @@ tags = {
   cost_center         = "shared-global"
   data_classification = "internal"
 }
+
+zone_redundancy_enabled = false
