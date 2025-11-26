@@ -34,7 +34,7 @@ locals {
   }
 
   plane_overlay_tags = {
-    shared_with = "uat,prod"
+    shared_with = "all"
     criticality = "high"
   }
 
