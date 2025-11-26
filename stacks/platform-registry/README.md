@@ -4,7 +4,7 @@
 
 The **Platform Registry** stack provisions a **shared Azure Container Registry (ACR)** that is:
 
-- Deployed **only in Azure Government (`hrz`)**
+- Deployed **only in Azure Government**
 - Always **production** plane (no nonprod variant)
 - Intended to be **shared by multiple workloads** (AKS clusters, app services, jobs, etc.)
 
@@ -43,7 +43,7 @@ stacks/platform-registry/
 - **`main.tf`** – Provider, RG, and ACR module wiring.
 - **`variables.tf`** – Inputs such as `subscription_id`, `tenant_id`, `location`, `registry_name`, etc.
 - **`outputs.tf`** – Exposes the registry name, ID, and login server.
-- **`tfvars/pr.hrz.tfvars`** – Opinionated defaults for the Gov / prod deployment.
+- **`tfvars/prod.tfvars`** – Opinionated defaults for the Gov / prod deployment.
 - **`README.md`** – Stack documentation.
 
 ---
@@ -61,10 +61,10 @@ Key inputs:
 - `location` (**string**, default: `USGov Arizona`)  
   Azure Gov region display name for the RG/ACR.
 
-- `resource_group_name` (**string**, default: `rg-core-pr-usaz-01`)  
+- `resource_group_name` (**string**, default: `rg-core-pr-usaz-01-reg`)  
   Name of the resource group that will host the ACR.
 
-- `registry_name` (**string**, default: `acrintterraprustx01`)  
+- `registry_name` (**string**, default: `acrintterra`)  
   ACR name (5–50 lowercase alphanumeric). Must be globally unique across Azure.
 
 - `acr_sku` (**string**, default: `Standard`)  
@@ -97,7 +97,7 @@ This stack exposes the following outputs:
 - `resource_group_name` – Name of the resource group created/used for the ACR.
 - `acr_name` – Name of the ACR.
 - `acr_id` – Full resource ID of the ACR.
-- `acr_login_server` – Login server for the ACR (e.g., `acrintterraprustx01.azurecr.us`).
+- `acr_login_server` – Login server for the ACR (e.g., `acrintterra.azurecr.us`).
 
 These can be consumed by:
 
