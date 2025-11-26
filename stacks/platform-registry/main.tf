@@ -67,7 +67,7 @@ resource "azurerm_resource_group" "rg" {
 
 # ACR
 module "acr" {
-  source = "./modules/acr"
+  source = "../../modules/acr"
 
   registry_name       = var.registry_name
   location            = var.location

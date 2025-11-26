@@ -32,6 +32,9 @@ Each stack has its own `README.md` with purpose, inputs, dependencies, and relat
 - **Platform App** – env-level application infrastructure  
   → [`stacks/platform-app/README.md`](stacks/platform-app/README.md)
 
+  - **Platform Registry** – shared Azure Container Registry (Azure Gov only, prod-only)
+  → [`stacks/platform-registry/README.md`](stacks/platform-registry/README.md)
+
 - **Observability** – env-level diagnostics and monitoring  
   → [`stacks/observability/README.md`](stacks/observability/README.md)
 
