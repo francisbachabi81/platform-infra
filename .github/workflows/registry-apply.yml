@@ -4,6 +4,16 @@ run-name: "${{ format('🚀 {0} | registry | {1} | #{2}', github.workflow, githu
 on:
   workflow_dispatch:
     inputs:
+      product:
+        description: "Product (ignored for registry; always Azure Gov global)"
+        type: string
+        required: false
+        default: "global"
+      env:
+        description: "Env/plane (ignored for registry; always prod)"
+        type: string
+        required: false
+        default: "pr"
       plan_run_id:
         description: "Run ID of the approved Plan workflow"
         type: string
