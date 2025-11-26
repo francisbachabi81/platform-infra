@@ -159,6 +159,9 @@ jobs:
             } else if (stack === "observability") {
               workflow_id = "observability-apply.yml";
               inputs = { product, env: third, plan_run_id: planRunId };
+            } else if (stack === "platform-registry") {
+              workflow_id = "registry-apply.yml";
+              inputs = { product, env: third, plan_run_id: planRunId };
             } else {
               core.setFailed(`Unknown stack in issue title: ${stack}`);
               return;
