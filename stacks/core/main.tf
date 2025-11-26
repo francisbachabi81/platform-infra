@@ -258,8 +258,6 @@ resource "azurerm_monitor_metric_alert" "appi_failures" {
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "heartbeat_missing" {
   count                = length(azurerm_log_analytics_workspace.plane) > 0 ? 1 : 0
   name                 = "sq-${var.product}-${local.plane_code}-${var.region}-core-heartbeat"
-  # resource_group_name  = local.rg_name_core
-  # location             = var.location
   resource_group_name = azurerm_log_analytics_workspace.plane[0].resource_group_name
   location            = azurerm_log_analytics_workspace.plane[0].location
   enabled              = true

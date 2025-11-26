@@ -17,6 +17,7 @@ The project is organized into reusable **modules**, environment/plane-specific *
 - **Repo structure & stacks**: [`docs/folder_structure.md`](docs/folder_structure.md)
 - **Workflows & execution order**: [`docs/workflows_documentation.md`](docs/workflows_documentation.md)
 - **Secrets schema / GitHub secrets notes**: [`docs/wiki-gh-secrets-hrz-pub.md`](docs/wiki-gh-secrets-hrz-pub.md)
+- **Azure VPN Client Setup (Gov + Commercial)**: [`docs/vpn_client_setup.md`](docs/vpn_client_setup.md)
 
 ### Stacks
 
@@ -43,7 +44,6 @@ Each stack has its own `README.md` with purpose, inputs, dependencies, and relat
 
 ```text
 readme.md
-wiki-gh-secrets-hrz-pub.md
 modules/
 stacks/
 workflows/
@@ -56,6 +56,28 @@ docs/
 - **`docs/`** – Structural documentation for the repo and workflows.
 
 See [`docs/folder_structure.md`](docs/folder_structure.md) for a detailed breakdown.
+
+---
+
+## Azure VPN Client — Connectivity for Nonprod & Prod
+
+The **Shared-Network** stack deploys VPN Gateways for each plane (`nonprod` and `prod`) and each product:
+
+- **Azure Government** (`hrz`)
+- **Azure Commercial** (`pub`)
+
+To connect to your VNets, users download an Azure VPN Client profile (`.xml`) and import it into the **Azure VPN Client** (Windows/macOS).
+
+A full guide is available here:
+
+[`VPN Setup Guide`](docs/vpn_client_setup.md)
+
+That page includes:
+
+- Download links for **nonprod** and **prod**
+- Links for both **hrz (Gov)** and **pub (Commercial)**
+- Step-by-step import instructions  
+- Notes for tenant selection, certificate prompts, and split-tunnel behavior
 
 ---
 
