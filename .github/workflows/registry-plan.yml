@@ -121,7 +121,7 @@ jobs:
           set -euo pipefail
 
           # Single tfvars file for registry stack
-          TV="${GITHUB_WORKSPACE}/stacks/platform-registry/terraform.tfvars"
+          TV="${GITHUB_WORKSPACE}/stacks/platform-registry/tfvars/prod.tfvars"
           if [ ! -f "$TV" ]; then
             echo "❌ Missing tfvars: $TV"
             exit 1
