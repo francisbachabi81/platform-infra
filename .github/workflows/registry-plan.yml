@@ -1,0 +1,397 @@
+name: "Plan | Platform Registry (ACR)"
+run-name: "${{ format('🧩 {0} | registry | {1} | #{2}', github.workflow, github.ref_name, github.run_number) }}"
+
+concurrency:
+  group: plan-registry-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+    inputs:
+      terraform_version:
+        description: "Terraform version"
+        type: string
+        default: "1.13.3"
+
+permissions:
+  id-token: write
+  contents: read
+  issues: write
+
+env:
+  TF_IN_AUTOMATION: true
+  APPROVERS_CSV: "francisbachabi81,user2"
+
+jobs:
+  plan:
+    name: "Plan (platform-registry: global.prod)"
+    runs-on: ubuntu-latest
+    environment: prod
+    defaults:
+      run:
+        working-directory: stacks/platform-registry
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine Terraform version
+        id: tfver
+        shell: bash
+        run: |
+          set -euo pipefail
+          TV="${{ inputs.terraform_version }}"
+          if [ -z "${TV}" ]; then TV="1.13.3"; fi
+          echo "version=${TV}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Terraform plugins
+        uses: actions/cache@v4
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: tf-${{ runner.os }}-${{ steps.tfver.outputs.version }}
+
+      - name: Configure Terraform plugin cache dir
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.terraform.d/plugin-cache
+          echo 'plugin_cache_dir="~/.terraform.d/plugin-cache"' > ~/.terraformrc
+
+      - name: Select cloud + subscriptions (global prod only)
+        id: sel
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Registry is always:
+          # - Azure Gov (global)
+          # - prod plane
+          PRODUCT="global"
+          PLANE="pr"
+
+          CLOUD_ENV="AzureUSGovernment"
+          ARM_ENV="usgovernment"
+          TENANT='${{ secrets.AZ_TENANT_HRZ }}'
+          CLIENT_ID='${{ secrets.AZURE_CLIENT_ID_HRZ }}'
+          AUDIENCE="api://AzureADTokenExchangeUSGov"
+
+          # State subscription (can differ from target if desired)
+          STATE_SUB='${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}'
+
+          # Target subscription for the ACR itself (prod)
+          TARGET_SUB='${{ secrets.AZ_SUB_HRZ_PROD }}'
+
+          echo "PRODUCT=$PRODUCT"       >> "$GITHUB_OUTPUT"
+          echo "PLANE=$PLANE"           >> "$GITHUB_OUTPUT"
+          echo "CLOUD_ENV=$CLOUD_ENV"   >> "$GITHUB_OUTPUT"
+          echo "ARM_ENV=$ARM_ENV"       >> "$GITHUB_OUTPUT"
+          echo "TENANT=$TENANT"         >> "$GITHUB_OUTPUT"
+          echo "CLIENT_ID=$CLIENT_ID"   >> "$GITHUB_OUTPUT"
+          echo "AUDIENCE=$AUDIENCE"     >> "$GITHUB_OUTPUT"
+          echo "STATE_SUB=$STATE_SUB"   >> "$GITHUB_OUTPUT"
+          echo "TARGET_SUB=$TARGET_SUB" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "ARM_ENVIRONMENT=$ARM_ENV"
+            echo "ARM_TENANT_ID=$TENANT"
+            echo "ARM_CLIENT_ID=$CLIENT_ID"
+
+            # Pass into Terraform as variables
+            echo "TF_VAR_tenant_id=$TENANT"
+            echo "TF_VAR_subscription_id=$TARGET_SUB"
+
+            # Optional: tag-ish context if you ever add vars later
+            echo "TF_VAR_product=$PRODUCT"
+            echo "TF_VAR_plane=$PLANE"
+          } >> "$GITHUB_ENV"
+
+      - name: Debug - subscriptions (partial + hash)
+        shell: bash
+        run: |
+          set -euo pipefail
+          maskless() { v="$(printf '%s' "$1" | tr -d '[:space:]')"; printf '%s…%s' "${v:0:8}" "${v: -6}"; }
+          shortsha() { printf '%s' "$1" | tr -d '[:space:]' | shasum -a 256 | cut -c1-12; }
+          echo "TARGET sub: $(maskless "$TF_VAR_subscription_id") (sha12: $(shortsha "$TF_VAR_subscription_id"))"
+          echo "STATE  sub: $(maskless "${{ steps.sel.outputs.STATE_SUB }}") (sha12: $(shortsha "${{ steps.sel.outputs.STATE_SUB }}"))"
+          echo "Tenant:    $(maskless "$TF_VAR_tenant_id")       (sha12: $(shortsha "$TF_VAR_tenant_id"))"
+
+      - name: Resolve backend key & tfvars
+        id: paths
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Single tfvars file for registry stack
+          TV="${GITHUB_WORKSPACE}/stacks/platform-registry/terraform.tfvars"
+          if [ ! -f "$TV" ]; then
+            echo "❌ Missing tfvars: $TV"
+            exit 1
+          fi
+          echo "TFVARS_PATH=$TV" >> "$GITHUB_OUTPUT"
+
+          # Reuse the same state RG/SA as other stacks, but with its own key
+          echo "STATE_RG=rg-core-infra-state" >> "$GITHUB_OUTPUT"
+          echo "STATE_SA=sacoretfstateinfra"  >> "$GITHUB_OUTPUT"
+          echo "STATE_CONTAINER=tfstate"      >> "$GITHUB_OUTPUT"
+          echo "STATE_KEY=platform-registry/global/prod/terraform.tfstate" >> "$GITHUB_OUTPUT"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ steps.tfver.outputs.version }}
+
+      - name: Azure Login (state subscription for backend)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ steps.sel.outputs.CLIENT_ID }}
+          tenant-id:       ${{ steps.sel.outputs.TENANT }}
+          subscription-id: ${{ steps.sel.outputs.STATE_SUB }}
+          environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
+          audience:        ${{ steps.sel.outputs.AUDIENCE }}
+
+      - name: Terraform Init (backend in state subscription)
+        env:
+          ARM_USE_CLI: true
+          ARM_USE_AZUREAD: true
+          ARM_CLIENT_ID:       ${{ steps.sel.outputs.CLIENT_ID }}
+          ARM_TENANT_ID:       ${{ steps.sel.outputs.TENANT }}
+          ARM_SUBSCRIPTION_ID: ${{ steps.sel.outputs.STATE_SUB }}
+          ARM_ENVIRONMENT:     ${{ steps.sel.outputs.ARM_ENV }}
+        run: |
+          terraform init -input=false -reconfigure \
+            -backend-config="environment=${{ steps.sel.outputs.ARM_ENV }}" \
+            -backend-config="tenant_id=${{ steps.sel.outputs.TENANT }}" \
+            -backend-config="subscription_id=${{ steps.sel.outputs.STATE_SUB }}" \
+            -backend-config="resource_group_name=${{ steps.paths.outputs.STATE_RG }}" \
+            -backend-config="storage_account_name=${{ steps.paths.outputs.STATE_SA }}" \
+            -backend-config="container_name=${{ steps.paths.outputs.STATE_CONTAINER }}" \
+            -backend-config="key=${{ steps.paths.outputs.STATE_KEY }}" \
+            -backend-config="use_azuread_auth=true" \
+            -backend-config="use_cli=true"
+
+      - name: Azure Login (target subscription for plan)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ steps.sel.outputs.CLIENT_ID }}
+          tenant-id:       ${{ steps.sel.outputs.TENANT }}
+          subscription-id: ${{ steps.sel.outputs.TARGET_SUB }}
+          environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
+          audience:        ${{ steps.sel.outputs.AUDIENCE }}
+
+      - name: Terraform Fmt & Validate
+        id: validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform fmt -recursive
+          terraform validate
+
+      - name: Plan (detailed exit code)
+        id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          set +e
+          terraform plan -input=false -lock-timeout=5m \
+            -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
+            -detailed-exitcode -out=tfplan \
+            2>&1 | tee plan-raw.txt
+          ec=${PIPESTATUS[0]}
+          set -e
+          echo "exitcode=${ec}" >> "$GITHUB_OUTPUT"
+
+          if [ "$ec" = "0" ] || [ "$ec" = "2" ]; then
+            terraform show -no-color tfplan > plan.txt
+          else
+            if [ ! -f tfplan ]; then
+              cp plan-raw.txt plan.txt
+            fi
+          fi
+
+      - name: Sanity check plan output (no embedded errors)
+        id: sanity
+        if: ${{ success() && (steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2') }}
+        shell: bash
+        run: |
+          if grep -q '^Error:' plan.txt; then
+            echo "Found 'Error:' lines in plan.txt; failing."
+            exit 1
+          fi
+
+      - name: Summarize plan
+        id: summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -qiE "^no changes(\.|)$" plan.txt; then
+            SUM="No changes. Infrastructure is up-to-date."
+          else
+            SUM="$(grep -E '^Plan: ' plan.txt | tail -n1 || true)"
+            if [ -z "${SUM}" ]; then
+              SUM="(No 'Plan:' line found)"; echo "::group::Plan tail"; tail -n 10 plan.txt; echo "::endgroup::"
+            fi
+          fi
+          echo "summary=${SUM}" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Terraform plan summary (platform-registry)"
+            echo
+            echo "${SUM}"
+            echo
+            echo "[View full run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+            echo
+            echo "Artifact: \`registry-plan-${{ github.run_id }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Show plan exit code & outputs
+        shell: bash
+        run: |
+          echo "exitcode='${{ steps.plan.outputs.exitcode }}'"
+          echo "summary='${{ steps.summary.outputs.summary }}'"
+
+      - name: Parse plan JSON for changes
+        id: parse
+        if: ${{ success() && (steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform show -json tfplan > plan.json
+          COUNT=$(jq '[.resource_changes[] | select((.change.actions | index("no-op")) | not)] | length' plan.json)
+          echo "changes_count=${COUNT}" >> "$GITHUB_OUTPUT"
+          if [ "${COUNT}" -gt 0 ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Collect status / error summary
+        id: status
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC_FILE="plan-raw.txt"
+          if [ ! -f "$SRC_FILE" ] && [ -f "plan.txt" ]; then
+            SRC_FILE="plan.txt"
+          fi
+          ERR_COUNT=0
+          if [ -f "$SRC_FILE" ]; then
+            ERR_COUNT=$(grep -c '^Error:' "$SRC_FILE" || true)
+          fi
+          echo "error_count=${ERR_COUNT}" >> "$GITHUB_OUTPUT"
+
+      - name: Mark pipeline had errors
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          echo "HAS_PIPELINE_FAILURE=true" >> "$GITHUB_ENV"
+
+      - name: Upload plan
+        if: ${{ success() && (steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: registry-plan-${{ github.run_id }}
+          if-no-files-found: error
+          path: |
+            ${{ github.workspace }}/stacks/platform-registry/tfplan
+            ${{ github.workspace }}/stacks/platform-registry/plan.txt
+            ${{ github.workspace }}/stacks/platform-registry/plan.json
+
+      - name: Open approval issue
+        if: ${{ always() }}
+        uses: actions/github-script@v7
+        env:
+          APPROVERS_CSV: ${{ env.APPROVERS_CSV }}
+          PLAN_SUMMARY:  ${{ steps.summary.outputs.summary }}
+          STATE_KEY:     ${{ steps.paths.outputs.STATE_KEY }}
+          ERROR_COUNT:   ${{ steps.status.outputs.error_count }}
+          PLAN_EXITCODE: ${{ steps.plan.outputs.exitcode }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const product      = 'global';
+            const plane        = 'pr';
+            const envLabel     = 'prod';
+            const planSummary  = process.env.PLAN_SUMMARY || '';
+            const stateKey     = process.env.STATE_KEY || '';
+            const errorCount   = parseInt(process.env.ERROR_COUNT || '0', 10) || 0;
+            const planExitCode = process.env.PLAN_EXITCODE || '';
+            const pipelineFailed = process.env.HAS_PIPELINE_FAILURE === 'true';
+
+            const hasErrors = pipelineFailed || errorCount > 0;
+
+            const approvers = (process.env.APPROVERS_CSV || '')
+              .split(',')
+              .map(s => s.trim())
+              .filter(Boolean);
+            const firstApprover = approvers[0];
+
+            const branchRaw  = process.env.GITHUB_REF || '';
+            const branch     = branchRaw.replace('refs/heads/', '') || 'detached';
+            const shortSha   = (process.env.GITHUB_SHA || '').slice(0, 7);
+            const runNum     = process.env.GITHUB_RUN_NUMBER;
+            const runId      = process.env.GITHUB_RUN_ID;
+            const serverUrl  = process.env.GITHUB_SERVER_URL;
+            const repo       = process.env.GITHUB_REPOSITORY;
+            const runUrl     = `${serverUrl}/${repo}/actions/runs/${runId}`;
+
+            let headlineStatus;
+            if (hasErrors) {
+              headlineStatus = `⚠️ This plan run had errors. Please review the Actions logs before approving. (Error lines in plan.txt: ${errorCount})`;
+            } else if (planExitCode === '2') {
+              headlineStatus = '✅ Plan succeeded with pending changes.';
+            } else if (planExitCode === '0') {
+              headlineStatus = '✅ Plan succeeded with no changes.';
+            } else {
+              headlineStatus = 'ℹ️ Plan status is not fully determined from exit code.';
+            }
+
+            let titlePrefix = 'APPROVAL: platform-registry';
+            if (hasErrors) {
+              titlePrefix += ' (WITH ERRORS)';
+            }
+            const title =
+              titlePrefix +
+              ' | ' + product + '-' + plane +
+              ' | ' + branch +
+              ' | #' + runNum +
+              ' | run ' + runId +
+              ' (' + shortSha + ')';
+
+            const statusTag = hasErrors ? '❌ WITH ERRORS' : '✅ clean';
+
+            const body = `
+            **Plan ready (${statusTag})**
+            - **Stack:** platform-registry
+            - **Product:** ${product}
+            - **Plane:** ${plane} (${envLabel})
+            - **Branch:** ${branchRaw}
+            - **Commit:** ${process.env.GITHUB_SHA}
+            - **Run:** ${runUrl}
+            - **State key:** \`${stateKey}\`
+
+            **Summary:** ${planSummary}
+
+            ${headlineStatus}
+
+            ${hasErrors ? '> ⚠️ One or more steps in this workflow failed or errors were detected in the plan output. Do **not** approve until the errors are understood and resolved.\n' : ''}
+
+            **Artifact:** \`registry-plan-${runId}\`
+            **JSON:** \`plan.json\`
+
+            **Approve by commenting:** \`/approve ${runId}\`
+            **Reject by commenting:** \`/reject ${runId}\`
+            `;
+
+            const resp = await github.rest.issues.create({
+              ...context.repo,
+              title,
+              body,
+              assignees: firstApprover ? [firstApprover] : undefined,
+              labels: [
+                'stack:platform-registry',
+                `product:${product}`,
+                `plane:${plane}`,
+                `env:${envLabel}`,
+                `branch:${branch}`
+              ]
+            });
+            core.info(`Created issue #${resp.data.number}`);
