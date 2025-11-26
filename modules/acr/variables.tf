@@ -57,3 +57,13 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+
+variable "georeplication_locations" {
+  description = <<EOT
+List of Azure regions for ACR geo-replication (Premium only).
+Examples (commercial): ["eastus2", "westus3"]
+Examples (Azure Gov):  ["usgovvirginia"]
+EOT
+  type    = list(string)
+  default = []
+}

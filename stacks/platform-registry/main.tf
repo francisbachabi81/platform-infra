@@ -81,6 +81,8 @@ module "acr" {
   retention_untagged_enabled = true
   zone_redundancy_enabled    = var.zone_redundancy_enabled
 
+  georeplication_locations = var.georeplication_locations
+
   role_assignments = var.role_assignments
 
   tags = local.tags_common

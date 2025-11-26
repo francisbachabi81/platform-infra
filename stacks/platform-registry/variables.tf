@@ -64,6 +64,16 @@ EOT
   default = []
 }
 
+variable "georeplication_locations" {
+  description = <<EOT
+List of Azure regions for ACR geo-replication (Premium only).
+Examples (commercial): ["eastus2", "westus3"]
+Examples (Azure Gov):  ["usgovvirginia"]
+EOT
+  type    = list(string)
+  default = []
+}
+
 # tags
 variable "tags" {
   description = "Additional tags to apply to all resources (merged with standard org/plane/runtime tags)."

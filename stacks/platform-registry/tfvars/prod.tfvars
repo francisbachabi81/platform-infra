@@ -17,3 +17,7 @@ tags = {
 }
 
 zone_redundancy_enabled = false
+
+georeplication_locations = [
+  "usgovvirginia"
+]

@@ -22,6 +22,15 @@ resource "azurerm_container_registry" "this" {
   # only set retention policy on premium
   retention_policy_in_days = (local.is_premium && var.retention_untagged_enabled) ? var.retention_untagged_days : null
 
+  dynamic "georeplications" {
+    for_each = local.is_premium ? toset(var.georeplication_locations) : []
+    content {
+      location                = georeplications.value
+      zone_redundancy_enabled = false
+      tags                    = var.tags
+    }
+  }
+
   tags = var.tags
 }
 
