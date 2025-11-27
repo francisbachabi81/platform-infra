@@ -320,3 +320,39 @@ module "communication" {
 
   depends_on = [module.rg_core_platform]
 }
+
+locals {
+  core_vm_subnet_id = var.shared_state_enabled ? data.terraform_remote_state.shared[0].outputs.hub_internal_subnet_id : null
+
+  core_vm_name = "vm-${var.product}-${local.plane_code}-${var.region}-gha"
+}
+
+module "core_vm" {
+  count = (var.create_core_vm && var.shared_state_enabled) ? 1 : 0
+
+  source = "../../modules/linux-vm"
+
+  name                = local.core_vm_name
+  resource_group_name = local.rg_name_core
+  location            = var.location
+
+  subnet_id          = local.core_vm_subnet_id
+  private_ip_address = var.core_vm_private_ip
+
+  admin_username = var.core_vm_admin_username
+  admin_password = var.core_vm_admin_password
+
+  # VM size / image customization
+  vm_size         = var.core_runner_vm_size
+  image_publisher = var.core_runner_vm_image_publisher
+  image_offer     = var.core_runner_vm_image_offer
+  image_sku       = var.core_runner_vm_image_sku
+  image_version   = var.core_runner_vm_image_version
+
+  tags = merge(local.tags_common, { purpose = "gha-runner" })
+
+  depends_on = [
+    module.rg_core_platform
+  ]
+}
+

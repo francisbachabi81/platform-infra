@@ -183,3 +183,57 @@ variable "associate_custom_domain" {
   type        = bool
   default     = false
 }
+
+# core VM (GitHub Actions runner) 
+variable "create_core_vm" {
+  type        = bool
+  description = "Whether to create the core Linux VM (for GitHub Actions / jumpbox)."
+  default     = false
+}
+
+variable "core_vm_private_ip" {
+  type        = string
+  description = "Static private IP for the core VM in the hub internal subnet (e.g. 10.10.10.20)."
+}
+
+variable "core_vm_admin_username" {
+  type        = string
+  description = "Admin username for the core Linux VM."
+  default     = "coreadmin"
+}
+
+variable "core_vm_admin_password" {
+  type        = string
+  description = "Admin password for the core Linux VM (should come from a secret)."
+  sensitive   = true
+}
+
+variable "core_runner_vm_size" {
+  type        = string
+  description = "VM size for the core runner/jumpbox. Example: Standard_D2s_v5 for light CI or Standard_D4s_v5 for heavier workloads."
+  default     = "Standard_D2s_v5"
+}
+
+variable "core_runner_vm_image_publisher" {
+  type        = string
+  description = "Image publisher for the core runner VM. Default is Canonical for Ubuntu."
+  default     = "Canonical"
+}
+
+variable "core_runner_vm_image_offer" {
+  type        = string
+  description = "Image offer for the core runner VM. Default is Ubuntu 22.04 Jammy offer."
+  default     = "0001-com-ubuntu-server-jammy"
+}
+
+variable "core_runner_vm_image_sku" {
+  type        = string
+  description = "Image SKU for the core runner VM. Default is 22_04-lts-gen2 (Ubuntu 22.04 LTS Gen2)."
+  default     = "22_04-lts-gen2"
+}
+
+variable "core_runner_vm_image_version" {
+  type        = string
+  description = "Image version for the core runner VM. Use 'latest' for automatic patching or pin to a specific version if needed."
+  default     = "latest"
+}

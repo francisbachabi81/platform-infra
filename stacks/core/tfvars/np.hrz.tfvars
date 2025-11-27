@@ -33,4 +33,19 @@ action_group_email_receivers = [
 
 enable_custom_domain    = true
 custom_domain_name      = "dev.horizon.intterra.io"
-associate_custom_domain = false 
+associate_custom_domain = false
+
+create_core_vm     = true
+core_vm_private_ip = "10.10.13.10"
+core_vm_admin_username = "coreadmin"
+# VM size suggestions:
+# - "Standard_D2s_v5": light CI / tooling, low cost
+# - "Standard_D4s_v5": medium workloads
+# - "Standard_D8s_v5": heavier pipelines or multiple runners
+core_runner_vm_size = "Standard_D2s_v5"
+# Ubuntu image suggestions:
+# Keep defaults for latest Ubuntu 22.04 LTS:
+core_runner_vm_image_publisher = "Canonical"
+core_runner_vm_image_offer     = "0001-com-ubuntu-server-jammy"
+core_runner_vm_image_sku       = "22_04-lts-gen2"
+core_runner_vm_image_version   = "latest"
