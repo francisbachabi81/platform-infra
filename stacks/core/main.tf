@@ -322,8 +322,7 @@ module "communication" {
 }
 
 locals {
-  core_vm_subnet_id = var.shared_state_enabled ? data.terraform_remote_state.shared[0].outputs.hub_internal_subnet_id : null
-
+  core_vm_subnet_id = var.shared_state_enabled ? lookup( lookup(data.terraform_remote_state.shared[0].outputs.subnet_ids_by_env, "hub", {}),"internal", null) : null
   core_vm_name = "vm-${var.product}-${local.plane_code}-${var.region}-gha"
 }
 
