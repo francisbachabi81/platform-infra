@@ -922,6 +922,59 @@ locals {
   pe_cdbpg_qa   = { for k, v in local.pe_cdbpg_targets_struct : k => v if can(regex("^qa-",   k)) }
   pe_cdbpg_prod = { for k, v in local.pe_cdbpg_targets_struct : k => v if can(regex("^prod-", k)) }
   pe_cdbpg_uat  = { for k, v in local.pe_cdbpg_targets_struct : k => v if can(regex("^uat-",  k)) }
+
+
+    # GitHub Actions runners: only NSGs for subnets named exactly "internal"
+  ghrunner_targets_all = {
+    for k, v in local._workload_pairs :
+    k => { name = v.nsg_name, rg = v.nsg_rg }
+    if v.subnet_name == "internal"
+  }
+
+  ghrunner_targets_hub  = { for k, v in local.ghrunner_targets_all : k => v if can(regex("^hub-",  k)) }
+  # ghrunner_targets_dev  = { for k, v in local.ghrunner_targets_all : k => v if can(regex("^dev-",  k)) }
+  # ghrunner_targets_qa   = { for k, v in local.ghrunner_targets_all : k => v if can(regex("^qa-",   k)) }
+  # ghrunner_targets_prod = { for k, v in local.ghrunner_targets_all : k => v if can(regex("^prod-", k)) }
+  # ghrunner_targets_uat  = { for k, v in local.ghrunner_targets_all : k => v if can(regex("^uat-",  k)) }
+}
+
+# GitHub Actions runner egress
+resource "azurerm_network_security_rule" "allow_ghrunner_https_internet_hub" {
+  for_each                    = local.ghrunner_targets_hub
+  name                        = "allow-ghrunner-https-internet"
+  priority                    = 360
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "10.10.13.10"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+resource "azurerm_network_security_rule" "allow_ghrunner_http_internet_hub" {
+  for_each                    = local.ghrunner_targets_hub
+  name                        = "allow-ghrunner-http-internet"
+  priority                    = 365
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "80"
+  source_address_prefix       = "10.10.13.10"
+  destination_address_prefix  = "Internet"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 # ---------- DENY TO INTERNET (all non-PE, non-appgw NSGs) ----------
