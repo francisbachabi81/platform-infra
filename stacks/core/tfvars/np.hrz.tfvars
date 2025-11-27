@@ -42,7 +42,10 @@ core_vm_admin_username = "coreadmin"
 # - "Standard_D2s_v5": light CI / tooling, low cost
 # - "Standard_D4s_v5": medium workloads
 # - "Standard_D8s_v5": heavier pipelines or multiple runners
-core_runner_vm_size = "Standard_D2s_v5"
+#   - Standard_B2ms  → 2 vCPU, 8 GiB RAM (good default, burstable)
+#   - Standard_B1ms  → 1 vCPU, 2 GiB RAM (lighter workloads)
+#   - Standard_B1s   → 1 vCPU, 1 GiB RAM (very light / test only)
+core_runner_vm_size = "Standard_B2ms"
 # Ubuntu image suggestions:
 # Keep defaults for latest Ubuntu 22.04 LTS:
 core_runner_vm_image_publisher = "Canonical"
