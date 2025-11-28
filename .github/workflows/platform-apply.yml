@@ -386,25 +386,49 @@ jobs:
           environment:     AzureUSGovernment
           audience:        api://AzureADTokenExchangeUSGov
 
-      - name: Fetch deploy-config from Key Vault
+      - name: Fetch AKS deployment credentials from Key Vault
         shell: bash
         run: |
           set -euo pipefail
-          echo "Getting 'deploy-config' secret from kvt-corp-pr-usaz-01 in HRZ prod..."
-          VALUE=$(az keyvault secret show \
-            --vault-name kvt-corp-pr-usaz-01 \
-            --name deploy-config \
+      
+          VAULT_NAME="kvt-corp-pr-usaz-01"
+          OUT_DIR="azure-kv-credentials"
+      
+          echo "Creating output directory: $OUT_DIR"
+          mkdir -p "$OUT_DIR"
+      
+          echo "Getting 'argo-repo-secrets' from $VAULT_NAME..."
+          ARGO_REPO_SECRETS=$(az keyvault secret show \
+            --vault-name "$VAULT_NAME" \
+            --name argo-repo-secrets \
             --query value -o tsv)
-
-          echo "Current directory:"
-          pwd
-          echo "Listing repo root:"
-          ls -la
-          
-          echo "$VALUE" > deploy-config.json
-
-          echo "deploy-config.json contents:"
-          cat deploy-config.json
+          echo "$ARGO_REPO_SECRETS" > "$OUT_DIR/argo-repo-secrets.yaml"
+      
+          echo "Getting 'azuredns-config' from $VAULT_NAME..."
+          AZUREDNS_CONFIG=$(az keyvault secret show \
+            --vault-name "$VAULT_NAME" \
+            --name azuredns-config \
+            --query value -o tsv)
+          echo "$AZUREDNS_CONFIG" > "$OUT_DIR/azuredns-config.yaml"
+      
+          echo "Getting 'secrets' from $VAULT_NAME..."
+          SECRETS_VALUE=$(az keyvault secret show \
+            --vault-name "$VAULT_NAME" \
+            --name secrets \
+            --query value -o tsv)
+          echo "$SECRETS_VALUE" > "$OUT_DIR/secrets.yaml"
+      
+          echo "Getting 'horizonk8s-automation-private-key' from $VAULT_NAME..."
+          PRIVATE_KEY=$(az keyvault secret show \
+            --vault-name "$VAULT_NAME" \
+            --name horizonk8s-automation-private-key \
+            --query value -o tsv)
+          PEM_PATH="$OUT_DIR/horizonk8s-automation-private-key.pem"
+          echo "$PRIVATE_KEY" > "$PEM_PATH"
+          chmod 600 "$PEM_PATH"
+      
+          echo "Wrote the following files in $OUT_DIR:"
+          ls -la "$OUT_DIR"
           
       - name: Azure Login (AKS subscription)
         uses: azure/login@v2
@@ -415,9 +439,6 @@ jobs:
           environment:     ${{ steps.sel_smoke.outputs.CLOUD_ENV }}
           audience:        ${{ steps.sel_smoke.outputs.AUDIENCE }}
 
-      # - name: Install kubectl
-      #   run: az aks install-cli
-
       - name: Clone repo
         uses: actions/checkout@v4
         with:
@@ -426,7 +447,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           path: s3crawler
 
-      - name: Unzip package and list contents
+      - name: List package contents
         working-directory: s3crawler
         shell: bash
         run: |
