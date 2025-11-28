@@ -416,6 +416,9 @@ jobs:
             echo "After unzip, in extracted root:"
             pwd
             ls -la
+            
+            echo "Contents of host.json:"
+            cat host.json
           else
             echo "No zip file found in s3crawler root; skipping unzip."
           fi
