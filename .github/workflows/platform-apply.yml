@@ -291,12 +291,11 @@ jobs:
           echo "  rg:   $AKS_RG"
           echo "  id:   $AKS_ID"
 
-  aks-smoke-test:
-    name: "AKS | kubectl get nodes"
+  aks-deploy-setup:
+    name: "AKS Cluster Setup"
     needs: apply
-    runs-on: [self-hosted, dev]
+    runs-on: [self-hosted, nonprod]
     environment: ${{ inputs.env }}
-    # if: ${{ needs.apply.outputs.HAS_AKS == 'true' }}
     if: ${{ needs.apply.outputs.HAS_AKS == 'true' && inputs.env != 'qa' }}
 
     steps:
@@ -443,7 +442,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: francisbachabi81/s3crawler
-          # token: ${{ secrets.GH_PAT_S3CRAWLER }} 
           token: ${{ secrets.GITHUB_TOKEN }}
           path: s3crawler
 
@@ -468,14 +466,3 @@ jobs:
 
           echo "Running 'kubectl get nodes -o wide'..."
           kubectl get nodes -o wide
-
-      # - name: Get AKS nodes
-      #   run: |
-      #     echo "Using AKS cluster '${{ needs.apply.outputs.AKS_NAME }}' in RG '${{ needs.apply.outputs.AKS_RG }}' (sub: '${{ steps.sel_smoke.outputs.AKS_SUB }}')"
-      #     az aks get-credentials \
-      #       --resource-group "${{ needs.apply.outputs.AKS_RG }}" \
-      #       --name "${{ needs.apply.outputs.AKS_NAME }}" \
-      #       --overwrite-existing
-
-      #     echo "Running 'kubectl get nodes -o wide'..."
-      #     kubectl get nodes -o wide
