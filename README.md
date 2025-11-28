@@ -139,6 +139,23 @@ There is **no Azure Commercial registry** in this design; all shared images are 
 | Log Analytics | ✅ | ✅ |
 | Application Insights | ✅ | ✅ |
 | Recovery Services Vault | ✅ | ✅ |
+| Linux VM GitHub Actions runner | ✅ | ✅ |
+
+
+The **Core** stack provisions a **Linux VM** intended to run as a **self-hosted GitHub Actions runner** for internal workloads, including **initial AKS setup and application deployment jobs**.
+
+Before running any **Platform-App** workflows, you **must**:
+
+1. Finish deploying the Core stack for your plane/product  
+2. SSH into the VM  
+3. Install and register the GitHub Actions runner  
+4. Confirm that the runner is *online* and properly tagged (e.g., `self-hosted`, `nonprod` or `prod`)
+
+**See full instructions here:**  
+[`stacks/core/README.md`](stacks/core/README.md)  
+This page documents VM access, required packages, runner registration commands, firewall considerations, tags, and operational guidance.
+
+Platform-App workflows will **fail** if the VM runner is not fully configured.
 
 ---
 
