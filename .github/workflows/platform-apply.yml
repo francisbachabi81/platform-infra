@@ -396,6 +396,11 @@ jobs:
             --name deploy-config \
             --query value -o tsv)
 
+          echo "Current directory:"
+          pwd
+          echo "Listing repo root:"
+          ls -la
+          
           echo "$VALUE" > deploy-config.json
 
           echo "deploy-config.json contents:"
