@@ -389,6 +389,37 @@ jobs:
       - name: Install kubectl
         run: az aks install-cli
 
+      # - name: Clone s3crawler repo
+      #   uses: actions/checkout@v4
+      #   with:
+      #     # Update this to your real org/owner
+      #     repository: francisbachabi81/s3crawler
+      #     token: ${{ secrets.GH_PAT_S3CRAWLER }} # PAT with read access to repo
+      #     path: s3crawler
+
+      # - name: Unzip s3crawler package and list contents
+      #   working-directory: s3crawler
+      #   shell: bash
+      #   run: |
+      #     set -euo pipefail
+      #     echo "Current directory (s3crawler repo root):"
+      #     pwd
+      #     echo "Listing repo root:"
+      #     ls -la
+
+      #     # If there's a zip at the root, unzip it
+      #     ZIP_FILE=$(ls *.zip 2>/dev/null || echo "")
+      #     if [ -n "$ZIP_FILE" ]; then
+      #       echo "Found zip: $ZIP_FILE – unzipping..."
+      #       unzip "$ZIP_FILE" -d extracted
+      #       cd extracted
+      #       echo "After unzip, in extracted root:"
+      #       pwd
+      #       ls -la
+      #     else
+      #       echo "No zip file found in s3crawler root; skipping unzip."
+      #     fi
+
       - name: Get AKS nodes
         run: |
           echo "Using AKS cluster '${{ needs.apply.outputs.AKS_NAME }}' in RG '${{ needs.apply.outputs.AKS_RG }}' (sub: '${{ steps.sel_smoke.outputs.AKS_SUB }}')"
