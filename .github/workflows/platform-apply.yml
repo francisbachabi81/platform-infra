@@ -294,7 +294,7 @@ jobs:
   aks-smoke-test:
     name: "AKS | kubectl get nodes"
     needs: apply
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, dev]
     environment: ${{ inputs.env }}
     # if: ${{ needs.apply.outputs.HAS_AKS == 'true' }}
     if: ${{ needs.apply.outputs.HAS_AKS == 'true' && inputs.env != 'qa' }}
@@ -324,7 +324,6 @@ jobs:
             CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
             AUDIENCE="api://AzureADTokenExchangeUSGov"
 
-            # Hub + per-env target subs (same as apply job)
             HUB_SUB="${{ secrets.AZ_SUB_HRZ_CORE }}"
             case "$ENV_IN" in
               dev)  TARGET_SUB="${{ secrets.AZ_SUB_HRZ_DEV }}" ;;
@@ -390,12 +389,17 @@ jobs:
       - name: Install kubectl
         run: az aks install-cli
 
-      - name: Get AKS nodes via AKS Run Command
+      - name: Get AKS nodes
         run: |
-          az aks command invoke \
+          echo "Using AKS cluster '${{ needs.apply.outputs.AKS_NAME }}' in RG '${{ needs.apply.outputs.AKS_RG }}' (sub: '${{ steps.sel_smoke.outputs.AKS_SUB }}')"
+
+          az aks get-credentials \
             --resource-group "${{ needs.apply.outputs.AKS_RG }}" \
             --name "${{ needs.apply.outputs.AKS_NAME }}" \
-            --command "kubectl get nodes -o wide"
+            --overwrite-existing
+
+          echo "Running 'kubectl get nodes -o wide'..."
+          kubectl get nodes -o wide
 
       # - name: Get AKS nodes
       #   run: |
