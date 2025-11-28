@@ -135,7 +135,8 @@ jobs:
         if: ${{ steps.guard.outputs.proceed == '1' && steps.parse.outputs.action == '/approve' }}
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GH_PAT_WORKFLOW }}
+          # github-token: ${{ secrets.GH_PAT_WORKFLOW }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const MARK = process.env.SYSTEM_MARKER || '<!-- system:approval-final -->';
             const PAT_OWNER = process.env.GH_PAT_ACTOR || process.env.PAT_ACTOR || 'github-actions[bot]';

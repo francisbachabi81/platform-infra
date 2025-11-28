@@ -4,13 +4,14 @@ run-name: "${{ format('🚀 {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs
 on:
   workflow_dispatch:
     inputs:
-      product:    { type: choice, options: [hrz, pub], required: true }
-      env:        { type: choice, options: [dev, qa, uat, prod], required: true }
+      product:     { type: choice, options: [hrz, pub], required: true }
+      env:         { type: choice, options: [dev, qa, uat, prod], required: true }
       plan_run_id: { type: string, required: true }
 
 permissions:
   id-token: write
   contents: read
+  actions: read
 
 env:
   # ARM_USE_OIDC: true
@@ -21,6 +22,20 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.env }}
     defaults: { run: { working-directory: stacks/platform-app } }
+
+    outputs:
+      CLOUD_ENV:  ${{ steps.sel.outputs.CLOUD_ENV }}
+      ARM_ENV:    ${{ steps.sel.outputs.ARM_ENV }}
+      TENANT:     ${{ steps.sel.outputs.TENANT }}
+      CLIENT_ID:  ${{ steps.sel.outputs.CLIENT_ID }}
+      TARGET_SUB: ${{ steps.sel.outputs.TARGET_SUB }}
+      HUB_SUB:    ${{ steps.sel.outputs.HUB_SUB }}
+      AKS_SUB:    ${{ steps.sel.outputs.AKS_SUB }}
+      AUDIENCE:   ${{ steps.sel.outputs.AUDIENCE }}
+      HAS_AKS:    ${{ steps.aks_meta.outputs.HAS_AKS }}
+      AKS_NAME:   ${{ steps.aks_meta.outputs.AKS_NAME }}
+      AKS_RG:     ${{ steps.aks_meta.outputs.AKS_RG }}
+      AKS_ID:     ${{ steps.aks_meta.outputs.AKS_ID }}
 
     steps:
       - uses: actions/checkout@v4
@@ -92,6 +107,15 @@ jobs:
             PG_ADMIN_PASSWORD='${{ secrets.PG_ADMIN_PASSWORD_PUB }}'
           fi
 
+          # Decide where AKS lives:
+          # dev  -> hub subscription
+          # qa/uat/prod -> target subscription
+          case "$ENV_IN" in
+            dev)         AKS_SUB="$HUB_SUB" ;;
+            qa|uat|prod) AKS_SUB="$TARGET_SUB" ;;
+            *)           AKS_SUB="$TARGET_SUB" ;;
+          esac
+
           echo "ENV=$ENV_IN"            >> "$GITHUB_OUTPUT"
           echo "PRODUCT=$PRODUCT"       >> "$GITHUB_OUTPUT"
           echo "PLANE=$PLANE"           >> "$GITHUB_OUTPUT"
@@ -103,6 +127,7 @@ jobs:
           echo "STATE_SUB=$STATE_SUB"   >> "$GITHUB_OUTPUT"
           echo "TARGET_SUB=$TARGET_SUB" >> "$GITHUB_OUTPUT"
           echo "HUB_SUB=$HUB_SUB"       >> "$GITHUB_OUTPUT"
+          echo "AKS_SUB=$AKS_SUB"       >> "$GITHUB_OUTPUT"
 
           {
             echo "ARM_ENVIRONMENT=$ARM_ENV"
@@ -137,13 +162,14 @@ jobs:
           done
           [ -f "${TFVARS_PATH:-}" ] || { echo "Missing tfvars"; exit 1; }
           echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
-          echo "STATE_RG=rg-core-infra-state"               >> "$GITHUB_OUTPUT"
-          echo "STATE_SA=sacoretfstateinfra"               >> "$GITHUB_OUTPUT"
-          echo "STATE_CONTAINER=tfstate"                   >> "$GITHUB_OUTPUT"
+          echo "STATE_RG=rg-core-infra-state"                               >> "$GITHUB_OUTPUT"
+          echo "STATE_SA=sacoretfstateinfra"                                >> "$GITHUB_OUTPUT"
+          echo "STATE_CONTAINER=tfstate"                                    >> "$GITHUB_OUTPUT"
           echo "STATE_KEY=platform-app/${PRODUCT}/${ENV}/terraform.tfstate" >> "$GITHUB_OUTPUT"
 
       - uses: hashicorp/setup-terraform@v3
-        with: { terraform_version: "1.13.3" }
+        with:
+          terraform_version: "1.13.3"
 
       - name: Azure Login (state)
         uses: azure/login@v2
@@ -210,3 +236,174 @@ jobs:
       - name: Terraform Apply (approved plan)
         if: ${{ steps.detect.outputs.has_tfplan == 'true' }}
         run: terraform apply -input=false -auto-approve tfplan
+
+      - name: Terraform Apply (no approved plan)
+        if: ${{ steps.detect.outputs.has_tfplan != 'true' }}
+        run: terraform apply -input=false -auto-approve -var-file="${{ steps.paths.outputs.TFVARS_PATH }}"
+
+      - name: Export AKS outputs
+        id: aks_meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Use the structured 'aks' output
+          AKS_JSON=$(terraform output -json aks 2>/dev/null || echo "")
+
+          echo "Raw aks JSON from terraform output:"
+          echo "$AKS_JSON"
+
+          if [ -z "$AKS_JSON" ] || [ "$AKS_JSON" = "null" ]; then
+            echo "HAS_AKS=false" >> "$GITHUB_OUTPUT"
+            echo "No AKS output found (aks is null or not defined)."
+            exit 0
+          fi
+
+          # terraform output -json aks returns the VALUE directly
+          AKS_ID=$(echo "$AKS_JSON"   | jq -r '.id // empty')
+          AKS_RG=$(echo "$AKS_JSON"   | jq -r '.resource_group // empty')
+          AKS_NAME=$(echo "$AKS_JSON" | jq -r '.name // empty')
+
+          # If name is null/empty, derive it from the ID
+          if [ -z "$AKS_NAME" ] && [ -n "$AKS_ID" ]; then
+            # Resource ID ends with .../managedClusters/<name>
+            AKS_NAME="${AKS_ID##*/}"
+          fi
+
+          echo "Derived from aks output:"
+          echo "  AKS_ID=$AKS_ID"
+          echo "  AKS_RG=$AKS_RG"
+          echo "  AKS_NAME=$AKS_NAME"
+
+          if [ -z "$AKS_ID" ] || [ -z "$AKS_RG" ] || [ -z "$AKS_NAME" ]; then
+            echo "HAS_AKS=false" >> "$GITHUB_OUTPUT"
+            echo "AKS output exists but missing usable id, resource_group, or name."
+            exit 0
+          fi
+
+          echo "HAS_AKS=true"       >> "$GITHUB_OUTPUT"
+          echo "AKS_ID=$AKS_ID"     >> "$GITHUB_OUTPUT"
+          echo "AKS_RG=$AKS_RG"     >> "$GITHUB_OUTPUT"
+          echo "AKS_NAME=$AKS_NAME" >> "$GITHUB_OUTPUT"
+
+          echo "Detected AKS cluster from aks_id:"
+          echo "  name: $AKS_NAME"
+          echo "  rg:   $AKS_RG"
+          echo "  id:   $AKS_ID"
+
+  aks-smoke-test:
+    name: "AKS | kubectl get nodes"
+    needs: apply
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.env }}
+    # if: ${{ needs.apply.outputs.HAS_AKS == 'true' }}
+    if: ${{ needs.apply.outputs.HAS_AKS == 'true' && inputs.env != 'qa' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select cloud + subscriptions (smoke test)
+        id: sel_smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ENV_IN="${{ inputs.env }}"
+          PRODUCT="${{ inputs.product }}"
+
+          case "$ENV_IN" in
+            dev|qa|np)   PLANE="nonprod" ;;
+            uat|prod|pr) PLANE="prod" ;;
+            *) echo "Unknown env: $ENV_IN"; exit 1 ;;
+          esac
+
+          if [ "$PRODUCT" = "hrz" ]; then
+            CLOUD_ENV="AzureUSGovernment"
+            ARM_ENV="usgovernment"
+            TENANT="${{ secrets.AZ_TENANT_HRZ }}"
+            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
+            AUDIENCE="api://AzureADTokenExchangeUSGov"
+
+            # Hub + per-env target subs (same as apply job)
+            HUB_SUB="${{ secrets.AZ_SUB_HRZ_CORE }}"
+            case "$ENV_IN" in
+              dev)  TARGET_SUB="${{ secrets.AZ_SUB_HRZ_DEV }}" ;;
+              qa)   TARGET_SUB="${{ secrets.AZ_SUB_HRZ_QA }}" ;;
+              uat)  TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}" ;;
+              prod) TARGET_SUB="${{ secrets.AZ_SUB_HRZ_PROD }}" ;;
+              *) echo "Unknown env for HRZ: $ENV_IN"; exit 1 ;;
+            esac
+          else
+            CLOUD_ENV="AzureCloud"
+            ARM_ENV="public"
+            TENANT="${{ secrets.AZ_TENANT_PUB }}"
+            CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_PUB }}"
+            AUDIENCE="api://AzureADTokenExchange"
+
+            HUB_SUB="${{ secrets.AZ_SUB_PUB_CORE }}"
+            case "$ENV_IN" in
+              dev)  TARGET_SUB="${{ secrets.AZ_SUB_PUB_DEV }}" ;;
+              qa)   TARGET_SUB="${{ secrets.AZ_SUB_PUB_QA }}" ;;
+              uat)  TARGET_SUB="${{ secrets.AZ_SUB_PUB_UAT }}" ;;
+              prod) TARGET_SUB="${{ secrets.AZ_SUB_PUB_PROD }}" ;;
+              *) echo "Unknown env for PUB: $ENV_IN"; exit 1 ;;
+            esac
+          fi
+
+          # Decide where AKS lives:
+          # dev  -> hub subscription
+          # qa/uat/prod -> target subscription
+          case "$ENV_IN" in
+            dev)         AKS_SUB="$HUB_SUB" ;;
+            qa|uat|prod) AKS_SUB="$TARGET_SUB" ;;
+            *)           AKS_SUB="$TARGET_SUB" ;;
+          esac
+
+          echo "CLOUD_ENV=$CLOUD_ENV"   >> "$GITHUB_OUTPUT"
+          echo "ARM_ENV=$ARM_ENV"       >> "$GITHUB_OUTPUT"
+          echo "TENANT=$TENANT"         >> "$GITHUB_OUTPUT"
+          echo "CLIENT_ID=$CLIENT_ID"   >> "$GITHUB_OUTPUT"
+          echo "AUDIENCE=$AUDIENCE"     >> "$GITHUB_OUTPUT"
+          echo "HUB_SUB=$HUB_SUB"       >> "$GITHUB_OUTPUT"
+          echo "TARGET_SUB=$TARGET_SUB" >> "$GITHUB_OUTPUT"
+          echo "AKS_SUB=$AKS_SUB"       >> "$GITHUB_OUTPUT"
+
+      - name: Debug smoke selection
+        run: |
+          echo "CLIENT_ID='${{ steps.sel_smoke.outputs.CLIENT_ID }}'"
+          echo "TENANT='${{ steps.sel_smoke.outputs.TENANT }}'"
+          echo "CLOUD_ENV='${{ steps.sel_smoke.outputs.CLOUD_ENV }}'"
+          echo "AUDIENCE='${{ steps.sel_smoke.outputs.AUDIENCE }}'"
+          echo "AKS_SUB (derived)='${{ steps.sel_smoke.outputs.AKS_SUB }}'"
+          echo "AKS_NAME='${{ needs.apply.outputs.AKS_NAME }}'"
+          echo "AKS_RG='${{ needs.apply.outputs.AKS_RG }}'"
+
+      - name: Azure Login (AKS subscription)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ steps.sel_smoke.outputs.CLIENT_ID }}
+          tenant-id:       ${{ steps.sel_smoke.outputs.TENANT }}
+          subscription-id: ${{ steps.sel_smoke.outputs.AKS_SUB }}
+          environment:     ${{ steps.sel_smoke.outputs.CLOUD_ENV }}
+          audience:        ${{ steps.sel_smoke.outputs.AUDIENCE }}
+
+      - name: Install kubectl
+        run: az aks install-cli
+
+      - name: Get AKS nodes via AKS Run Command
+        run: |
+          az aks command invoke \
+            --resource-group "${{ needs.apply.outputs.AKS_RG }}" \
+            --name "${{ needs.apply.outputs.AKS_NAME }}" \
+            --command "kubectl get nodes -o wide"
+
+      # - name: Get AKS nodes
+      #   run: |
+      #     echo "Using AKS cluster '${{ needs.apply.outputs.AKS_NAME }}' in RG '${{ needs.apply.outputs.AKS_RG }}' (sub: '${{ steps.sel_smoke.outputs.AKS_SUB }}')"
+      #     az aks get-credentials \
+      #       --resource-group "${{ needs.apply.outputs.AKS_RG }}" \
+      #       --name "${{ needs.apply.outputs.AKS_NAME }}" \
+      #       --overwrite-existing
+
+      #     echo "Running 'kubectl get nodes -o wide'..."
+      #     kubectl get nodes -o wide
