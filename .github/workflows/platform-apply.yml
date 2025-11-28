@@ -407,6 +407,9 @@ jobs:
           echo "Listing repo root:"
           ls -la
 
+          echo "Contents of host.json:"
+          cat host.json
+
           # If there's a zip at the root, unzip it
           ZIP_FILE=$(ls *.zip 2>/dev/null || echo "")
           if [ -n "$ZIP_FILE" ]; then
@@ -416,9 +419,6 @@ jobs:
             echo "After unzip, in extracted root:"
             pwd
             ls -la
-            
-            echo "Contents of host.json:"
-            cat host.json
           else
             echo "No zip file found in s3crawler root; skipping unzip."
           fi
