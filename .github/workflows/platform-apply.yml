@@ -291,12 +291,11 @@ jobs:
           echo "  rg:   $AKS_RG"
           echo "  id:   $AKS_ID"
 
-  aks-smoke-test:
-    name: "AKS | kubectl get nodes"
+  aks-deploy-setup:
+    name: "AKS Cluster Setup"
     needs: apply
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, nonprod]
     environment: ${{ inputs.env }}
-    # if: ${{ needs.apply.outputs.HAS_AKS == 'true' }}
     if: ${{ needs.apply.outputs.HAS_AKS == 'true' && inputs.env != 'qa' }}
 
     steps:
@@ -324,7 +323,6 @@ jobs:
             CLIENT_ID="${{ secrets.AZURE_CLIENT_ID_HRZ }}"
             AUDIENCE="api://AzureADTokenExchangeUSGov"
 
-            # Hub + per-env target subs (same as apply job)
             HUB_SUB="${{ secrets.AZ_SUB_HRZ_CORE }}"
             case "$ENV_IN" in
               dev)  TARGET_SUB="${{ secrets.AZ_SUB_HRZ_DEV }}" ;;
@@ -378,6 +376,59 @@ jobs:
           echo "AKS_NAME='${{ needs.apply.outputs.AKS_NAME }}'"
           echo "AKS_RG='${{ needs.apply.outputs.AKS_RG }}'"
 
+      - name: Azure Login (Key Vault HRZ prod)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID_HRZ }}
+          tenant-id:       ${{ secrets.AZ_TENANT_HRZ }}
+          subscription-id: ${{ secrets.AZ_SUB_HRZ_PROD }}
+          environment:     AzureUSGovernment
+          audience:        api://AzureADTokenExchangeUSGov
+
+      - name: Fetch AKS deployment credentials from Key Vault
+        shell: bash
+        run: |
+          set -euo pipefail
+      
+          VAULT_NAME="kvt-corp-pr-usaz-01"
+          OUT_DIR="azure-kv-credentials"
+      
+          echo "Creating output directory: $OUT_DIR"
+          mkdir -p "$OUT_DIR"
+      
+          echo "Getting 'argo-repo-secrets' from $VAULT_NAME..."
+          ARGO_REPO_SECRETS=$(az keyvault secret show \
+            --vault-name "$VAULT_NAME" \
+            --name argo-repo-secrets \
+            --query value -o tsv)
+          echo "$ARGO_REPO_SECRETS" > "$OUT_DIR/argo-repo-secrets.yaml"
+      
+          echo "Getting 'azuredns-config' from $VAULT_NAME..."
+          AZUREDNS_CONFIG=$(az keyvault secret show \
+            --vault-name "$VAULT_NAME" \
+            --name azuredns-config \
+            --query value -o tsv)
+          echo "$AZUREDNS_CONFIG" > "$OUT_DIR/azuredns-config.yaml"
+      
+          echo "Getting 'secrets' from $VAULT_NAME..."
+          SECRETS_VALUE=$(az keyvault secret show \
+            --vault-name "$VAULT_NAME" \
+            --name secrets \
+            --query value -o tsv)
+          echo "$SECRETS_VALUE" > "$OUT_DIR/secrets.yaml"
+      
+          echo "Getting 'horizonk8s-automation-private-key' from $VAULT_NAME..."
+          PRIVATE_KEY=$(az keyvault secret show \
+            --vault-name "$VAULT_NAME" \
+            --name horizonk8s-automation-private-key \
+            --query value -o tsv)
+          PEM_PATH="$OUT_DIR/horizonk8s-automation-private-key.pem"
+          echo "$PRIVATE_KEY" > "$PEM_PATH"
+          chmod 600 "$PEM_PATH"
+      
+          echo "Wrote the following files in $OUT_DIR:"
+          ls -la "$OUT_DIR"
+          
       - name: Azure Login (AKS subscription)
         uses: azure/login@v2
         with:
@@ -387,23 +438,31 @@ jobs:
           environment:     ${{ steps.sel_smoke.outputs.CLOUD_ENV }}
           audience:        ${{ steps.sel_smoke.outputs.AUDIENCE }}
 
-      - name: Install kubectl
-        run: az aks install-cli
+      - name: Clone repo
+        uses: actions/checkout@v4
+        with:
+          repository: francisbachabi81/s3crawler
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: s3crawler
 
-      - name: Get AKS nodes via AKS Run Command
+      - name: List package contents
+        working-directory: s3crawler
+        shell: bash
         run: |
-          az aks command invoke \
+          set -euo pipefail
+          echo "Current directory (s3crawler repo root):"
+          pwd
+          echo "Listing repo root:"
+          ls -la
+
+      - name: Get AKS nodes
+        run: |
+          echo "Using AKS cluster '${{ needs.apply.outputs.AKS_NAME }}' in RG '${{ needs.apply.outputs.AKS_RG }}' (sub: '${{ steps.sel_smoke.outputs.AKS_SUB }}')"
+
+          az aks get-credentials \
             --resource-group "${{ needs.apply.outputs.AKS_RG }}" \
             --name "${{ needs.apply.outputs.AKS_NAME }}" \
-            --command "kubectl get nodes -o wide"
+            --overwrite-existing
 
-      # - name: Get AKS nodes
-      #   run: |
-      #     echo "Using AKS cluster '${{ needs.apply.outputs.AKS_NAME }}' in RG '${{ needs.apply.outputs.AKS_RG }}' (sub: '${{ steps.sel_smoke.outputs.AKS_SUB }}')"
-      #     az aks get-credentials \
-      #       --resource-group "${{ needs.apply.outputs.AKS_RG }}" \
-      #       --name "${{ needs.apply.outputs.AKS_NAME }}" \
-      #       --overwrite-existing
-
-      #     echo "Running 'kubectl get nodes -o wide'..."
-      #     kubectl get nodes -o wide
+          echo "Running 'kubectl get nodes -o wide'..."
+          kubectl get nodes -o wide
