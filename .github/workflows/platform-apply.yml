@@ -386,8 +386,8 @@ jobs:
           environment:     ${{ steps.sel_smoke.outputs.CLOUD_ENV }}
           audience:        ${{ steps.sel_smoke.outputs.AUDIENCE }}
 
-      - name: Install kubectl
-        run: az aks install-cli
+      # - name: Install kubectl
+      #   run: az aks install-cli
 
       # - name: Clone s3crawler repo
       #   uses: actions/checkout@v4
