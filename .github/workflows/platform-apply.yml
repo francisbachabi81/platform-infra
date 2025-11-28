@@ -377,6 +377,30 @@ jobs:
           echo "AKS_NAME='${{ needs.apply.outputs.AKS_NAME }}'"
           echo "AKS_RG='${{ needs.apply.outputs.AKS_RG }}'"
 
+      - name: Azure Login (Key Vault HRZ prod)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID_HRZ }}
+          tenant-id:       ${{ secrets.AZ_TENANT_HRZ }}
+          subscription-id: ${{ secrets.AZ_SUB_HRZ_PROD }}
+          environment:     AzureUSGovernment
+          audience:        api://AzureADTokenExchangeUSGov
+
+      - name: Fetch deploy-config from Key Vault
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Getting 'deploy-config' secret from kvt-corp-pr-usaz-01 in HRZ prod..."
+          VALUE=$(az keyvault secret show \
+            --vault-name kvt-corp-pr-usaz-01 \
+            --name deploy-config \
+            --query value -o tsv)
+
+          echo "$VALUE" > deploy-config.json
+
+          echo "deploy-config.json contents:"
+          cat deploy-config.json
+          
       - name: Azure Login (AKS subscription)
         uses: azure/login@v2
         with:
@@ -406,22 +430,6 @@ jobs:
           pwd
           echo "Listing repo root:"
           ls -la
-
-          echo "Contents of host.json:"
-          cat host.json
-
-          # If there's a zip at the root, unzip it
-          ZIP_FILE=$(ls *.zip 2>/dev/null || echo "")
-          if [ -n "$ZIP_FILE" ]; then
-            echo "Found zip: $ZIP_FILE – unzipping..."
-            unzip "$ZIP_FILE" -d extracted
-            cd extracted
-            echo "After unzip, in extracted root:"
-            pwd
-            ls -la
-          else
-            echo "No zip file found in s3crawler root; skipping unzip."
-          fi
 
       - name: Get AKS nodes
         run: |
