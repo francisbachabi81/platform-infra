@@ -151,8 +151,8 @@ Before running any **Platform-App** workflows, you **must**:
 3. Install and register the GitHub Actions runner  
 4. Confirm that the runner is *online* and properly tagged (e.g., `self-hosted`, `nonprod` or `prod`)
 
-**See full instructions here:**  
-[`stacks/core/README.md`](stacks/core/README.md)  
+[`See full instructions here`](stacks/core/README.md) 
+
 This page documents VM access, required packages, runner registration commands, firewall considerations, tags, and operational guidance.
 
 Platform-App workflows will **fail** if the VM runner is not fully configured.

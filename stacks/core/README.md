@@ -49,7 +49,7 @@ tar xzf ./actions-runner-linux-x64-2.329.0.tar.gz
 ## 2. Configure the GitHub Actions Runner
 
 ```bash
-./config.sh --url https://github.com/francisbachabi81/platform-infra --token YOUR_TOKEN_HERE
+./config.sh --url https://github.com/intterra-io/platform-infra --token BXQIBB4DCVHACGQVLGWKQUDJFXJU2
 
 # Start the runner interactively
 ./run.sh

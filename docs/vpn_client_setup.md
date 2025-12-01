@@ -111,15 +111,15 @@ Replace these URLs with your actual blob or repo URLs.
 
 | Plane | Download |
 |-------|----------|
-| Nonprod | https://your-url/hrz/nonprod/vpnconfig.xml |
-| Prod    | https://your-url/hrz/prod/vpnconfig.xml |
+| Nonprod | [`Download`](azurevpnconfig_np_hrz_vpn.xml) |
+| Prod    | [`Download`](azurevpnconfig_pr_hrz_vpn.xml) |
 
 ### **Azure Commercial (pub)**
 
 | Plane | Download |
 |-------|----------|
-| Nonprod | https://your-url/pub/nonprod/vpnconfig.xml |
-| Prod    | https://your-url/pub/prod/vpnconfig.xml |
+| Nonprod | [`Download`](azurevpnconfig_np_pub_vpn.xml) |
+| Prod    | [`Download`](azurevpnconfig_pr_pub_vpn.xml) |
 
 ---
 

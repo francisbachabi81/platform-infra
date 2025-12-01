@@ -1,0 +1,41 @@
+<AzVpnProfile xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://schemas.datacontract.org/2004/07/">
+  <any xmlns:d2p1="http://schemas.datacontract.org/2004/07/System.Xml" i:nil="true" />
+  <clientauth>
+    <aad>
+      <audience>51bb15d4-3a4f-4ebf-9dca-40096fe32426</audience>
+      <cachesigninuser>true</cachesigninuser>
+      <enablegrouptoken>false</enablegrouptoken>
+      <issuer>https://sts.windows.net/ed7990c3-61c2-477d-85e9-1a396c19ae94/</issuer>
+      <tenant>https://login.microsoftonline.us/ed7990c3-61c2-477d-85e9-1a396c19ae94</tenant>
+    </aad>
+    <cert i:nil="true" />
+    <type>aad</type>
+    <usernamepass i:nil="true" />
+  </clientauth>
+  <clientconfig>
+    <dnsservers>
+      <dnsserver>10.10.50.4</dnsserver>  <!-- DNS Private Resolver inbound #1 -->
+    </dnsservers>
+</clientconfig>
+  <name>HRZ-NP-VPN</name>
+  <protocolconfig>
+    <sslprotocolConfig>
+      <transportprotocol>tcp</transportprotocol>
+    </sslprotocolConfig>
+  </protocolconfig>
+  <serverlist>
+    <ServerEntry>
+      <displayname i:nil="true" />
+      <fqdn>azuregateway-bdbc0040-9350-4260-9fb1-d76df5c28b41-78bb7e3a5e61.vpn.usgovcloudapi.net</fqdn>
+    </ServerEntry>
+  </serverlist>
+  <servervalidation>
+    <Cert>
+      <hash>DF3C24F9BFD666761B268073FE06D1CC8D4F82A4</hash>
+      <issuer i:nil="true" />
+    </Cert>
+    <serversecret>f42f0fac982268ede6262b446bef5bdfc9fc91cf88ff0a5b92cfaf55408a142688c31b4f530feac759790edcd855c9526568a0a798494da23d621cb4b51aab68c504296963daca68c3f4da6b75a4303764e73c4cdae270ee99c6ab08e096df75b2bb4f3f7f335b29f8599bc53c57c50b4e3879424099acb52e88237e4aecdfc1b2e74b908e276f283eb764574235ec7f7430d0e7e010f889df8fecee6f1188c5d28abfbf665177527685e0dec1f6d0539fff424a8a28890f048df09391a781fa1a818a54abebf49ea7917936e25bed473dda76944e38864541e2792acf6ab239e86e24e42ef7f111d7b21b3c845e85de6776b474757ef4383b3ca57318401315</serversecret>
+    <type>cert</type>
+  </servervalidation>
+  <version>1</version>
+</AzVpnProfile>
