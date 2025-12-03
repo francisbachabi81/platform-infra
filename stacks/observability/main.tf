@@ -1028,21 +1028,45 @@ locals {
       }
     }
 
+    // HTTP Request trigger used as Event Grid webhook endpoint
     "triggers" = {
       "manual" = {
         "type" = "Request"
         "kind" = "Http"
-        # Accept whatever Event Grid sends (no strict schema)
         "inputs" = {
+          // Event Grid posts an ARRAY of events
           "schema" = {
-            "type" = "object"
+            "type"  = "array"
+            "items" = {
+              "type"       = "object"
+              "properties" = {
+                "id"        = { "type" = "string" }
+                "eventType" = { "type" = "string" }
+                "subject"   = { "type" = "string" }
+                "eventTime" = { "type" = "string" }
+                "data" = {
+                  "type"       = "object"
+                  "properties" = {
+                    // For SubscriptionValidation events
+                    "validationCode" = { "type" = "string" }
+                    "validationUrl"  = { "type" = "string" }
+
+                    // For PolicyState events
+                    "complianceState"    = { "type" = "string" }
+                    "resourceId"         = { "type" = "string" }
+                    "policyAssignmentId" = { "type" = "string" }
+                    "policyDefinitionId" = { "type" = "string" }
+                  }
+                }
+              }
+            }
           }
         }
       }
     }
 
     "actions" = {
-      # 1. First handle Event Grid subscription validation handshake
+      // 1) Handle Event Grid subscription validation handshake
       "If_SubscriptionValidation" = {
         "type"       = "If"
         "expression" = "@equals(triggerOutputs()['headers']['aeg-event-type'], 'SubscriptionValidation')"
@@ -1054,47 +1078,49 @@ locals {
             "inputs" = {
               "statusCode" = 200
               "body" = {
-                # Event Grid posts an array of events for EventGridSchema
+                // take the first Event Grid event from the array
                 "validationResponse" = "@first(triggerBody())?['data']?['validationCode']"
               }
             }
           }
         }
 
-        # 2. If it's NOT a validation event, fall through to your NonCompliant logic
+        // 2) Normal flow: handle policy non-compliance events
         "else" = {
-          "actions" = {
-            "If_NonCompliant" = {
-              "type"       = "If"
-              # Also use first(triggerBody()) here since body is an array
-              "expression" = "@equals(first(triggerBody())?['data']?['complianceState'], 'NonCompliant')"
+          "If_NonCompliant" = {
+            "type"       = "If"
+            "expression" = "@equals(first(triggerBody())?['data']?['complianceState'], 'NonCompliant')"
 
-              "actions" = {
-                "Send_Email" = {
-                  "type"   = "ApiConnection"
-                  "inputs" = {
-                    "host" = {
-                      "connection" = {
-                        "name" = "@parameters('$connections')['office365']['connectionId']"
-                      }
+            "actions" = {
+              "Send_Email" = {
+                "type"   = "ApiConnection"
+                "inputs" = {
+                  "host" = {
+                    "connection" = {
+                      "name" = "@parameters('$connections')['office365']['connectionId']"
                     }
-                    "method" = "post"
-                    "path"   = "/v2/Mail"
-                    "body" = {
-                      "To"              = var.policy_alert_email
-                      "Subject"         = "FedRAMP Policy Non-Compliance Detected"
-                      "Body"            = "<p><strong>FedRAMP Moderate non-compliant resource detected.</strong></p><p><strong>Resource:</strong> @{first(triggerBody())?['data']?['resourceId']}</p><p><strong>Policy Assignment:</strong> @{first(triggerBody())?['data']?['policyAssignmentId']}</p><p><strong>Policy Definition:</strong> @{first(triggerBody())?['data']?['policyDefinitionId']}</p><p><strong>Compliance State:</strong> @{first(triggerBody())?['data']?['complianceState']}</p><p><strong>Time:</strong> @{first(triggerBody())?['eventTime']}</p><p>Please remediate according to the FedRAMP Moderate baseline or move this workload out of the FedRAMP boundary.</p>"
-                      "BodyContentType" = "HTML"
-                    }
+                  }
+                  "method" = "post"
+                  "path"   = "/v2/Mail"
+                  "body" = {
+                    "To"      = var.policy_alert_email
+                    "Subject" = "FedRAMP Policy Non-Compliance Detected"
+                    "Body" = <<HTML
+<p><strong>FedRAMP Moderate non-compliant resource detected.</strong></p>
+<p><strong>Resource:</strong> @{first(triggerBody())?['data']?['resourceId']}</p>
+<p><strong>Policy Assignment:</strong> @{first(triggerBody())?['data']?['policyAssignmentId']}</p>
+<p><strong>Policy Definition:</strong> @{first(triggerBody())?['data']?['policyDefinitionId']}</p>
+<p><strong>Compliance State:</strong> @{first(triggerBody())?['data']?['complianceState']}</p>
+<p><strong>Time:</strong> @{first(triggerBody())?['eventTime']}</p>
+<p>Please remediate according to the FedRAMP Moderate baseline or move this workload out of the FedRAMP boundary.</p>
+HTML
+                    "BodyContentType" = "HTML"
                   }
                 }
               }
-
-              # Optional else branch – do nothing for compliant / other events
-              "else" = {
-                "actions" = {}
-              }
             }
+
+            "else" = {}
           }
         }
       }
