@@ -171,3 +171,16 @@ variable "policy_alert_email" {
   type        = string
   default     = "test@org.com"
 }
+
+variable "policy_subscriptions" {
+  description = <<DESC
+List of subscriptions where Policy State system topics should be created.
+Each object must include the subscription_id and the resource_group_name
+that will host the system topic in that subscription.
+DESC
+  type = list(object({
+    subscription_id     = string
+    resource_group_name = string
+  }))
+  default = []
+}

@@ -954,16 +954,33 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
   }
 }
 
+locals {
+  # Only enable policy/compliance wiring for dev & prod
+  policy_env_enabled = contains(["dev", "prod"], local.env_effective)
+
+  # Effective list of subscriptions to wire policy state changes for
+  policy_subscriptions_effective = local.policy_env_enabled && var.enable_policy_compliance_alerts ? var.policy_subscriptions : []
+
+  # Map keyed by subscription id for easy for_each
+  policy_subscriptions_map = {
+    for s in local.policy_subscriptions_effective :
+    s.subscription_id => s
+  }
+}
+
 resource "azapi_resource" "policy_state_changes" {
-  count     = var.enable_policy_compliance_alerts ? 1 : 0
-  type      = "Microsoft.EventGrid/systemTopics@2023-06-01-preview"
-  name      = "policy-compliance-topic-${var.product}-${local.plane_code}-${var.region}"
-  parent_id = local.rg_core_id_resolved
+  for_each = local.policy_subscriptions_map
+
+  type     = "Microsoft.EventGrid/systemTopics@2023-06-01-preview"
+  name     = "policy-compliance-topic-${var.product}-${local.plane_code}-${var.region}-${substr(each.key, 0, 6)}"
+  # System topic lives *in the subscription* that is the source
+  parent_id = "/subscriptions/${each.value.subscription_id}/resourceGroups/${each.value.resource_group_name}"
   location  = "global"
 
   body = {
     properties = {
-      source    = "/tenants/${data.azurerm_client_config.core.tenant_id}/providers/Microsoft.Management/managementGroups/${var.management_group_name}"
+      # Subscription-scoped source (the bit that worked in your CLI test)
+      source    = "/subscriptions/${each.value.subscription_id}"
       topicType = "Microsoft.PolicyInsights.PolicyStates"
     }
   }
@@ -1085,10 +1102,10 @@ data "azurerm_logic_app_workflow" "policy_alerts" {
 }
 
 resource "azurerm_eventgrid_event_subscription" "policy_to_logicapp" {
-  count = var.enable_policy_compliance_alerts ? 1 : 0
+  for_each = azapi_resource.policy_state_changes
 
-  name  = "egsub-${var.product}-${local.plane_code}-${var.region}-policy-noncompliant"
-  scope = azapi_resource.policy_state_changes[0].id
+  name  = "egsub-${var.product}-${local.plane_code}-${var.region}-${substr(each.key, 0, 6)}-policy-noncompliant"
+  scope = each.value.id   # each system topic
 
   event_delivery_schema = "EventGridSchema"
 
