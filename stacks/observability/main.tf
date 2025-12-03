@@ -1028,13 +1028,13 @@ locals {
       }
     }
 
-    // HTTP Request trigger used as Event Grid webhook endpoint
+    # HTTP Request trigger used as Event Grid webhook endpoint
     "triggers" = {
       "manual" = {
         "type" = "Request"
         "kind" = "Http"
         "inputs" = {
-          // Event Grid posts an ARRAY of events
+          # Event Grid posts an ARRAY of events
           "schema" = {
             "type"  = "array"
             "items" = {
@@ -1047,11 +1047,11 @@ locals {
                 "data" = {
                   "type"       = "object"
                   "properties" = {
-                    // For SubscriptionValidation events
+                    # For SubscriptionValidation events
                     "validationCode" = { "type" = "string" }
                     "validationUrl"  = { "type" = "string" }
 
-                    // For PolicyState events
+                    # For PolicyState events
                     "complianceState"    = { "type" = "string" }
                     "resourceId"         = { "type" = "string" }
                     "policyAssignmentId" = { "type" = "string" }
@@ -1066,11 +1066,12 @@ locals {
     }
 
     "actions" = {
-      // 1) Handle Event Grid subscription validation handshake
+      # 1) Handle Event Grid subscription validation handshake
       "If_SubscriptionValidation" = {
         "type"       = "If"
         "expression" = "@equals(triggerOutputs()['headers']['aeg-event-type'], 'SubscriptionValidation')"
 
+        # THEN branch: respond to SubscriptionValidation
         "actions" = {
           "Return_SubscriptionValidation_Response" = {
             "type" = "Response"
@@ -1078,34 +1079,35 @@ locals {
             "inputs" = {
               "statusCode" = 200
               "body" = {
-                // take the first Event Grid event from the array
+                # Take the first Event Grid event from the array
                 "validationResponse" = "@first(triggerBody())?['data']?['validationCode']"
               }
             }
           }
         }
 
-        // 2) Normal flow: handle policy non-compliance events
+        # ELSE branch: normal flow → handle policy non-compliance events
         "else" = {
-          "If_NonCompliant" = {
-            "type"       = "If"
-            "expression" = "@equals(first(triggerBody())?['data']?['complianceState'], 'NonCompliant')"
+          "actions" = {
+            "If_NonCompliant" = {
+              "type"       = "If"
+              "expression" = "@equals(first(triggerBody())?['data']?['complianceState'], 'NonCompliant')"
 
-            "actions" = {
-              "Send_Email" = {
-                "type"   = "ApiConnection"
-                "inputs" = {
-                  "host" = {
-                    "connection" = {
-                      "name" = "@parameters('$connections')['office365']['connectionId']"
+              "actions" = {
+                "Send_Email" = {
+                  "type"   = "ApiConnection"
+                  "inputs" = {
+                    "host" = {
+                      "connection" = {
+                        "name" = "@parameters('$connections')['office365']['connectionId']"
+                      }
                     }
-                  }
-                  "method" = "post"
-                  "path"   = "/v2/Mail"
-                  "body" = {
-                    "To"      = var.policy_alert_email
-                    "Subject" = "FedRAMP Policy Non-Compliance Detected"
-                    "Body" = <<HTML
+                    "method" = "post"
+                    "path"   = "/v2/Mail"
+                    "body" = {
+                      "To"      = var.policy_alert_email
+                      "Subject" = "FedRAMP Policy Non-Compliance Detected"
+                      "Body" = <<HTML
 <p><strong>FedRAMP Moderate non-compliant resource detected.</strong></p>
 <p><strong>Resource:</strong> @{first(triggerBody())?['data']?['resourceId']}</p>
 <p><strong>Policy Assignment:</strong> @{first(triggerBody())?['data']?['policyAssignmentId']}</p>
@@ -1114,13 +1116,14 @@ locals {
 <p><strong>Time:</strong> @{first(triggerBody())?['eventTime']}</p>
 <p>Please remediate according to the FedRAMP Moderate baseline or move this workload out of the FedRAMP boundary.</p>
 HTML
-                    "BodyContentType" = "HTML"
+                      "BodyContentType" = "HTML"
+                    }
                   }
                 }
               }
-            }
 
-            "else" = {}
+              "else" = {}
+            }
           }
         }
       }
