@@ -21,13 +21,13 @@ enable_policy_compliance_alerts = true
 management_group_name = "b332ab98-00a1-42a1-9388-63538bc86612"
 policy_alert_email   = "francis.bachabi@intterragroup.com"
 policy_source_subscriptions = {
-  dev = {
+  dev-core = {
     subscription_id = "62ae6908-cbcb-40cb-8773-54bd318ff7f9"
   }
   core = {
     subscription_id = "df6dc63f-c4dc-4590-ba4b-f2ce9639ca6c"
   }
-  qa = {
+  qa-core = {
     subscription_id = "d4c1d472-722c-49c2-857f-4243441104c8"
   }
 }

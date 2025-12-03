@@ -183,3 +183,14 @@ variable "aad_tenant_id" {
   default     = null
 }
 
+variable "extensions" {
+  description = "List of PostgreSQL extensions to set on azure.extensions."
+  type        = list(string)
+  # Keep your current default so behavior doesn't change
+  default = [
+    "POSTGIS",
+    "PGCRYPTO",
+    "PG_STAT_STATEMENTS",
+    "UUID-OSSP",
+  ]
+}

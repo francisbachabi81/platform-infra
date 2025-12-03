@@ -955,22 +955,64 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
 }
 
 locals {
+  policy_source_context_raw = {
+    for label, cfg in var.policy_source_subscriptions :
+    label => {
+      subscription_id = cfg.subscription_id
+
+      rg = label == "core" ? {
+            name = local.rg_core_name_resolved
+            id   = local.rg_core_id_resolved
+          } : try(
+            data.terraform_remote_state.network.outputs.resource_groups[replace(label, "-", "_")],
+            null
+          )
+    }
+  }
+
+  policy_source_context = {
+    for label, ctx in local.policy_source_context_raw :
+    label => ctx
+    if ctx.rg != null
+  }
+
   policy_alerts_enabled_for_env = contains(["dev", "prod"], local.env_effective)
+}
+
+resource "azapi_resource" "policy_core_rg" {
+  for_each = (var.enable_policy_compliance_alerts && local.policy_alerts_enabled_for_env) ? var.policy_source_subscriptions : {}
+
+  type      = "Microsoft.Resources/resourceGroups@2021-04-01"
+  name      = "rg-${var.product}-${each.key}-${var.region}-core-01"
+  parent_id = "/subscriptions/${each.value.subscription_id}"
+  location  = var.location
+
+  # Optional but handy
+  body = {
+    tags = var.tags_extra
+  }
 }
 
 resource "azapi_resource" "policy_state_changes" {
   provider = azapi.core
 
-  for_each = (var.enable_policy_compliance_alerts && local.policy_alerts_enabled_for_env) ? var.policy_source_subscriptions : {}
+  # Only create when feature is enabled and env is dev/prod
+  for_each = (var.enable_policy_compliance_alerts && local.policy_alerts_enabled_for_env) ? local.policy_source_context : {}
 
-  type      = "Microsoft.EventGrid/systemTopics@2023-06-01-preview"
-  name      = "policy-compliance-topic-${var.product}-${local.plane_code}-${var.region}-${each.key}"
-  parent_id = local.rg_core_id_resolved
+  type = "Microsoft.EventGrid/systemTopics@2023-06-01-preview"
+
+  # Ex: policy-compliance-topic-hrz-dev-core-usaz or policy-compliance-topic-hrz-core-usaz
+  name      = "policy-compliance-topic-${var.product}-${each.key}-${var.region}"
+
+  # IMPORTANT: RG is in SAME subscription as the source
+  # parent_id is the RG id from either core stack or shared-network
+  parent_id = each.value.rg.id
+
   location  = "global"
 
   body = {
     properties = {
-      # subscription-scoped source, per entry
+      # subscription-scoped source (must match the system topic subscription)
       source    = "/subscriptions/${each.value.subscription_id}"
       topicType = "Microsoft.PolicyInsights.PolicyStates"
     }

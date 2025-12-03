@@ -1011,6 +1011,8 @@ module "postgres" {
   firewall_rules = var.pg_firewall_rules
   enable_postgis = var.pg_enable_postgis
 
+  extensions = var.pg_extensions
+
   tags = merge(local.tags_common, local.tags_postgres, var.tags, { role = "primary" })
 
   depends_on  = [data.azurerm_resource_group.env, module.cdbpg1]
@@ -1038,6 +1040,8 @@ module "postgres_replica" {
   source_server_id = module.postgres[0].id
 
   ha_mode = var.product == "hrz" ? "SameZone" : "ZoneRedundant"
+
+  extensions = var.pg_extensions
 
   tags       = merge(local.tags_common, local.tags_postgres, var.tags, { role = "replica" })
   depends_on  = [data.azurerm_resource_group.env, module.postgres]

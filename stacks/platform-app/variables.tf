@@ -374,6 +374,18 @@ variable "pg_enable_postgis" {
   default     = false
 }
 
+variable "pg_extensions" {
+  description = "List of PostgreSQL extensions to set on azure.extensions."
+  type        = list(string)
+  # Keep your current default so behavior doesn't change
+  default = [
+    "POSTGIS",
+    "PGCRYPTO",
+    "PG_STAT_STATEMENTS",
+    "UUID-OSSP",
+  ]
+}
+
 # redis
 variable "redis_sku_name" {
   description = "redis sku name"

@@ -143,5 +143,5 @@ resource "azurerm_postgresql_flexible_server_configuration" "extensions" {
   count     = var.enable_postgis ? 1 : 0
   name      = "azure.extensions"
   server_id = azurerm_postgresql_flexible_server.pg.id
-  value     = "POSTGIS,PGCRYPTO,PG_STAT_STATEMENTS,UUID-OSSP"   # comma-separate for more, e.g. "POSTGIS,PG_TRGM"
+  value     = join(",", var.extensions)
 }

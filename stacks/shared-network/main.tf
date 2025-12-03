@@ -181,6 +181,11 @@ locals {
   prod_rg_name = local.is_prod    ? coalesce(try(var.prod_spoke.rg, null), "rg-${var.product}-prod-${var.region}-net-01") : null
   uat_rg_name  = local.is_prod    ? coalesce(try(var.uat_spoke.rg,  null), "rg-${var.product}-uat-${var.region}-net-01")  : null
 
+  dev_rg_name_core  = local.is_nonprod ? coalesce(try(var.dev_spoke.rg,  null), "rg-${var.product}-dev-${var.region}-core-01")  : null
+  qa_rg_name_core   = local.is_nonprod ? coalesce(try(var.qa_spoke.rg,   null), "rg-${var.product}-qa-${var.region}-core-01")   : null
+  prod_rg_name_core = local.is_prod    ? coalesce(try(var.prod_spoke.rg, null), "rg-${var.product}-prod-${var.region}-core-01") : null
+  uat_rg_name_core  = local.is_prod    ? coalesce(try(var.uat_spoke.rg,  null), "rg-${var.product}-uat-${var.region}-core-01")  : null
+
   # ---------- canonical VNet names (overrideable via vars if set) ----------
   hub_vnet_name  = local.is_nonprod ? coalesce(try(var.nonprod_hub.vnet, null), "vnet-${var.product}-${local.plane_code}-hub-${var.region}-${var.seq}") : coalesce(try(var.prod_hub.vnet,    null), "vnet-${var.product}-${local.plane_code}-hub-${var.region}-${var.seq}")
   dev_vnet_name  = local.is_nonprod ? coalesce(try(var.dev_spoke.vnet,  null), "vnet-${var.product}-dev-${var.region}-${var.seq}")  : null
@@ -224,12 +229,30 @@ module "rg_dev" {
   tags      = merge(local.tag_base, local.dev_only_tags, { layer = local.rg_layer_by_key["dev"] })
 }
 
+module "rg_dev_core" {
+  count     = local.is_nonprod ? 1 : 0
+  providers = { azurerm = azurerm.dev }
+  source    = "../../modules/resource-group"
+  name      = local.dev_rg_name_core
+  location  = var.location
+  tags      = merge(local.tag_base, local.dev_only_tags, { layer = local.rg_layer_by_key["dev"] })
+}
+
 module "rg_qa" {
   count     = local.is_nonprod ? 1 : 0
   providers = { azurerm = azurerm.qa }
   source    = "../../modules/resource-group"
   # name      = local.qa_rg_name
   name      = local.qa_rg_name
+  location  = var.location
+  tags      = merge(local.tag_base, local.qa_only_tags, { layer = local.rg_layer_by_key["qa"] })
+}
+
+module "rg_qa_core" {
+  count     = local.is_nonprod ? 1 : 0
+  providers = { azurerm = azurerm.qa }
+  source    = "../../modules/resource-group"
+  name      = local.qa_rg_name_core
   location  = var.location
   tags      = merge(local.tag_base, local.qa_only_tags, { layer = local.rg_layer_by_key["qa"] })
 }
@@ -244,12 +267,30 @@ module "rg_prod" {
   tags      = merge(local.tag_base, local.prod_only_tags, { layer = local.rg_layer_by_key["prod"] })
 }
 
+module "rg_prod_core" {
+  count     = local.is_prod ? 1 : 0
+  providers = { azurerm = azurerm.prod }
+  source    = "../../modules/resource-group"
+  name      = local.prod_rg_name_core
+  location  = var.location
+  tags      = merge(local.tag_base, local.prod_only_tags, { layer = local.rg_layer_by_key["prod"] })
+}
+
 module "rg_uat" {
   count     = local.is_prod ? 1 : 0
   providers = { azurerm = azurerm.uat }
   source    = "../../modules/resource-group"
   # name      = local.uat_rg_name
   name      = local.uat_rg_name
+  location  = var.location
+  tags      = merge(local.tag_base, local.uat_only_tags, { layer = local.rg_layer_by_key["uat"] })
+}
+
+module "rg_uat_core" {
+  count     = local.is_prod ? 1 : 0
+  providers = { azurerm = azurerm.uat }
+  source    = "../../modules/resource-group"
+  name      = local.uat_rg_name_core
   location  = var.location
   tags      = merge(local.tag_base, local.uat_only_tags, { layer = local.rg_layer_by_key["uat"] })
 }

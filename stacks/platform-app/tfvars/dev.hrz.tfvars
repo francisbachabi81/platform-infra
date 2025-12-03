@@ -103,6 +103,12 @@ pg_databases             = ["appdb"]
 pg_replica_enabled       = false  # no replica
 pg_enable_postgis        = true
 # pg_admin_password via TF_VAR_pg_admin_password
+pg_extensions = [
+  "POSTGIS",
+  "PGCRYPTO",
+  "PG_STAT_STATEMENTS",
+  "UUID-OSSP",
+]
 
 # Cosmos (NoSQL) (env)
 cosno_total_throughput_limit = 400
