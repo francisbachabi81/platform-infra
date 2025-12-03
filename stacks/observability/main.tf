@@ -963,7 +963,7 @@ locals {
       rg = label == "core" ? {
             name = local.rg_core_name_resolved
             id   = local.rg_core_id_resolved
-          } : try(
+          } : try (
             data.terraform_remote_state.network.outputs.resource_groups[replace(label, "-", "_")],
             null
           )
@@ -977,20 +977,6 @@ locals {
   }
 
   policy_alerts_enabled_for_env = contains(["dev", "prod"], local.env_effective)
-}
-
-resource "azapi_resource" "policy_core_rg" {
-  for_each = (var.enable_policy_compliance_alerts && local.policy_alerts_enabled_for_env) ? var.policy_source_subscriptions : {}
-
-  type      = "Microsoft.Resources/resourceGroups@2021-04-01"
-  name      = "rg-${var.product}-${each.key}-${var.region}-core-01"
-  parent_id = "/subscriptions/${each.value.subscription_id}"
-  location  = var.location
-
-  # Optional but handy
-  body = {
-    tags = var.tags_extra
-  }
 }
 
 resource "azapi_resource" "policy_state_changes" {

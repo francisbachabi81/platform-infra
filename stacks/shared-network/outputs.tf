@@ -31,10 +31,10 @@ output "resource_groups" {
     qa   = try({ name = local.qa_rg_name,   id = module.rg_qa[0].id },   null)
     prod = try({ name = local.prod_rg_name, id = module.rg_prod[0].id }, null)
     uat  = try({ name = local.uat_rg_name,  id = module.rg_uat[0].id },  null)
-    dev_core  = try({ name = local.dev_rg_name_core,  id = module.rg_dev[0].id },  null)
-    qa_core   = try({ name = local.qa_rg_name_core,   id = module.rg_qa[0].id },   null)
-    prod_core = try({ name = local.prod_rg_name_core, id = module.rg_prod[0].id }, null)
-    uat_core  = try({ name = local.uat_rg_name_core,  id = module.rg_uat[0].id },  null)
+    dev_core  = try({ name = local.dev_rg_name_core,  id = module.rg_dev_core[0].id },  null)
+    qa_core   = try({ name = local.qa_rg_name_core,   id = module.rg_qa_core[0].id },   null)
+    prod_core = try({ name = local.prod_rg_name_core, id = module.rg_prod_core[0].id }, null)
+    uat_core  = try({ name = local.uat_rg_name_core,  id = module.rg_uat_core[0].id },  null)
   }
 }
 
