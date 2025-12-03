@@ -1085,6 +1085,7 @@ locals {
 }
 
 resource "azurerm_resource_group_template_deployment" "logicapp" {
+  provider = azurerm.core
   count               = var.enable_policy_compliance_alerts ? 1 : 0
   name                = "tmpl-la-${var.product}-${local.plane_code}-${var.region}-policy-alerts"
   resource_group_name = local.rg_core_name_resolved
