@@ -1010,9 +1010,9 @@ locals {
     "$connections" = {
       "value" = {
         "office365" = {
-          connectionId   = azurerm_api_connection.office365.id
-          connectionName = azurerm_api_connection.office365.name
-          id             = "/subscriptions/${local.sub_core_resolved}/providers/Microsoft.Web/locations/${local.rg_core_location_resolved}/managedApis/office365"
+          "connectionId"   = "/subscriptions/${data.azurerm_client_config.core.subscription_id}/resourceGroups/${data.azurerm_resource_group.core_rg[0].name}/providers/Microsoft.Web/connections/office365"
+          "connectionName" = "office365"
+          "id"             = "/subscriptions/${data.azurerm_client_config.core.subscription_id}/providers/Microsoft.Web/locations/${data.azurerm_resource_group.core_rg[0].location}/managedApis/office365"
         }
       }
     }
@@ -1027,12 +1027,15 @@ locals {
         "type"         = "Object"
       }
     }
+
+    //
+    // HTTP trigger that can receive Event Grid events (array of events)
+    //
     "triggers" = {
       "manual" = {
         "type" = "Request"
         "kind" = "Http"
         "inputs" = {
-          # Accept an array of Event Grid events
           "schema" = {
             "type"  = "array"
             "items" = {
@@ -1042,51 +1045,89 @@ locals {
                 "eventType" = { "type" = "string" }
                 "subject"   = { "type" = "string" }
                 "eventTime" = { "type" = "string" }
-                "data"      = { "type" = "object" }
-              }
-            }
-          }
-        }
-      }
-    }
-    "actions" = {
-      # 1) Normalize: take first event from array
-      "Compose_Event" = {
-        "type"    = "Compose"
-        "inputs"  = "@first(triggerBody())"
-        "runAfter" = {}   # runs right after trigger
-      }
-
-      # 2) Only send email when it's a NonCompliant policy event
-      "If_NonCompliant" = {
-        "type"       = "If"
-        "expression" = "@and(equals(outputs('Compose_Event')?['eventType'], 'Microsoft.PolicyInsights.PolicyStateCreated'), equals(outputs('Compose_Event')?['data']?['complianceState'], 'NonCompliant'))"
-        "runAfter" = {
-          "Compose_Event" = [ "Succeeded" ]   # <--- dependency on Compose_Event
-        }
-        "actions" = {
-          "Send_Email" = {
-            "type"   = "ApiConnection"
-            "inputs" = {
-              "host" = {
-                "connection" = {
-                  "name" = "@parameters('$connections')['office365']['connectionId']"
+                "data" = {
+                  "type"       = "object"
+                  "properties" = {
+                    "complianceState"    = { "type" = "string" }
+                    "resourceId"         = { "type" = "string" }
+                    "policyAssignmentId" = { "type" = "string" }
+                    "policyDefinitionId" = { "type" = "string" }
+                    // used only during subscription validation handshake
+                    "validationCode"     = { "type" = "string" }
+                  }
                 }
               }
-              "method" = "post"
-              "path"   = "/v2/Mail"
+            }
+          }
+        }
+      }
+    }
+
+    "actions" = {
+      //
+      // First branch: handle SubscriptionValidationEvent
+      //
+      "If_SubscriptionValidation" = {
+        "type"       = "If"
+        "expression" = "@equals(first(triggerBody())?['eventType'], 'Microsoft.EventGrid.SubscriptionValidationEvent')"
+
+        // TRUE branch → respond with validationResponse
+        "actions" = {
+          "Return_SubscriptionValidation_Response" = {
+            "type" = "Response"
+            "kind" = "Http"
+            "inputs" = {
+              "statusCode" = 200
               "body" = {
-                "To"              = var.policy_alert_email
-                "Subject"         = "FedRAMP Policy Non-Compliance Detected"
-                "Body"            = "<p><strong>FedRAMP Moderate non-compliant resource detected.</strong></p><p><strong>Resource:</strong> @{outputs('Compose_Event')?['data']?['resourceId']}</p><p><strong>Policy Assignment:</strong> @{outputs('Compose_Event')?['data']?['policyAssignmentId']}</p><p><strong>Policy Definition:</strong> @{outputs('Compose_Event')?['data']?['policyDefinitionId']}</p><p><strong>Compliance State:</strong> @{outputs('Compose_Event')?['data']?['complianceState']}</p><p><strong>Time:</strong> @{outputs('Compose_Event')?['eventTime']}</p><p>Please remediate according to the FedRAMP Moderate baseline or move this workload out of the FedRAMP boundary.</p>"
-                "BodyContentType" = "HTML"
+                "validationResponse" = "@first(triggerBody())?['data']?['validationCode']"
               }
             }
           }
         }
-        "else" = {}
+
+        // FALSE branch → normal policy evaluation (NonCompliant → email)
+        "else" = {
+          "actions" = {
+            "If_NonCompliant" = {
+              "type"       = "If"
+              "expression" = "@equals(first(triggerBody())?['data']?['complianceState'], 'NonCompliant')"
+
+              "actions" = {
+                "Send_Email" = {
+                  "type"   = "ApiConnection"
+                  "inputs" = {
+                    "host" = {
+                      "connection" = {
+                        "name" = "@parameters('$connections')['office365']['connectionId']"
+                      }
+                    }
+                    "method" = "post"
+                    "path"   = "/v2/Mail"
+                    "body" = {
+                      "To"              = var.policy_alert_email
+                      "Subject"         = "FedRAMP Policy Non-Compliance Detected"
+                      "Body"            = <<HTML
+<p><strong>FedRAMP Moderate non-compliant resource detected.</strong></p>
+<p><strong>Resource:</strong> @{first(triggerBody())?['data']?['resourceId']}</p>
+<p><strong>Policy Assignment:</strong> @{first(triggerBody())?['data']?['policyAssignmentId']}</p>
+<p><strong>Policy Definition:</strong> @{first(triggerBody())?['data']?['policyDefinitionId']}</p>
+<p><strong>Compliance State:</strong> @{first(triggerBody())?['data']?['complianceState']}</p>
+<p><strong>Time:</strong> @{first(triggerBody())?['eventTime']}</p>
+<p>Please remediate according to the FedRAMP Moderate baseline or move this workload out of the FedRAMP boundary.</p>
+HTML
+                      "BodyContentType" = "HTML"
+                    }
+                  }
+                }
+              }
+
+              "else" = {}
+            }
+          }
+        }
       }
     }
+
     "outputs" = {}
   }
 }
