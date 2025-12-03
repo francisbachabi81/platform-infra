@@ -1032,7 +1032,7 @@ locals {
         "type" = "Request"
         "kind" = "Http"
         "inputs" = {
-          # Accept an array of Event Grid events with loose schema
+          # Accept an array of Event Grid events
           "schema" = {
             "type"  = "array"
             "items" = {
@@ -1050,15 +1050,20 @@ locals {
       }
     }
     "actions" = {
-      # Normalize to a single event object
+      # 1) Normalize: take first event from array
       "Compose_Event" = {
-        "type"   = "Compose"
-        "inputs" = "@first(triggerBody())"
+        "type"    = "Compose"
+        "inputs"  = "@first(triggerBody())"
+        "runAfter" = {}   # runs right after trigger
       }
 
+      # 2) Only send email when it's a NonCompliant policy event
       "If_NonCompliant" = {
         "type"       = "If"
         "expression" = "@and(equals(outputs('Compose_Event')?['eventType'], 'Microsoft.PolicyInsights.PolicyStateCreated'), equals(outputs('Compose_Event')?['data']?['complianceState'], 'NonCompliant'))"
+        "runAfter" = {
+          "Compose_Event" = [ "Succeeded" ]   # <--- dependency on Compose_Event
+        }
         "actions" = {
           "Send_Email" = {
             "type"   = "ApiConnection"
