@@ -172,15 +172,14 @@ variable "policy_alert_email" {
   default     = "test@org.com"
 }
 
-variable "policy_subscriptions" {
+variable "policy_source_subscriptions" {
   description = <<DESC
-List of subscriptions where Policy State system topics should be created.
-Each object must include the subscription_id and the resource_group_name
-that will host the system topic in that subscription.
+Map of subscriptions to monitor for policy compliance.
+Key is a short label (e.g., "core", "nonprod", "prod").
+Value is the subscription_id to use in the Event Grid system topic source.
 DESC
-  type = list(object({
-    subscription_id     = string
-    resource_group_name = string
+  type = map(object({
+    subscription_id = string
   }))
-  default = []
+  default = {}
 }
