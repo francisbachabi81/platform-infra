@@ -961,12 +961,12 @@ resource "azapi_resource" "policy_state_changes" {
   parent_id = local.rg_core_id_resolved
   location  = "global"
 
-  body = jsonencode({
+  body = {
     properties = {
       source    = "/tenants/${data.azurerm_client_config.core.tenant_id}/providers/Microsoft.Management/managementGroups/${var.management_group_name}"
       topicType = "Microsoft.PolicyInsights.PolicyStates"
     }
-  })
+  }
 }
 
 locals {
