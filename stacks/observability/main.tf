@@ -1032,15 +1032,21 @@ locals {
       "manual" = {
         "type" = "Request"
         "kind" = "Http"
-        "inputs" = {}
+        # Accept whatever Event Grid sends (no strict schema)
+        "inputs" = {
+          "schema" = {
+            "type" = "object"
+          }
+        }
       }
     }
 
     "actions" = {
-      # 1) First handle Event Grid subscription validation handshake
+      # 1. First handle Event Grid subscription validation handshake
       "If_SubscriptionValidation" = {
         "type"       = "If"
         "expression" = "@equals(triggerOutputs()['headers']['aeg-event-type'], 'SubscriptionValidation')"
+
         "actions" = {
           "Return_SubscriptionValidation_Response" = {
             "type" = "Response"
@@ -1048,39 +1054,47 @@ locals {
             "inputs" = {
               "statusCode" = 200
               "body" = {
-                # Event Grid usually posts an *array* of events for EventGridSchema
-                # If your events come as an array, first(triggerBody()) is the first event.
+                # Event Grid posts an array of events for EventGridSchema
                 "validationResponse" = "@first(triggerBody())?['data']?['validationCode']"
               }
             }
           }
         }
+
+        # 2. If it's NOT a validation event, fall through to your NonCompliant logic
         "else" = {
-          # 2) Your original NonCompliant flow stays intact in the ELSE branch
-          "If_NonCompliant" = {
-            "type"       = "If"
-            "expression" = "@equals(triggerBody()?['data']?['complianceState'], 'NonCompliant')"
-            "actions" = {
-              "Send_Email" = {
-                "type"   = "ApiConnection"
-                "inputs" = {
-                  "host" = {
-                    "connection" = {
-                      "name" = "@parameters('$connections')['office365']['connectionId']"
+          "actions" = {
+            "If_NonCompliant" = {
+              "type"       = "If"
+              # Also use first(triggerBody()) here since body is an array
+              "expression" = "@equals(first(triggerBody())?['data']?['complianceState'], 'NonCompliant')"
+
+              "actions" = {
+                "Send_Email" = {
+                  "type"   = "ApiConnection"
+                  "inputs" = {
+                    "host" = {
+                      "connection" = {
+                        "name" = "@parameters('$connections')['office365']['connectionId']"
+                      }
                     }
-                  }
-                  "method" = "post"
-                  "path"   = "/v2/Mail"
-                  "body" = {
-                    "To"              = var.policy_alert_email
-                    "Subject"         = "FedRAMP Policy Non-Compliance Detected"
-                    "Body"            = "<p><strong>FedRAMP Moderate non-compliant resource detected.</strong></p><p><strong>Resource:</strong> @{triggerBody()?['data']?['resourceId']}</p><p><strong>Policy Assignment:</strong> @{triggerBody()?['data']?['policyAssignmentId']}</p><p><strong>Policy Definition:</strong> @{triggerBody()?['data']?['policyDefinitionId']}</p><p><strong>Compliance State:</strong> @{triggerBody()?['data']?['complianceState']}</p><p><strong>Time:</strong> @{triggerBody()?['eventTime']}</p><p>Please remediate according to the FedRAMP Moderate baseline or move this workload out of the FedRAMP boundary.</p>"
-                    "BodyContentType" = "HTML"
+                    "method" = "post"
+                    "path"   = "/v2/Mail"
+                    "body" = {
+                      "To"              = var.policy_alert_email
+                      "Subject"         = "FedRAMP Policy Non-Compliance Detected"
+                      "Body"            = "<p><strong>FedRAMP Moderate non-compliant resource detected.</strong></p><p><strong>Resource:</strong> @{first(triggerBody())?['data']?['resourceId']}</p><p><strong>Policy Assignment:</strong> @{first(triggerBody())?['data']?['policyAssignmentId']}</p><p><strong>Policy Definition:</strong> @{first(triggerBody())?['data']?['policyDefinitionId']}</p><p><strong>Compliance State:</strong> @{first(triggerBody())?['data']?['complianceState']}</p><p><strong>Time:</strong> @{first(triggerBody())?['eventTime']}</p><p>Please remediate according to the FedRAMP Moderate baseline or move this workload out of the FedRAMP boundary.</p>"
+                      "BodyContentType" = "HTML"
+                    }
                   }
                 }
               }
+
+              # Optional else branch – do nothing for compliant / other events
+              "else" = {
+                "actions" = {}
+              }
             }
-            "else" = {}
           }
         }
       }
