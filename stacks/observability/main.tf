@@ -1080,7 +1080,7 @@ data "azurerm_logic_app_workflow" "policy_alerts" {
   resource_group_name = local.rg_core_name_resolved
 
   depends_on = [
-    azurerm_template_deployment.logicapp
+    azurerm_resource_group_template_deployment.logicapp
   ]
 }
 
