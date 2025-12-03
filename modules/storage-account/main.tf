@@ -29,8 +29,19 @@ resource "azurerm_storage_container" "containers" {
 locals {
   sa_name_cleaned = replace(lower(trimspace(var.name)), "-", "")
 
-  blob_pdns_id = lookup(var.private_dns_zone_ids, "privatelink.blob.core.windows.net", null)
-  file_pdns_id = lookup(var.private_dns_zone_ids, "privatelink.file.core.windows.net",  null)
+  is_hrz = var.product == "hrz"
+
+  blob_pdz_pub = "privatelink.blob.core.windows.net"
+  blob_pdz_gov = "privatelink.blob.core.usgovcloudapi.net"
+
+  file_pdz_pub = "privatelink.file.core.windows.net"
+  file_pdz_gov = "privatelink.file.core.usgovcloudapi.net"
+
+  blob_pdz_name = local.is_hrz ? local.blob_pdz_gov : local.blob_pdz_pub
+  file_pdz_name = local.is_hrz ? local.file_pdz_gov : local.file_pdz_pub
+
+  blob_pdns_id = lookup(var.private_dns_zone_ids, local.blob_pdz_name, null)
+  file_pdns_id = lookup(var.private_dns_zone_ids, local.file_pdz_name, null)
 
   pe_blob_name_effective   = coalesce(var.pe_blob_name,  "pep-${local.sa_name_cleaned}-blob")
   psc_blob_name_effective  = coalesce(var.psc_blob_name, "psc-${local.sa_name_cleaned}-blob")
@@ -55,7 +66,7 @@ resource "azurerm_private_endpoint" "blob" {
   }
 
   dynamic "private_dns_zone_group" {
-    for_each = local.blob_pdns_id == null ? [] : [1]
+    for_each = (var.pe_subnet_id != null && local.blob_pdns_id != null) ? [1] : []
     content {
       name                 = local.blob_zone_group_effective
       private_dns_zone_ids = [local.blob_pdns_id]
@@ -79,7 +90,7 @@ resource "azurerm_private_endpoint" "file" {
   }
 
   dynamic "private_dns_zone_group" {
-    for_each = local.file_pdns_id == null ? [] : [1]
+    for_each = (var.pe_subnet_id != null && local.file_pdns_id != null) ? [1] : []
     content {
       name                 = local.file_zone_group_effective
       private_dns_zone_ids = [local.file_pdns_id]

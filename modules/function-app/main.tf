@@ -9,8 +9,20 @@ terraform {
 # locals
 locals {
   app_name_clean           = replace(lower(trimspace(var.name)), "-", "")
-  pdns_site_id             = lookup(var.private_dns_zone_ids, "privatelink.azurewebsites.net", null)
-  pdns_scm_id              = lookup(var.private_dns_zone_ids, "privatelink.scm.azurewebsites.net", null)
+  is_hrz = var.product == "hrz"
+
+  site_pdz_pub = "privatelink.azurewebsites.net"
+  site_pdz_gov = "privatelink.azurewebsites.us"
+
+  scm_pdz_pub  = "privatelink.scm.azurewebsites.net"
+  scm_pdz_gov  = "privatelink.scm.azurewebsites.us"
+
+  pdns_site_name = local.is_hrz ? local.site_pdz_gov : local.site_pdz_pub
+  pdns_scm_name  = local.is_hrz ? local.scm_pdz_gov  : local.scm_pdz_pub
+
+  pdns_site_id = lookup(var.private_dns_zone_ids, local.pdns_site_name, null)
+  pdns_scm_id  = lookup(var.private_dns_zone_ids, local.pdns_scm_name,  null)
+
   pe_site_name_effective   = coalesce(var.pe_site_name,  "pep-${local.app_name_clean}-site")
   psc_site_name_effective  = coalesce(var.psc_site_name, "psc-${local.app_name_clean}-site")
   site_zone_group_effect   = coalesce(var.site_zone_group_name, "pdns-${local.app_name_clean}-site")
@@ -149,7 +161,7 @@ resource "azurerm_private_endpoint" "sites" {
   }
 
   dynamic "private_dns_zone_group" {
-    for_each = local.pdns_site_id == null ? [] : [1]
+    for_each = (var.pe_subnet_id != null && local.pdns_site_id != null) ? [1] : []
     content {
       name                 = local.site_zone_group_effect
       private_dns_zone_ids = [local.pdns_site_id]
@@ -175,7 +187,7 @@ resource "azurerm_private_endpoint" "scm" {
   }
 
   dynamic "private_dns_zone_group" {
-    for_each = local.pdns_scm_id == null ? [] : [1]
+    for_each = (var.pe_subnet_id != null && local.pdns_scm_id != null) ? [1] : []
     content {
       name                 = local.scm_zone_group_effect
       private_dns_zone_ids = [local.pdns_scm_id]

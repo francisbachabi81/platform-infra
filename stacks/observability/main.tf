@@ -20,6 +20,11 @@ locals {
   activity_alert_location = "Global"
 
   ag_name_default = "ag-obs-${var.product}-${local.env_effective}-${var.region}-01"
+
+  # Policy / compliance wiring
+  egst_policy_name = "egst-${var.product}-${local.plane_code}-${var.region}-policy-compliance"
+  la_policy_name   = "la-${var.product}-${local.plane_code}-${var.region}-policy-alerts"
+  eges_policy_name = "eges-${var.product}-${local.plane_code}-${var.region}-policy-to-la"
 }
 
 locals {
@@ -208,6 +213,9 @@ locals {
   rg_env_name_resolved    = try(data.azurerm_resource_group.env_rg[0].name, null)
   rg_env_id_resolved      = try(data.azurerm_resource_group.env_rg[0].id,   null)
   rg_core_name_resolved   = try(data.azurerm_resource_group.core_rg[0].name, null)
+
+  rg_core_location_resolved = try(data.azurerm_resource_group.core_rg[0].location, null)
+  rg_core_id_resolved      = try(data.azurerm_resource_group.core_rg[0].id, null)
 }
 
 # Gather IDs and RGs
@@ -944,4 +952,177 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
       error_message = "LAW workspace ID could not be resolved for AKS diagnostics."
     }
   }
+}
+
+resource "azapi_resource" "policy_state_changes" {
+  count     = var.enable_policy_compliance_alerts ? 1 : 0
+  type      = "Microsoft.EventGrid/systemTopics@2023-06-01-preview"
+  name      = "policy-compliance-topic-${var.product}-${local.plane_code}-${var.region}"
+  parent_id = local.rg_core_id_resolved
+  location  = "global"
+
+  body = jsonencode({
+    properties = {
+      source    = "/tenants/${data.azurerm_client_config.core.tenant_id}/providers/Microsoft.Management/managementGroups/${var.management_group_name}"
+      topicType = "Microsoft.PolicyInsights.PolicyStates"
+    }
+  })
+}
+
+locals {
+  logicapp_parameters = {
+    "$connections" = {
+      "value" = {
+        "office365" = {
+          "connectionId"   = "/subscriptions/${data.azurerm_client_config.core.subscription_id}/resourceGroups/${data.azurerm_resource_group.core_rg[0].name}/providers/Microsoft.Web/connections/office365"
+          "connectionName" = "office365"
+          "id"             = "/subscriptions/${data.azurerm_client_config.core.subscription_id}/providers/Microsoft.Web/locations/${data.azurerm_resource_group.core_rg[0].location}/managedApis/office365"
+        }
+      }
+    }
+  }
+
+  logicapp_definition = {
+    "$schema"        = "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#"
+    "contentVersion" = "1.0.0.0"
+    "parameters" = {
+      "$connections" = {
+        "defaultValue" = {}
+        "type"         = "Object"
+      }
+    }
+    "triggers" = {
+      "manual" = {
+        "type" = "Request"
+        "kind" = "Http"
+        "inputs" = {
+          "schema" = {
+            "type"       = "object"
+            "properties" = {
+              "id"        = { "type" = "string" }
+              "eventType" = { "type" = "string" }
+              "subject"   = { "type" = "string" }
+              "eventTime" = { "type" = "string" }
+              "data" = {
+                "type"       = "object"
+                "properties" = {
+                  "complianceState"    = { "type" = "string" }
+                  "resourceId"         = { "type" = "string" }
+                  "policyAssignmentId" = { "type" = "string" }
+                  "policyDefinitionId" = { "type" = "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    "actions" = {
+      "If_NonCompliant" = {
+        "type"       = "If"
+        "expression" = "@equals(triggerBody()?['data']?['complianceState'], 'NonCompliant')"
+        "actions" = {
+          "Send_Email" = {
+            "type"   = "ApiConnection"
+            "inputs" = {
+              "host" = {
+                "connection" = {
+                  "name" = "@parameters('$connections')['office365']['connectionId']"
+                }
+              }
+              "method" = "post"
+              "path"   = "/v2/Mail"
+              "body" = {
+                "To"              = var.policy_alert_email
+                "Subject"         = "FedRAMP Policy Non-Compliance Detected"
+                "Body"            = "<p><strong>FedRAMP Moderate non-compliant resource detected.</strong></p><p><strong>Resource:</strong> @{triggerBody()?['data']?['resourceId']}</p><p><strong>Policy Assignment:</strong> @{triggerBody()?['data']?['policyAssignmentId']}</p><p><strong>Policy Definition:</strong> @{triggerBody()?['data']?['policyDefinitionId']}</p><p><strong>Compliance State:</strong> @{triggerBody()?['data']?['complianceState']}</p><p><strong>Time:</strong> @{triggerBody()?['eventTime']}</p><p>Please remediate according to the FedRAMP Moderate baseline or move this workload out of the FedRAMP boundary.</p>"
+                "BodyContentType" = "HTML"
+              }
+            }
+          }
+        }
+        "else" = {}
+      }
+    }
+    "outputs" = {}
+  }
+}
+
+resource "azurerm_template_deployment" "logicapp" {
+  count = var.enable_policy_compliance_alerts ? 1 : 0
+  name                = "logicapp-deployment"
+  resource_group_name = data.azurerm_resource_group.core_rg[0].name
+  deployment_mode     = "Incremental"
+
+  template_body = <<TEMPLATE
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "resources": [
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "la-${var.product}-${local.plane_code}-policy-alerts-01",
+      "location": "${data.azurerm_resource_group.core_rg[0].location}",
+      "properties": {
+        "definition": ${jsonencode(local.logicapp_definition)},
+        "parameters": ${jsonencode(local.logicapp_parameters)}
+      }
+    }
+  ]
+}
+TEMPLATE
+}
+
+data "azurerm_logic_app_workflow" "policy_alerts" {
+  provider            = azurerm.core
+  name                = "la-${var.product}-${local.plane_code}-${var.region}-policy-alerts-01"
+  resource_group_name = local.rg_core_name_resolved
+
+  depends_on = [
+    azurerm_template_deployment.logicapp
+  ]
+}
+
+data "azurerm_logic_app_trigger_http_request" "policy_alerts_http" {
+  provider     = azurerm.core
+  count        = var.enable_policy_compliance_alerts ? 1 : 0
+  name         = "manual"
+  logic_app_id = data.azurerm_logic_app_workflow.policy_alerts.id
+}
+
+resource "azurerm_eventgrid_event_subscription" "policy_to_logicapp" {
+  count = var.enable_policy_compliance_alerts ? 1 : 0
+
+  name  = "egsub-${var.product}-${local.plane_code}-${var.region}-policy-noncompliant"
+  scope = azapi_resource.policy_state_changes[0].id
+
+  event_delivery_schema = "EventGridSchema"
+
+  included_event_types = [
+    "Microsoft.PolicyInsights.PolicyStateCreated",
+    "Microsoft.PolicyInsights.PolicyStateChanged"
+  ]
+
+  webhook_endpoint {
+    url = data.azurerm_logic_app_trigger_http_request.policy_alerts_http[0].callback_url
+  }
+
+  retry_policy {
+    max_delivery_attempts = 30
+    event_time_to_live    = 1440
+  }
+
+  # Advanced filter: only NonCompliant events
+  advanced_filter {
+    string_in {
+      key    = "data.complianceState"
+      values = ["NonCompliant"]
+    }
+  }
+
+  depends_on = [
+    azapi_resource.policy_state_changes,
+    azurerm_logic_app_workflow.policy_alerts
+  ]
 }

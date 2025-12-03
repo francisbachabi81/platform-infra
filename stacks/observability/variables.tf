@@ -154,3 +154,20 @@ variable "key_vault_ids" {
   default     = []
   description = "Explicit Key Vault resource IDs to enable diagnostics on."
 }
+
+variable "management_group_name" {
+  description = "Management group name used for PolicyInsights PolicyStates system topic."
+  type        = string
+}
+
+variable "enable_policy_compliance_alerts" {
+  description = "Enable creation of PolicyStates Event Grid system topic + Logic App alerts."
+  type        = bool
+  default     = false
+}
+
+variable "policy_alert_email" {
+  description = "Email address to receive policy non-compliance alerts."
+  type        = string
+  default     = "test@org.com"
+}

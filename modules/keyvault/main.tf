@@ -9,7 +9,11 @@ terraform {
 locals {
   name_clean              = lower(trimspace(var.name))
   name_nodash             = replace(local.name_clean, "-", "")
-  kv_pdns_zone_id         = lookup(var.private_dns_zone_ids, "privatelink.vaultcore.azure.net", null)
+  is_hrz = var.product == "hrz"
+  kv_pdz_pub = "privatelink.vaultcore.azure.net"
+  kv_pdz_gov = "privatelink.vaultcore.usgovcloudapi.net"
+  kv_pdz_name = local.is_hrz ? local.kv_pdz_gov : local.kv_pdz_pub
+  kv_pdns_zone_id = lookup(var.private_dns_zone_ids, local.kv_pdz_name, null)
 
   pe_name_effective       = coalesce(var.pe_name,               "pep-${local.name_nodash}")
   psc_name_effective      = coalesce(var.psc_name,              "psc-${local.name_nodash}")

@@ -16,6 +16,11 @@ action_group_email_receivers = [
   }
 ]
 
+# FedRAMP Policy events pipeline
+enable_policy_compliance_alerts = true
+management_group_name = "intterra"
+policy_alert_email   = "francis.bachabi@intterragroup.com"
+
 # tags
 tags_extra = {
   purpose = "observability"

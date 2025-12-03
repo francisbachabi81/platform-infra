@@ -8,6 +8,11 @@ variable "location" {
   description = "Azure region."
 }
 
+variable "product" {
+  type        = string
+  description = "Cloud/product selector: 'hrz' (Azure Gov) or 'pub' (Azure public)"
+}
+
 variable "resource_group_name" {
   type        = string
   description = "Resource group name."

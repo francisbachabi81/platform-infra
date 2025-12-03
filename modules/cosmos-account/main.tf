@@ -39,7 +39,13 @@ resource "azurerm_cosmosdb_account" "cosmos" {
 
 locals {
   cosmos_name_cleaned     = length(trimspace(var.name)) > 0 ? replace(lower(trimspace(var.name)), "-", "") : "cosmosdb"
-  sql_pdns_id             = lookup(var.private_dns_zone_ids, "privatelink.documents.azure.com", null)
+  sql_pdns_name_public = "privatelink.documents.azure.com"
+  sql_pdns_name_gov    = "privatelink.documents.azure.us"
+
+  sql_pdns_name = var.product == "hrz" ? local.sql_pdns_name_gov : local.sql_pdns_name_public
+
+  sql_pdns_id = lookup(var.private_dns_zone_ids, local.sql_pdns_name, null)
+
   pe_sql_name_effective   = coalesce(var.pe_sql_name,  "pep-${local.cosmos_name_cleaned}-sql")
   psc_sql_name_effective  = coalesce(var.psc_sql_name, "psc-${local.cosmos_name_cleaned}-sql")
   sql_zone_group_name     = coalesce(var.sql_zone_group_name, "pdns-${local.cosmos_name_cleaned}-sql")

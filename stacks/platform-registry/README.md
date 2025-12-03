@@ -61,10 +61,10 @@ Key inputs:
 - `location` (**string**, default: `USGov Arizona`)  
   Azure Gov region display name for the RG/ACR.
 
-- `resource_group_name` (**string**, default: `rg-core-pr-usaz-01-reg`)  
+- `resource_group_name` (**string**, default: `rg-core-pr-usaz-01`)  
   Name of the resource group that will host the ACR.
 
-- `registry_name` (**string**, default: `acrintterra`)  
+- `registry_name` (**string**, default: `acrintterraprustx01`)  
   ACR name (5–50 lowercase alphanumeric). Must be globally unique across Azure.
 
 - `acr_sku` (**string**, default: `Standard`)  

@@ -377,9 +377,9 @@ locals {
 module "kv1" {
   count                = local.enable_both ? 1 : 0
   source               = "../../modules/keyvault"
+  product              = var.product
   name                 = local.kv1_base_name
   location             = var.location
-  # resource_group_name  = var.rg_name
   resource_group_name  = local.env_rg_name
   tenant_id            = var.tenant_id
   pe_subnet_id         = local.pe_subnet_id_effective
@@ -402,6 +402,7 @@ locals { sa1_name_cleaned = replace(lower(trimspace(local.sa1_name)), "-", "") }
 module "sa1" {
   count                = local.enable_both ? 1 : 0
   source               = "../../modules/storage-account"
+  product              = var.product
   name                 = local.sa1_name
   location             = var.location
   # resource_group_name  = var.rg_name
@@ -432,6 +433,7 @@ locals {
 module "cosmos1" {
   count                  = local.enable_public_features ? 1 : 0
   source                 = "../../modules/cosmos-account"
+  product                = var.product
   name                   = local.cosmos1_name
   location               = var.location
   # resource_group_name    = var.rg_name
@@ -788,6 +790,7 @@ locals {
 module "funcapp1" {
   count                      = local.enable_both ? 1 : 0
   source                     = "../../modules/function-app"
+  product                    = var.product
   name                       = local.funcapp1_name
   location                   = var.location
   # resource_group_name        = var.rg_name
@@ -830,6 +833,7 @@ module "funcapp1" {
 module "funcapp2" {
   count                      = local.enable_both ? 1 : 0
   source                     = "../../modules/function-app"
+  product                    = var.product
   name                       = local.funcapp2_name
   location                   = var.location
   # resource_group_name        = var.rg_name
@@ -1049,6 +1053,7 @@ locals {
 module "redis1" {
   count               = local.enable_both ? 1 : 0
   source              = "../../modules/redis"
+  product             = var.product
   name                = local.redis1_name
   location            = var.location
   # resource_group_name = var.rg_name
