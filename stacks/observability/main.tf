@@ -1010,9 +1010,9 @@ locals {
     "$connections" = {
       "value" = {
         "office365" = {
-          "connectionId"   = "/subscriptions/${data.azurerm_client_config.core.subscription_id}/resourceGroups/${data.azurerm_resource_group.core_rg[0].name}/providers/Microsoft.Web/connections/office365"
-          "connectionName" = "office365"
-          "id"             = "/subscriptions/${data.azurerm_client_config.core.subscription_id}/providers/Microsoft.Web/locations/${data.azurerm_resource_group.core_rg[0].location}/managedApis/office365"
+          connectionId   = azurerm_api_connection.office365.id
+          connectionName = azurerm_api_connection.office365.name
+          id             = "/subscriptions/${local.sub_core_resolved}/providers/Microsoft.Web/locations/${local.rg_core_location_resolved}/managedApis/office365"
         }
       }
     }
@@ -1082,6 +1082,18 @@ locals {
     }
     "outputs" = {}
   }
+}
+
+resource "azurerm_api_connection" "office365" {
+  provider = azurerm.core
+  name                = "office365"
+  resource_group_name = local.rg_core_name_resolved
+  display_name   = "Office 365"
+  managed_api_id = "/subscriptions/${local.sub_core_resolved}/providers/Microsoft.Web/locations/${local.rg_core_location_resolved}/managedApis/office365"
+
+  # You can usually leave parameter_values empty and then
+  # go into the portal once to "Authorize" with an account.
+  parameter_values = {}
 }
 
 resource "azurerm_resource_group_template_deployment" "logicapp" {
