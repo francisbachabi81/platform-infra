@@ -213,9 +213,6 @@ locals {
   rg_env_name_resolved    = try(data.azurerm_resource_group.env_rg[0].name, null)
   rg_env_id_resolved      = try(data.azurerm_resource_group.env_rg[0].id,   null)
   rg_core_name_resolved   = try(data.azurerm_resource_group.core_rg[0].name, null)
-
-  rg_core_location_resolved = try(data.azurerm_resource_group.core_rg[0].location, null)
-  rg_core_id_resolved      = try(data.azurerm_resource_group.core_rg[0].id, null)
 }
 
 # Gather IDs and RGs
@@ -974,12 +971,12 @@ resource "azapi_resource" "policy_state_changes" {
   type     = "Microsoft.EventGrid/systemTopics@2023-06-01-preview"
   name     = "policy-compliance-topic-${var.product}-${local.plane_code}-${var.region}-${substr(each.key, 0, 6)}"
   # System topic lives *in the subscription* that is the source
-  parent_id = "/subscriptions/${each.value.subscription_id}/resourceGroups/${each.value.resource_group_name}"
+  # parent_id = "/subscriptions/${each.value.subscription_id}/resourceGroups/${each.value.resource_group_name}"
+  parent_id = local.rg_core_name_resolved
   location  = "global"
 
   body = {
     properties = {
-      # Subscription-scoped source (the bit that worked in your CLI test)
       source    = "/subscriptions/${each.value.subscription_id}"
       topicType = "Microsoft.PolicyInsights.PolicyStates"
     }
