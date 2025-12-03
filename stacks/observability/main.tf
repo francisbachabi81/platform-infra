@@ -1048,13 +1048,13 @@ locals {
   }
 }
 
-resource "azurerm_template_deployment" "logicapp" {
-  count = var.enable_policy_compliance_alerts ? 1 : 0
-  name                = "logicapp-deployment"
-  resource_group_name = data.azurerm_resource_group.core_rg[0].name
+resource "azurerm_resource_group_template_deployment" "logicapp" {
+  count               = var.enable_policy_compliance_alerts ? 1 : 0
+  name                = "tmpl-la-${var.product}-${local.plane_code}-${var.region}-policy-alerts"
+  resource_group_name = local.rg_core_name_resolved
   deployment_mode     = "Incremental"
 
-  template_body = <<TEMPLATE
+  template_content = <<TEMPLATE
 {
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
@@ -1062,7 +1062,7 @@ resource "azurerm_template_deployment" "logicapp" {
     {
       "type": "Microsoft.Logic/workflows",
       "apiVersion": "2019-05-01",
-      "name": "la-${var.product}-${local.plane_code}-policy-alerts-01",
+      "name": "la-${var.product}-${local.plane_code}-${var.region}-policy-alerts-01",
       "location": "${data.azurerm_resource_group.core_rg[0].location}",
       "properties": {
         "definition": ${jsonencode(local.logicapp_definition)},
@@ -1084,13 +1084,6 @@ data "azurerm_logic_app_workflow" "policy_alerts" {
   ]
 }
 
-data "azurerm_logic_app_trigger_http_request" "policy_alerts_http" {
-  provider     = azurerm.core
-  count        = var.enable_policy_compliance_alerts ? 1 : 0
-  name         = "manual"
-  logic_app_id = data.azurerm_logic_app_workflow.policy_alerts.id
-}
-
 resource "azurerm_eventgrid_event_subscription" "policy_to_logicapp" {
   count = var.enable_policy_compliance_alerts ? 1 : 0
 
@@ -1105,15 +1098,14 @@ resource "azurerm_eventgrid_event_subscription" "policy_to_logicapp" {
   ]
 
   webhook_endpoint {
-    url = data.azurerm_logic_app_trigger_http_request.policy_alerts_http[0].callback_url
+    url = data.azurerm_logic_app_workflow.policy_alerts.access_endpoint
   }
 
   retry_policy {
     max_delivery_attempts = 30
-    event_time_to_live    = 1440
+    event_time_to_live    = 1440 # minutes (1 day)
   }
 
-  # Advanced filter: only NonCompliant events
   advanced_filter {
     string_in {
       key    = "data.complianceState"
@@ -1123,6 +1115,6 @@ resource "azurerm_eventgrid_event_subscription" "policy_to_logicapp" {
 
   depends_on = [
     azapi_resource.policy_state_changes,
-    azurerm_logic_app_workflow.policy_alerts
+    azurerm_resource_group_template_deployment.logicapp
   ]
 }
