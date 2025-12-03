@@ -955,55 +955,55 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
 }
 
 locals {
-  policy_source_context_raw = {
+  policy_system_topic_parent_ids = {
     for label, cfg in var.policy_source_subscriptions :
-    label => {
-      subscription_id = cfg.subscription_id
-
-      rg = label == "core" ? {
-            name = local.rg_core_name_resolved
-            id   = local.rg_core_id_resolved
-          } : try (
-            data.terraform_remote_state.network.outputs.resource_groups[replace(label, "-", "_")],
+    label => (
+      label == "core"
+        ? local.rg_core_id_resolved
+        : try(
+            data.terraform_remote_state.network.outputs.resource_groups[replace(label, "-", "_")].id,
             null
           )
-    }
+    )
   }
 
-  policy_source_context = {
-    for label, ctx in local.policy_source_context_raw :
-    label => ctx
-    if ctx.rg != null
+  # Map each policy source key → RG name for the event subscription resource
+  policy_system_topic_rg_name_by_key = {
+    for label, cfg in var.policy_source_subscriptions :
+    label => (
+      label == "core"
+        ? local.rg_core_name_resolved
+        : try(
+            data.terraform_remote_state.network.outputs.resource_groups[replace(label, "-", "_")].name,
+            null
+          )
+    )
   }
+}
 
+locals {
   policy_alerts_enabled_for_env = contains(["dev", "prod"], local.env_effective)
 }
 
 resource "azapi_resource" "policy_state_changes" {
   provider = azapi.core
 
-  # Only create when feature is enabled and env is dev/prod
-  for_each = (var.enable_policy_compliance_alerts && local.policy_alerts_enabled_for_env) ? local.policy_source_context : {}
+  for_each = (var.enable_policy_compliance_alerts && local.policy_alerts_enabled_for_env) ? var.policy_source_subscriptions : {}
 
-  type = "Microsoft.EventGrid/systemTopics@2023-06-01-preview"
-
-  # Ex: policy-compliance-topic-hrz-dev-core-usaz or policy-compliance-topic-hrz-core-usaz
-  name      = "policy-compliance-topic-${var.product}-${each.key}-${var.region}"
-
-  # IMPORTANT: RG is in SAME subscription as the source
-  # parent_id is the RG id from either core stack or shared-network
-  parent_id = each.value.rg.id
-
+  type      = "Microsoft.EventGrid/systemTopics@2023-06-01-preview"
+  name      = "policy-compliance-topic-${var.product}-${local.plane_code}-${var.region}-${each.key}"
+  parent_id = local.policy_system_topic_parent_ids[each.key]
   location  = "global"
 
   body = {
     properties = {
-      # subscription-scoped source (must match the system topic subscription)
+      # subscription-scoped source, per entry
       source    = "/subscriptions/${each.value.subscription_id}"
       topicType = "Microsoft.PolicyInsights.PolicyStates"
     }
   }
 }
+
 
 locals {
   logicapp_parameters = {
@@ -1133,11 +1133,12 @@ data "azurerm_logic_app_workflow" "policy_alerts" {
   ]
 }
 
-resource "azurerm_eventgrid_event_subscription" "policy_to_logicapp" {
+resource "azurerm_eventgrid_system_topic_event_subscription" "policy_to_logicapp" {
   for_each = (var.enable_policy_compliance_alerts && local.policy_alerts_enabled_for_env) ? azapi_resource.policy_state_changes : {}
 
-  name  = "egsub-${var.product}-${local.plane_code}-${var.region}-policy-noncompliant-${each.key}"
-  scope = each.value.id   # system topic ID for each subscription
+  name                = "egsub-${var.product}-${local.plane_code}-${var.region}-policy-noncompliant-${each.key}"
+  system_topic        = each.value.name
+  resource_group_name = local.policy_system_topic_rg_name_by_key[each.key]
 
   event_delivery_schema = "EventGridSchema"
 
@@ -1164,6 +1165,6 @@ resource "azurerm_eventgrid_event_subscription" "policy_to_logicapp" {
   }
 
   depends_on = [
-    azurerm_resource_group_template_deployment.logicapp
+    azurerm_resource_group_template_deployment.logicapp,
   ]
 }
