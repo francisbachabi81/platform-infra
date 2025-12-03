@@ -29,7 +29,7 @@ policy_source_subscriptions = [
   },
   {
     subscription_id     = "d4c1d472-722c-49c2-857f-4243441104c8"
-  },
+  }
 ]
 
 # tags
