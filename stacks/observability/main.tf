@@ -1032,21 +1032,17 @@ locals {
         "type" = "Request"
         "kind" = "Http"
         "inputs" = {
+          # Accept an array of Event Grid events with loose schema
           "schema" = {
-            "type"       = "object"
-            "properties" = {
-              "id"        = { "type" = "string" }
-              "eventType" = { "type" = "string" }
-              "subject"   = { "type" = "string" }
-              "eventTime" = { "type" = "string" }
-              "data" = {
-                "type"       = "object"
-                "properties" = {
-                  "complianceState"    = { "type" = "string" }
-                  "resourceId"         = { "type" = "string" }
-                  "policyAssignmentId" = { "type" = "string" }
-                  "policyDefinitionId" = { "type" = "string" }
-                }
+            "type"  = "array"
+            "items" = {
+              "type"       = "object"
+              "properties" = {
+                "id"        = { "type" = "string" }
+                "eventType" = { "type" = "string" }
+                "subject"   = { "type" = "string" }
+                "eventTime" = { "type" = "string" }
+                "data"      = { "type" = "object" }
               }
             }
           }
@@ -1054,9 +1050,15 @@ locals {
       }
     }
     "actions" = {
+      # Normalize to a single event object
+      "Compose_Event" = {
+        "type"   = "Compose"
+        "inputs" = "@first(triggerBody())"
+      }
+
       "If_NonCompliant" = {
         "type"       = "If"
-        "expression" = "@equals(triggerBody()?['data']?['complianceState'], 'NonCompliant')"
+        "expression" = "@and(equals(outputs('Compose_Event')?['eventType'], 'Microsoft.PolicyInsights.PolicyStateCreated'), equals(outputs('Compose_Event')?['data']?['complianceState'], 'NonCompliant'))"
         "actions" = {
           "Send_Email" = {
             "type"   = "ApiConnection"
@@ -1071,7 +1073,7 @@ locals {
               "body" = {
                 "To"              = var.policy_alert_email
                 "Subject"         = "FedRAMP Policy Non-Compliance Detected"
-                "Body"            = "<p><strong>FedRAMP Moderate non-compliant resource detected.</strong></p><p><strong>Resource:</strong> @{triggerBody()?['data']?['resourceId']}</p><p><strong>Policy Assignment:</strong> @{triggerBody()?['data']?['policyAssignmentId']}</p><p><strong>Policy Definition:</strong> @{triggerBody()?['data']?['policyDefinitionId']}</p><p><strong>Compliance State:</strong> @{triggerBody()?['data']?['complianceState']}</p><p><strong>Time:</strong> @{triggerBody()?['eventTime']}</p><p>Please remediate according to the FedRAMP Moderate baseline or move this workload out of the FedRAMP boundary.</p>"
+                "Body"            = "<p><strong>FedRAMP Moderate non-compliant resource detected.</strong></p><p><strong>Resource:</strong> @{outputs('Compose_Event')?['data']?['resourceId']}</p><p><strong>Policy Assignment:</strong> @{outputs('Compose_Event')?['data']?['policyAssignmentId']}</p><p><strong>Policy Definition:</strong> @{outputs('Compose_Event')?['data']?['policyDefinitionId']}</p><p><strong>Compliance State:</strong> @{outputs('Compose_Event')?['data']?['complianceState']}</p><p><strong>Time:</strong> @{outputs('Compose_Event')?['eventTime']}</p><p>Please remediate according to the FedRAMP Moderate baseline or move this workload out of the FedRAMP boundary.</p>"
                 "BodyContentType" = "HTML"
               }
             }
@@ -1133,34 +1135,39 @@ data "azurerm_logic_app_workflow" "policy_alerts" {
   ]
 }
 
-resource "azurerm_eventgrid_system_topic_event_subscription" "policy_to_logicapp" {
+resource "azapi_resource" "policy_to_logicapp" {
   for_each = (var.enable_policy_compliance_alerts && local.policy_alerts_enabled_for_env) ? azapi_resource.policy_state_changes : {}
 
-  name                = "egsub-${var.product}-${local.plane_code}-${var.region}-policy-noncompliant-${each.key}"
-  system_topic        = each.value.name
-  resource_group_name = local.policy_system_topic_rg_name_by_key[each.key]
+  type      = "Microsoft.EventGrid/systemTopics/eventSubscriptions@2022-06-15"
+  name      = "egsub-${var.product}-${local.plane_code}-${var.region}-policy-noncompliant-${each.key}"
+  parent_id = each.value.id   # full system topic ID, including subscription & RG
 
-  event_delivery_schema = "EventGridSchema"
-
-  included_event_types = [
-    "Microsoft.PolicyInsights.PolicyStateCreated",
-    "Microsoft.PolicyInsights.PolicyStateChanged",
-  ]
-
-  webhook_endpoint {
-    # One Logic App, many Event Grid subscriptions
-    url = data.azurerm_logic_app_workflow.policy_alerts.access_endpoint
-  }
-
-  retry_policy {
-    max_delivery_attempts = 30
-    event_time_to_live    = 1440 # minutes (1 day)
-  }
-
-  advanced_filter {
-    string_in {
-      key    = "data.complianceState"
-      values = ["NonCompliant"]
+  body = {
+    properties = {
+      destination = {
+        endpointType = "WebHook"
+        properties = {
+          endpointUrl = data.azurerm_logic_app_workflow.policy_alerts.access_endpoint
+        }
+      }
+      filter = {
+        includedEventTypes = [
+          "Microsoft.PolicyInsights.PolicyStateCreated",
+          "Microsoft.PolicyInsights.PolicyStateChanged",
+        ]
+        advancedFilters = [
+          {
+            operatorType = "StringIn"
+            key          = "data.complianceState"
+            values       = ["NonCompliant"]
+          }
+        ]
+      }
+      eventDeliverySchema = "EventGridSchema"
+      retryPolicy = {
+        maxDeliveryAttempts        = 30
+        eventTimeToLiveInMinutes   = 1440
+      }
     }
   }
 
