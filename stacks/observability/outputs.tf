@@ -62,33 +62,52 @@ output "nsg_diag_categories_debug" {
   }
 }
 
-output "debug_nsg_flowlogs" {
+output "debug_nsg_flowlogs_v2" {
   value = {
-    # High-level
-    env_effective        = local.env_effective
-    plane_effective      = local.plane_effective
-    plane_code           = local.plane_code
+    # Raw inputs
+    var_env   = var.env
+    var_plane = var.plane
 
-    # What envs we *intend* to include
-    nsg_flowlog_env_sets  = local.nsg_flowlog_env_sets
-    nsg_flowlog_env_keys  = local.nsg_flowlog_env_keys
+    # Effective env / plane
+    env_effective   = local.env_effective
+    plane_effective = local.plane_effective
+    plane_code      = local.plane_code
 
-    # Raw NSG IDs from shared-network
+    # Target env sets for flow logs
+    nsg_flowlog_env_sets = local.nsg_flowlog_env_sets
+    nsg_flowlog_env_keys = local.nsg_flowlog_env_keys
+
+    # NSG IDs collected from shared-network
     nsg_flowlog_ids       = local.nsg_flowlog_ids
+    nsg_flowlog_ids_count = length(local.nsg_flowlog_ids)
 
-    # Partition by subscription
-    sub_env_resolved      = local.sub_env_resolved
-    sub_core_resolved     = local.sub_core_resolved
-    nsg_flowlog_map_env   = local.nsg_flowlog_map_env
-    nsg_flowlog_map_core  = local.nsg_flowlog_map_core
+    # Subscription IDs actually present in the NSG IDs
+    nsg_subscription_ids_distinct = distinct([
+      for id in local.nsg_flowlog_ids :
+      element(split(id, "/"), 2)
+    ])
 
-    # Storage + LAW resolution
-    nsg_flow_logs_storage = local.nsg_flow_logs_storage
-    nsg_flow_logs_sa_id   = local.nsg_flow_logs_sa_id
-    law_id                = local.law_id
+    # The subscription we derived for the network provider
+    nsg_subscription_id = try(local.nsg_subscription_id, null)
 
-    # Final gates
-    nsg_flowlogs_enabled_env  = local.nsg_flowlogs_enabled_env
-    nsg_flowlogs_enabled_core = local.nsg_flowlogs_enabled_core
+    # Final map used for for_each on azurerm_network_watcher_flow_log.nsg
+    nsg_flowlog_map       = try(local.nsg_flowlog_map, null)
+    nsg_flowlog_map_keys  = try(keys(local.nsg_flowlog_map), null)
+    nsg_flowlog_map_count = try(length(local.nsg_flowlog_map), null)
+
+    # Gate flag
+    nsg_flowlogs_enabled = try(local.nsg_flowlogs_enabled, null)
+
+    # Network watcher naming we’ll use
+    network_watcher_name_env = local.network_watcher_name_env
+    network_watcher_rg_env   = local.network_watcher_rg_env
+
+    # What the module thinks env/core subscriptions are
+    sub_env_resolved  = local.sub_env_resolved
+    sub_core_resolved = local.sub_core_resolved
+
+    # LAW + storage account resolution (for traffic analytics)
+    law_id              = local.law_id
+    nsg_flow_logs_sa_id = local.nsg_flow_logs_sa_id
   }
 }

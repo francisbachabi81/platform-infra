@@ -1382,10 +1382,6 @@ locals {
                                       /* fallback – hub */                "rg-${var.product}-${local.plane_code}-${var.region}-net-01"
   )
 
-  # Core/hub network watcher (lives in the core subscription)
-  network_watcher_name_core = "nw-${var.product}-${local.plane_code}-${var.region}-01"
-  network_watcher_rg_core   = "rg-${var.product}-${local.plane_code}-${var.region}-net-01"
-
   # Which environments' NSGs should get flow logs, per effective env
   # - dev  → hub + dev + qa
   # - prod → hub + prod + uat
@@ -1394,7 +1390,7 @@ locals {
     prod = ["hub", "prod", "uat"]
   }
 
-  # List of env keys we should target in this run
+  # List of env keys we should target in this run (only when env is dev/prod)
   nsg_flowlog_env_keys = lookup(local.nsg_flowlog_env_sets, local.env_effective, [])
 
   # Collect NSG IDs from shared-network outputs for those env keys
@@ -1404,31 +1400,39 @@ locals {
     )
   ]))
 
-  # Partition NSGs by subscription: ENV vs CORE
-  # (Subscription ID is element 2 in the resource ID: /subscriptions/<id>/...)
-  nsg_flowlog_map_env = {
-    for id in local.nsg_flowlog_ids :
-    id => id
-    if local.sub_env_resolved != null && element(split(id, "/"), 2) == local.sub_env_resolved
-  }
+  # Derive the *network* subscription ID from the NSG IDs (they all live in the same sub)
+  nsg_subscription_id = (
+    length(local.nsg_flowlog_ids) > 0
+      ? element(split(local.nsg_flowlog_ids[0], "/"), 2)
+      : null
+  )
 
-  nsg_flowlog_map_core = {
+  # Map for for_each, no extra subscription filtering (we'll use the network provider)
+  nsg_flowlog_map = {
     for id in local.nsg_flowlog_ids :
     id => id
-    if local.sub_core_resolved != null && element(split(id, "/"), 2) == local.sub_core_resolved
   }
 
   # Gate: only enable flow logs when LAW + SA are resolved AND we have targets
-  nsg_flowlogs_enabled_env  = local.law_id != null && local.nsg_flow_logs_sa_id != null && length(local.nsg_flowlog_map_env)  > 0
-  nsg_flowlogs_enabled_core = local.law_id != null && local.nsg_flow_logs_sa_id != null && length(local.nsg_flowlog_map_core) > 0
+  nsg_flowlogs_enabled = local.law_id != null && local.nsg_flow_logs_sa_id != null && length(local.nsg_flowlog_map) > 0
 }
 
-resource "azurerm_network_watcher_flow_log" "nsg_env" {
-  provider = azurerm.env
+provider "azurerm" {
+  alias   = "network"
+  features {}
 
-  # When env_effective == dev → NSGs in (dev plane) env subscription
-  # When env_effective == prod → NSGs in (prod plane) env subscription
-  for_each = local.nsg_flowlogs_enabled_env ? local.nsg_flowlog_map_env : {}
+  # Use the subscription where the NSGs actually live
+  subscription_id = coalesce(local.nsg_subscription_id, local.core_sub)
+  tenant_id       = local.core_tenant
+  environment     = local.product_env
+}
+
+resource "azurerm_network_watcher_flow_log" "nsg" {
+  provider = azurerm.network
+
+  # When env_effective == dev → NSGs in hub + dev + qa (for this plane)
+  # When env_effective == prod → NSGs in hub + prod + uat
+  for_each = local.nsg_flowlogs_enabled ? local.nsg_flowlog_map : {}
 
   # Stable, readable name derived from NSG name in the ID
   name = "fl-${var.product}-${local.env_effective}-${var.region}-${
@@ -1462,7 +1466,7 @@ resource "azurerm_network_watcher_flow_log" "nsg_env" {
   lifecycle {
     precondition {
       condition     = local.law_id != null && local.nsg_flow_logs_sa_id != null
-      error_message = "LAW workspace or NSG flow-logs storage account is not resolved; cannot configure NSG flow logs (env)."
+      error_message = "LAW workspace or NSG flow-logs storage account is not resolved; cannot configure NSG flow logs."
     }
   }
 }
