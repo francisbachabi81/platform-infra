@@ -1174,14 +1174,19 @@ data "azurerm_logic_app_workflow" "policy_alerts" {
   ]
 }
 
-data "azurerm_logic_app_trigger_callback_url" "policy_alerts_manual" {
-  provider    = azurerm.core
-  name        = "manual"  # trigger name in your definition
-  logic_app_id = data.azurerm_logic_app_workflow.policy_alerts.id
+resource "azapi_resource_action" "manual_trigger_callback" {
+  # Logic Apps Consumption trigger action endpoint
+  type        = "Microsoft.Logic/workflows/triggers@2019-05-01"
+  resource_id = "${data.azurerm_logic_app_workflow.policy_alerts.id}/triggers/manual"
+  action      = "listCallbackUrl"
+  method      = "POST"
+  body        = {}
 
-  depends_on = [
-    azurerm_resource_group_template_deployment.logicapp
-  ]
+  depends_on = [azurerm_resource_group_template_deployment.logicapp]
+}
+
+locals {
+  logicapp_manual_trigger_callback_url = azapi_resource_action.manual_trigger_callback.output.value
 }
 
 resource "azapi_resource" "policy_to_logicapp" {
@@ -1196,7 +1201,7 @@ resource "azapi_resource" "policy_to_logicapp" {
       destination = {
         endpointType = "WebHook"
         properties = {
-          endpointUrl = data.azurerm_logic_app_trigger_callback_url.policy_alerts_manual.value
+          endpointUrl = local.logicapp_manual_trigger_callback_url
           # ^ instead of data.azurerm_logic_app_workflow.policy_alerts.access_endpoint
         }
       }
