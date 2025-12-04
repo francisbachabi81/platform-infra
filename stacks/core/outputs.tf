@@ -94,6 +94,7 @@ output "observability" {
     appi_resource_id         = try(one(azurerm_application_insights.plane[*].id),                  null)
     appi_connection_string   = try(one(azurerm_application_insights.plane[*].connection_string),   null)
     appi_instrumentation_key = try(one(azurerm_application_insights.plane[*].instrumentation_key), null)
+    law_workspace_guid       = try(one(azurerm_log_analytics_workspace.plane[*].workspace_id),     null)
   }
   sensitive = true
 }

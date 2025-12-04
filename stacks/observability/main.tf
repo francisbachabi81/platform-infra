@@ -1406,12 +1406,20 @@ locals {
     id => id
   }
 
-  # Gate: only enable flow logs when LAW + SA are resolved AND we have targets
-  nsg_flowlogs_enabled = local.law_id != null && local.nsg_flow_logs_sa_id != null && length(local.nsg_flowlog_map) > 0
+  law_workspace_guid = coalesce(
+    # (optional) if you want an override var, declare it and put it here:
+    # var.law_workspace_guid_override,
+    try(data.terraform_remote_state.core.outputs.observability.law_workspace_guid, null),
+    try(data.terraform_remote_state.platform.outputs.observability.law_workspace_guid, null),
+    null
+  )
 
-  law_workspace_guid = try(
-    element(split(local.law_id, "/"), length(split(local.law_id, "/")) - 1),
-    local.law_id
+  # Gate: only enable flow logs when LAW + SA are resolved AND we have targets
+  nsg_flowlogs_enabled = (
+    local.law_id != null &&
+    local.law_workspace_guid != null &&
+    local.nsg_flow_logs_sa_id != null &&
+    length(local.nsg_flowlog_map) > 0
   )
 }
 
@@ -1420,7 +1428,6 @@ resource "azurerm_network_watcher_flow_log" "nsg" {
 
   for_each = local.nsg_flowlogs_enabled ? local.nsg_flowlog_map : {}
 
-  # Use basename() to safely extract NSG name
   name = "fl-${var.product}-${local.env_effective}-${var.region}-${basename(each.key)}"
 
   network_watcher_name = local.network_watcher_name_env
@@ -1438,16 +1445,20 @@ resource "azurerm_network_watcher_flow_log" "nsg" {
 
   traffic_analytics {
     enabled               = true
-    workspace_id          = local.law_workspace_guid    # MUST be GUID
+    workspace_id          = local.law_workspace_guid    # now a real GUID ✅
     workspace_region      = var.location
-    workspace_resource_id = local.law_id                # ARM ID OK
+    workspace_resource_id = local.law_id                # full ARM ID
     interval_in_minutes   = 10
   }
 
   lifecycle {
     precondition {
-      condition     = local.law_id != null && local.nsg_flow_logs_sa_id != null
-      error_message = "LAW workspace or NSG flow-logs storage account not resolved."
+      condition = (
+        local.law_id != null &&
+        local.law_workspace_guid != null &&
+        local.nsg_flow_logs_sa_id != null
+      )
+      error_message = "LAW workspace (ID/GUID) or NSG flow-logs storage account not resolved."
     }
   }
 }
