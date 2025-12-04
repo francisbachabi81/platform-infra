@@ -421,15 +421,6 @@ variable "dnsresolver_enable_outbound" {
   default     = true
 }
 
-variable "aks_ingress_allowed_cidrs" {
-  description = "CIDR(s) or service tags allowed to reach AKS LB/Ingress from Internet side"
-  type        = map(list(string))
-  default = {
-    nonprod = ["Internet"]
-    prod    = ["AzureFrontDoor.Backend"] # or your WAF/AppGW public IP range later
-  }
-}
-
 variable "baseline_allowed_service_tags" {
   type = list(string)
   default = [

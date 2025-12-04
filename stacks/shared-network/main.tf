@@ -24,10 +24,6 @@ locals {
   prod_ten = (var.prod_tenant_id       != null && trimspace(var.prod_tenant_id)       != "") ? var.prod_tenant_id       : var.hub_tenant_id
 }
 
-locals {
-  aks_ingress_allowed_cidrs = local.is_nonprod ? var.aks_ingress_allowed_cidrs["nonprod"] : var.aks_ingress_allowed_cidrs["prod"]
-}
-
 # Default = HUB subscription
 provider "azurerm" {
   features {}
@@ -66,7 +62,7 @@ provider "azurerm" {
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
-# globals ───────────────────────────────────────────────────────────────────
+# globals
 locals {
   is_nonprod = var.plane == "nonprod"
   is_prod    = var.plane == "prod"
@@ -93,97 +89,66 @@ locals {
     uat   = "env-uat-network"
   }
 
+  # Org / global base tags (4)
   org_base_tags = {
     product      = var.product
     owner        = "itops-team"
-    department   = "it"
     businessunit = "public-safety"
     compliance   = "cjis"
   }
 
+  # Plane-level tags (2) – note: no criticality here to keep total tag count low
   plane_tags = local.is_nonprod ? {
-    lane        = "nonprod"
-    purpose     = "shared-nonprod"
-    criticality = "medium"
+    lane    = "nonprod"
+    purpose = "shared-nonprod"
   } : {
-    lane        = "prod"
-    purpose     = "shared-prod"
-    criticality = "high"
+    lane    = "prod"
+    purpose = "shared-prod"
   }
 
+  # Shared/network base tags (2)
   base_layer_tags = {
-    layer        = "shared-network"
-    managed_by   = "terraform"
-    deployed_via = "github-actions"
+    layer      = "shared-network"
+    managed_by = "terraform"
   }
 
+  # FedRAMP common tags (2) – kept minimal but still provide boundary + impact level
   fedramp_common_tags = {
-    system                 = "shared-network"
-    component              = "nsg"
-    fedramp_boundary       = "network"
-    fedramp_impact_level   = "moderate"
-    compliance             = "fedramp-moderate"
-    data_owner             = "it-operations"
-    business_unit          = "core-it"
+    fedramp_boundary     = "network"
+    fedramp_impact_level = "moderate"
   }
 
-  # consolidated base for most tags
+  # consolidated base for most tags (var.tags + org + layer)
   tag_base = merge(var.tags, local.org_base_tags, local.base_layer_tags)
 
+  # Env-only tags (4 each). Combined with tag_base (6), plane_tags (2) and
+  # fedramp_common_tags (2) gives 14 total keys from our side.
   dev_only_tags = {
-    environment           = "dev"
-    purpose               = "env-dev"
-    criticality           = "Low"
-    patchgroup            = "Test"
-    lane                  = "nonprod"
-
-    # FedRAMP / classification metadata
-    environment_stage     = "non-production"
-    data_classification   = "internal"
-    fedramp_data_profile  = "non-production"
-    asset_criticality     = "low"
+    environment         = "dev"
+    patchgroup          = "Test"
+    environment_stage   = "non-production"
+    data_classification = "internal"
   }
 
   qa_only_tags = {
-    environment           = "qa"
-    purpose               = "env-qa"
-    criticality           = "Medium"
-    patchgroup            = "Test"
-    lane                  = "nonprod"
-
-    # FedRAMP / classification metadata
-    environment_stage     = "non-production"
-    data_classification   = "internal"
-    fedramp_data_profile  = "non-production"
-    asset_criticality     = "low"
+    environment         = "qa"
+    patchgroup          = "Test"
+    environment_stage   = "non-production"
+    data_classification = "internal"
   }
 
   uat_only_tags = {
-    environment           = "uat"
-    purpose               = "env-uat"
-    criticality           = "Medium"
-    patchgroup            = "Monthly"
-    lane                  = "prod"
-
-    # FedRAMP / classification metadata
-    environment_stage     = "pre-production"
-    data_classification   = "internal"
-    fedramp_data_profile  = "pre-production"
-    asset_criticality     = "medium"
+    environment         = "uat"
+    patchgroup          = "Monthly"
+    environment_stage   = "pre-production"
+    data_classification = "internal"
   }
 
   prod_only_tags = {
-    environment           = "prod"
-    purpose               = "env-prod"
-    criticality           = "High"
-    patchgroup            = "Monthly"
-    lane                  = "prod"
-
-    # FedRAMP / classification metadata
-    environment_stage     = "production"
-    data_classification   = "restricted"
-    fedramp_data_profile  = "production"
-    asset_criticality     = "high"
+    environment         = "prod"
+    patchgroup          = "Monthly"
+    environment_stage   = "production"
+    data_classification = "restricted"
   }
 
   short_zone_map = {
@@ -239,7 +204,7 @@ locals {
 }
 
 locals {
-  # ---------- canonical RG names (overrideable via vars if set) ----------
+  # canonical RG names (overrideable via vars if set)
   hub_rg_name = local.is_nonprod ? coalesce(try(var.nonprod_hub.rg, null), "rg-${var.product}-${local.plane_code}-${var.region}-net-01") : coalesce(try(var.prod_hub.rg,    null), "rg-${var.product}-${local.plane_code}-${var.region}-net-01")
   dev_rg_name  = local.is_nonprod ? coalesce(try(var.dev_spoke.rg,  null), "rg-${var.product}-dev-${var.region}-net-01")  : null
   qa_rg_name   = local.is_nonprod ? coalesce(try(var.qa_spoke.rg,   null), "rg-${var.product}-qa-${var.region}-net-01")   : null
@@ -251,14 +216,14 @@ locals {
   prod_rg_name_core = local.is_prod    ? coalesce(try(var.prod_spoke.rg, null), "rg-${var.product}-prod-${var.region}-core-01") : null
   uat_rg_name_core  = local.is_prod    ? coalesce(try(var.uat_spoke.rg,  null), "rg-${var.product}-uat-${var.region}-core-01")  : null
 
-  # ---------- canonical VNet names (overrideable via vars if set) ----------
+  # canonical VNet names (overrideable via vars if set)
   hub_vnet_name  = local.is_nonprod ? coalesce(try(var.nonprod_hub.vnet, null), "vnet-${var.product}-${local.plane_code}-hub-${var.region}-${var.seq}") : coalesce(try(var.prod_hub.vnet,    null), "vnet-${var.product}-${local.plane_code}-hub-${var.region}-${var.seq}")
   dev_vnet_name  = local.is_nonprod ? coalesce(try(var.dev_spoke.vnet,  null), "vnet-${var.product}-dev-${var.region}-${var.seq}")  : null
   qa_vnet_name   = local.is_nonprod ? coalesce(try(var.qa_spoke.vnet,   null), "vnet-${var.product}-qa-${var.region}-${var.seq}")   : null
   prod_vnet_name = local.is_prod    ? coalesce(try(var.prod_spoke.vnet, null), "vnet-${var.product}-prod-${var.region}-${var.seq}") : null
   uat_vnet_name  = local.is_prod    ? coalesce(try(var.uat_spoke.vnet,  null), "vnet-${var.product}-uat-${var.region}-${var.seq}")  : null
 
-  # ---------- helper maps by environment key ----------
+  # helper maps by environment key
   rg_by_env = {
     hub  = local.hub_rg_name
     dev  = local.dev_rg_name
@@ -2619,7 +2584,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_hub" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "443"
-  source_address_prefixes     = local.aks_ingress_allowed_cidrs
+  source_address_prefixes     = "Internet"
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2639,7 +2604,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_dev" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "443"
-  source_address_prefixes     = local.aks_ingress_allowed_cidrs
+  source_address_prefixes     = "Internet"
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2659,7 +2624,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_qa" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "443"
-  source_address_prefixes     = local.aks_ingress_allowed_cidrs
+  source_address_prefixes     = "Internet"
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2679,7 +2644,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_prod" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "443"
-  source_address_prefixes     = local.aks_ingress_allowed_cidrs
+  source_address_prefixes     = "Internet"
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2699,7 +2664,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "443"
-  source_address_prefixes     = local.aks_ingress_allowed_cidrs
+  source_address_prefixes     = "Internet"
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2719,7 +2684,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
 #   protocol                    = "Tcp"
 #   source_port_range           = "*"
 #   destination_port_range      = "80"
-#   source_address_prefixes     = local.aks_ingress_allowed_cidrs
+#   source_address_prefixes     = "Internet"
 #   destination_address_prefix  = "*"
 #   resource_group_name         = each.value.rg
 #   network_security_group_name = each.value.name
@@ -2739,7 +2704,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
 #   protocol                    = "Tcp"
 #   source_port_range           = "*"
 #   destination_port_range      = "80"
-#   source_address_prefixes     = local.aks_ingress_allowed_cidrs
+#   source_address_prefixes     = "Internet"
 #   destination_address_prefix  = "*"
 #   resource_group_name         = each.value.rg
 #   network_security_group_name = each.value.name
@@ -2759,7 +2724,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
 #   protocol                    = "Tcp"
 #   source_port_range           = "*"
 #   destination_port_range      = "80"
-#   source_address_prefixes     = local.aks_ingress_allowed_cidrs
+#   source_address_prefixes     = "Internet"
 #   destination_address_prefix  = "*"
 #   resource_group_name         = each.value.rg
 #   network_security_group_name = each.value.name
@@ -2779,7 +2744,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
 #   protocol                    = "Tcp"
 #   source_port_range           = "*"
 #   destination_port_range      = "80"
-#   source_address_prefixes     = local.aks_ingress_allowed_cidrs
+#   source_address_prefixes     = "Internet"
 #   destination_address_prefix  = "*"
 #   resource_group_name         = each.value.rg
 #   network_security_group_name = each.value.name
@@ -2799,7 +2764,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
 #   protocol                    = "Tcp"
 #   source_port_range           = "*"
 #   destination_port_range      = "80"
-#   source_address_prefixes     = local.aks_ingress_allowed_cidrs
+#   source_address_prefixes     = "Internet"
 #   destination_address_prefix  = "*"
 #   resource_group_name         = each.value.rg
 #   network_security_group_name = each.value.name
