@@ -1105,15 +1105,15 @@ locals {
     data.terraform_remote_state.shared[0].outputs.private_dns.zone_ids,
     {}
   ) : {}
-
-  # (Optional, now unused)
-  hub_private_dns_zone_ids_list = [
-    for _, id in local.hub_private_dns_zone_ids : id
-  ]
 }
 
 module "sa_nsg_flowlogs" {
   count               = local.enable_both ? 1 : 0
+
+  providers = {
+    azurerm = azurerm.core
+  }
+  
   source              = "../../modules/storage-account"
   product             = var.product
   name                = local.sa_nsg_flowlogs_name_cleaned
