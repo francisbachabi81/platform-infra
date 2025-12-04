@@ -1110,8 +1110,8 @@ module "sa_nsg_flowlogs" {
 
   replication_type     = var.sa_replication_type
   container_names      = ["nsg-flowlogs"]
-  pe_subnet_id         = null
-  private_dns_zone_ids = {}
+  pe_subnet_id         = local.pe_subnet_id_effective
+  private_dns_zone_ids = local.zone_ids_effective
 
   pe_blob_name         = "pep-${local.sa_nsg_flowlogs_name_cleaned}-blob"
   psc_blob_name        = "psc-${local.sa_nsg_flowlogs_name_cleaned}-blob"
@@ -1131,4 +1131,11 @@ module "sa_nsg_flowlogs" {
     },
     var.tags
   )
+
+  depends_on = [
+    data.terraform_remote_state.core,
+    data.terraform_remote_state.shared,
+    data.azurerm_resource_group.env, 
+    module.sa1
+  ]
 }
