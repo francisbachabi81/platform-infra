@@ -1104,7 +1104,7 @@ module "sa_nsg_flowlogs" {
   providers = { azurerm = azurerm.hub }
 
   product             = var.product
-  name                = local.sa_nsg_flowlogs_name
+  name                = local.sa_nsg_flowlogs_name_cleaned
   location            = var.location
   resource_group_name = local.rg_hub
 
