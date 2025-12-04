@@ -1005,11 +1005,13 @@ resource "azapi_resource" "policy_state_changes" {
 }
 
 
+
 locals {
   logicapp_parameters = {
     "$connections" = {
       "value" = {
         "office365" = {
+          # Connection References used by the Office 365 Outlook action
           "connectionId"   = "/subscriptions/${data.azurerm_client_config.core.subscription_id}/resourceGroups/${data.azurerm_resource_group.core_rg[0].name}/providers/Microsoft.Web/connections/office365"
           "connectionName" = "office365"
           "id"             = "/subscriptions/${data.azurerm_client_config.core.subscription_id}/providers/Microsoft.Web/locations/${data.azurerm_resource_group.core_rg[0].location}/managedApis/office365"
@@ -1021,6 +1023,7 @@ locals {
   logicapp_definition = {
     "$schema"        = "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#"
     "contentVersion" = "1.0.0.0"
+
     "parameters" = {
       "$connections" = {
         "defaultValue" = {}
@@ -1034,33 +1037,11 @@ locals {
         "type" = "Request"
         "kind" = "Http"
         "inputs" = {
-          # Event Grid posts an ARRAY of events
-          "schema" = {
-            "type"  = "array"
-            "items" = {
-              "type"       = "object"
-              "properties" = {
-                "id"        = { "type" = "string" }
-                "eventType" = { "type" = "string" }
-                "subject"   = { "type" = "string" }
-                "eventTime" = { "type" = "string" }
-                "data" = {
-                  "type"       = "object"
-                  "properties" = {
-                    # For SubscriptionValidation events
-                    "validationCode" = { "type" = "string" }
-                    "validationUrl"  = { "type" = "string" }
-
-                    # For PolicyState events
-                    "complianceState"    = { "type" = "string" }
-                    "resourceId"         = { "type" = "string" }
-                    "policyAssignmentId" = { "type" = "string" }
-                    "policyDefinitionId" = { "type" = "string" }
-                  }
-                }
-              }
-            }
-          }
+          # IMPORTANT: Use a permissive schema so validation POSTs aren't rejected before actions run.
+          # (Event Grid can include extra properties; strict schemas cause 400s.)
+          # Ref: MS docs on endpoint validation & receiving events via HTTP. 
+          # https://learn.microsoft.com/azure/event-grid/receive-events
+          "schema" = { "type" = "object" }
         }
       }
     }
@@ -1069,20 +1050,33 @@ locals {
       # 1) Handle Event Grid subscription validation handshake
       "If_SubscriptionValidation" = {
         "type"       = "If"
-        "expression" = "@equals(triggerOutputs()['headers']['aeg-event-type'], 'SubscriptionValidation')"
+        # Safe condition: checks both header and payload; avoids exceptions when header is absent.
+        "expression" = "@or(equals(triggerOutputs()?['headers']?['aeg-event-type'],'SubscriptionValidation'), equals(first(triggerBody())?['eventType'],'Microsoft.EventGrid.SubscriptionValidationEvent'))"
 
-        # THEN branch: respond to SubscriptionValidation
+        # THEN branch: respond to SubscriptionValidation (synchronous echo)
         "actions" = {
           "Return_SubscriptionValidation_Response" = {
             "type" = "Response"
-            "kind" = "Http"
             "inputs" = {
               "statusCode" = 200
               "body" = {
-                # Take the first Event Grid event from the array
                 "validationResponse" = "@first(triggerBody())?['data']?['validationCode']"
               }
             }
+          },
+          # Optional fallback: complete manual validation via GET validationUrl if echo fails.
+          "Manual_Validation_GET" = {
+            "type" = "Http"
+            "runAfter" = { "Return_SubscriptionValidation_Response" = ["Failed"] }
+            "inputs" = {
+              "method" = "GET"
+              "uri"    = "@first(triggerBody())?['data']?['validationUrl']"
+            }
+          },
+          "Terminate_Validation" = {
+            "type"     = "Terminate"
+            "runAfter" = { "Manual_Validation_GET" = ["Succeeded"] }
+            "inputs"   = { "runStatus" = "Succeeded" }
           }
         }
 
@@ -1107,15 +1101,15 @@ locals {
                     "body" = {
                       "To"      = var.policy_alert_email
                       "Subject" = "FedRAMP Policy Non-Compliance Detected"
-                      "Body" = <<HTML
-<p><strong>FedRAMP Moderate non-compliant resource detected.</strong></p>
-<p><strong>Resource:</strong> @{first(triggerBody())?['data']?['resourceId']}</p>
-<p><strong>Policy Assignment:</strong> @{first(triggerBody())?['data']?['policyAssignmentId']}</p>
-<p><strong>Policy Definition:</strong> @{first(triggerBody())?['data']?['policyDefinitionId']}</p>
-<p><strong>Compliance State:</strong> @{first(triggerBody())?['data']?['complianceState']}</p>
-<p><strong>Time:</strong> @{first(triggerBody())?['eventTime']}</p>
-<p>Please remediate according to the FedRAMP Moderate baseline or move this workload out of the FedRAMP boundary.</p>
-HTML
+                      "Body" = <<-HTML
+                        <p><strong>FedRAMP Moderate non-compliant resource detected.</strong></p>
+                        <p><strong>Resource:</strong> @{first(triggerBody())?['data']?['resourceId']}</p>
+                        <p><strong>Policy Assignment:</strong> @{first(triggerBody())?['data']?['policyAssignmentId']}</p>
+                        <p><strong>Policy Definition:</strong> @{first(triggerBody())?['data']?['policyDefinitionId']}</p>
+                        <p><strong>Compliance State:</strong> @{first(triggerBody())?['data']?['complianceState']}</p>
+                        <p><strong>Time:</strong> @{first(triggerBody())?['eventTime']}</p>
+                        <p>Please remediate according to the FedRAMP Moderate baseline or move this workload out of the FedRAMP boundary.</p>
+                      HTML
                       "BodyContentType" = "HTML"
                     }
                   }
@@ -1124,7 +1118,7 @@ HTML
 
               "else" = {}
             }
-          }
+                   }
         }
       }
     }
@@ -1182,19 +1176,30 @@ data "azurerm_logic_app_workflow" "policy_alerts" {
   ]
 }
 
+data "azurerm_logic_app_trigger_http_request" "policy_alerts_manual" {
+  provider    = azurerm.core
+  name        = "manual"  # trigger name in your definition
+  logic_app_id = data.azurerm_logic_app_workflow.policy_alerts.id
+
+  depends_on = [
+    azurerm_resource_group_template_deployment.logicapp,
+  ]
+}
+
 resource "azapi_resource" "policy_to_logicapp" {
   for_each = (var.enable_policy_compliance_alerts && local.policy_alerts_enabled_for_env) ? azapi_resource.policy_state_changes : {}
 
   type      = "Microsoft.EventGrid/systemTopics/eventSubscriptions@2022-06-15"
   name      = "egsub-${var.product}-${local.plane_code}-${var.region}-policy-noncompliant-${each.key}"
-  parent_id = each.value.id   # full system topic ID, including subscription & RG
+  parent_id = each.value.id
 
   body = {
     properties = {
       destination = {
         endpointType = "WebHook"
         properties = {
-          endpointUrl = data.azurerm_logic_app_workflow.policy_alerts.access_endpoint
+          endpointUrl = data.azurerm_logic_app_trigger_http_request.policy_alerts_manual.callback_url
+          # ^ instead of data.azurerm_logic_app_workflow.policy_alerts.access_endpoint
         }
       }
       filter = {
@@ -1212,8 +1217,8 @@ resource "azapi_resource" "policy_to_logicapp" {
       }
       eventDeliverySchema = "EventGridSchema"
       retryPolicy = {
-        maxDeliveryAttempts        = 30
-        eventTimeToLiveInMinutes   = 1440
+        maxDeliveryAttempts      = 30
+        eventTimeToLiveInMinutes = 1440
       }
     }
   }
