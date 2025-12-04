@@ -1037,11 +1037,9 @@ locals {
         "type" = "Request"
         "kind" = "Http"
         "inputs" = {
-          # IMPORTANT: Use a permissive schema so validation POSTs aren't rejected before actions run.
-          # (Event Grid can include extra properties; strict schemas cause 400s.)
-          # Ref: MS docs on endpoint validation & receiving events via HTTP. 
-          # https://learn.microsoft.com/azure/event-grid/receive-events
-          "schema" = { "type" = "object" }
+          "schema" = {
+            "type" = "array"
+          }
         }
       }
     }
@@ -1176,13 +1174,13 @@ data "azurerm_logic_app_workflow" "policy_alerts" {
   ]
 }
 
-data "azurerm_logic_app_trigger_http_request" "policy_alerts_manual" {
+data "azurerm_logic_app_trigger_callback_url" "policy_alerts_manual" {
   provider    = azurerm.core
   name        = "manual"  # trigger name in your definition
   logic_app_id = data.azurerm_logic_app_workflow.policy_alerts.id
 
   depends_on = [
-    azurerm_resource_group_template_deployment.logicapp,
+    azurerm_resource_group_template_deployment.logicapp
   ]
 }
 
@@ -1198,7 +1196,7 @@ resource "azapi_resource" "policy_to_logicapp" {
       destination = {
         endpointType = "WebHook"
         properties = {
-          endpointUrl = data.azurerm_logic_app_trigger_http_request.policy_alerts_manual.callback_url
+          endpointUrl = data.azurerm_logic_app_trigger_callback_url.policy_alerts_manual.value
           # ^ instead of data.azurerm_logic_app_workflow.policy_alerts.access_endpoint
         }
       }
