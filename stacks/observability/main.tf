@@ -1382,39 +1382,63 @@ locals {
                                       /* fallback – hub */                "rg-${var.product}-${local.plane_code}-${var.region}-net-01"
   )
 
-  # Gate: only enable flow logs when LAW + SA are resolved
-  nsg_flowlogs_enabled = local.law_id != null && local.nsg_flow_logs_sa_id != null
-}
-
-resource "azurerm_monitor_flow_log" "nsg" {
-  provider = azurerm.env
-
-  # One flow log per NSG in the current env subscription
-  for_each = local.nsg_flowlogs_enabled ? local.nsg_map_env : {}
-
-  # Stable, readable name derived from the NSG name in the ID
-  name = "fl-${var.product}-${local.env_effective}-${var.region}-${
-    element(split(each.key, "/"), length(split(each.key, "/")) - 1)
-  }"
-
-  # Network watcher already created by shared-network, per subscription
-  network_watcher_name = local.network_watcher_name_env
-  resource_group_name  = local.network_watcher_rg_env
-  location             = var.location
-
-  network_security_group_id = each.key
-  storage_account_id        = local.nsg_flow_logs_sa_id
-
-  enabled = true
-  version = "2"
-
-  # FedRAMP Moderate: ensure logs are retained and not silently dropped
-  retention_policy {
-    enabled = true
-    days    = var.flow_log_retention_days
+  # Which environments' NSGs should get flow logs, per effective env
+  # - dev  → hub + dev + qa
+  # - prod → hub + prod + uat
+  nsg_flowlog_env_sets = {
+    dev  = ["hub", "dev", "qa"]
+    prod = ["hub", "prod", "uat"]
   }
 
-  # Traffic Analytics → centralized LAW in Core subscription
+  # List of env keys we should target in this run
+  nsg_flowlog_env_keys = lookup(local.nsg_flowlog_env_sets, local.env_effective, [])
+
+  # Collect NSG IDs from shared-network outputs for those env keys
+  nsg_flowlog_ids = distinct(flatten([
+    for env_key in local.nsg_flowlog_env_keys : values(
+      try(data.terraform_remote_state.network.outputs.nsg_ids_by_env[env_key], {})
+    )
+  ]))
+
+  # Map for for_each, filtered to the current env subscription (if resolved)
+  nsg_flowlog_map = {
+    for id in local.nsg_flowlog_ids :
+    id => id
+    if local.sub_env_resolved == null || local.sub_env_resolved == element(split(id, "/"), 2)
+  }
+
+  # Gate: only enable flow logs when LAW + SA are resolved and we have targets
+  nsg_flowlogs_enabled = local.law_id != null && local.nsg_flow_logs_sa_id != null && length(local.nsg_flowlog_map) > 0
+}
+
+resource "azurerm_network_watcher_flow_log" "nsg" {
+  provider = azurerm.env
+
+  # When env_effective == dev → NSGs in hub + dev + qa (for this subscription)
+  # When env_effective == prod → NSGs in hub + prod + uat (for this subscription)
+  for_each = local.nsg_flowlogs_enabled ? local.nsg_flowlog_map : {}
+
+  # Stable, readable name derived from NSG name in the ID
+  name = "fl-${var.product}-${local.env_effective}-${var.region}-${
+    element(
+      split(each.key, "/"),
+      length(split(each.key, "/")) - 1
+    )
+  }"
+
+  network_watcher_name = local.network_watcher_name_env
+  resource_group_name  = local.network_watcher_rg_env
+  target_resource_id   = each.key
+  storage_account_id   = local.nsg_flow_logs_sa_id
+
+  enabled = true
+  version = 2
+
+  retention_policy {
+    enabled = true
+    days    = var.nsg_flow_logs_retention_days
+  }
+
   traffic_analytics {
     enabled               = true
     workspace_id          = local.law_id
