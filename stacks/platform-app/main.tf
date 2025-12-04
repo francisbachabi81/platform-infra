@@ -1092,7 +1092,7 @@ locals {
   )
 
   hub_subnet_ids = try(
-    data.terraform_remote_state.shared_network.outputs.subnet_ids_by_env.hub,
+    data.terraform_remote_state.shared.outputs.subnet_ids_by_env.hub,
     {}
   )
 
@@ -1104,7 +1104,7 @@ locals {
 
   # Private DNS zones coming from shared-network
   hub_private_dns_zone_ids = try(
-    data.terraform_remote_state.shared_network.outputs.private_dns.zone_ids,
+    data.terraform_remote_state.shared.outputs.private_dns.zone_ids,
     {}
   )
 
