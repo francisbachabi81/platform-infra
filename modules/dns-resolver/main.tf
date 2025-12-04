@@ -7,7 +7,10 @@ terraform {
 }
 
 locals {
-  enable_ruleset = length(var.forwarding_rules) > 0
+  # Outbound only if explicitly enabled *and* we have a subnet
+  enable_outbound = var.enable_outbound && var.outbound_subnet_id != null
+  # Ruleset only if outbound is enabled and rules were provided
+  enable_ruleset = local.enable_outbound && length(var.forwarding_rules) > 0
 
   rules_map = {
     for idx, r in var.forwarding_rules :
@@ -52,6 +55,7 @@ resource "azurerm_private_dns_resolver_inbound_endpoint" "inbound" {
 }
 
 resource "azurerm_private_dns_resolver_outbound_endpoint" "outbound" {
+  count                   = local.enable_outbound ? 1 : 0
   name                    = "pdnsro-${local.name_nodash}"
   location                = var.location
   private_dns_resolver_id = azurerm_private_dns_resolver.this.id
@@ -66,7 +70,7 @@ resource "azurerm_private_dns_resolver_dns_forwarding_ruleset" "rs" {
   resource_group_name = var.resource_group_name
 
   private_dns_resolver_outbound_endpoint_ids = [
-    azurerm_private_dns_resolver_outbound_endpoint.outbound.id
+    azurerm_private_dns_resolver_outbound_endpoint.outbound[0].id
   ]
 
   tags = var.tags

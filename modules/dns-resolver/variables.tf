@@ -54,3 +54,9 @@ variable "tags" {
   description = "Resource tags."
   default     = {}
 }
+
+variable "enable_outbound" {
+  type        = bool
+  description = "Whether to create an outbound endpoint and forwarding rules."
+  default     = true
+}

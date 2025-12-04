@@ -2626,6 +2626,7 @@ module "dns_resolver" {
   forwarding_rules    = var.dns_forwarding_rules
   vnet_links          = local.dnsr_ruleset_links
   tags                = local.dnsr_tags
+  enable_outbound     = var.dnsresolver_enable_outbound   # disable outbound when you want inbound-only
   depends_on = [
     module.vnet_hub,
     module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat, module.vpng

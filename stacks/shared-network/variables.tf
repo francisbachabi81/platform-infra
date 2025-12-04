@@ -414,3 +414,9 @@ variable "fd_sku_name" {
     error_message = "fd_sku_name must be Standard_AzureFrontDoor or Premium_AzureFrontDoor."
   }
 }
+
+variable "dnsresolver_enable_outbound" {
+  type        = bool
+  description = "Whether to create an outbound endpoint and forwarding rules."
+  default     = true
+}
