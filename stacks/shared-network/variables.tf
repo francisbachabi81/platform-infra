@@ -421,6 +421,35 @@ variable "dnsresolver_enable_outbound" {
   default     = true
 }
 
+variable "aks_ingress_allowed_cidrs" {
+  description = "CIDR(s) or service tags allowed to reach AKS LB/Ingress from Internet side"
+  type        = map(list(string))
+  default = {
+    nonprod = ["0.0.0.0/0"] 
+    prod    = ["AzureFrontDoor.Backend"] # or your WAF/AppGW public IP range later
+  }
+}
+
+# variable "aks_ingress_allowed_cidrs" {
+#   description = "CIDR(s) or service tags allowed to reach AKS LB/Ingress from Internet side"
+#   type        = map(list(string))
+
+#   # Replace the x.x.x.x values with your actual App Gateway / WAF public IPs
+#   default = {
+#     nonprod = [
+#       "0.0.0.0/0",         # keep wide-open for labs / nonprod if you want
+#       "203.0.113.10/32",   # nonprod AppGW/WAF public IP
+#     ]
+
+#     prod = [
+#       "198.51.100.10/32",  # prod AppGW/WAF public IP 1
+#       "198.51.100.11/32",  # prod AppGW/WAF public IP 2 (optional)
+#       # if you are NOT using an AKS-managed NSG for this rule, you could also add:
+#       # "AzureFrontDoor.Backend"
+#     ]
+#   }
+# }
+
 variable "baseline_allowed_service_tags" {
   type = list(string)
   default = [

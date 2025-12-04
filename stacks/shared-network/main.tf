@@ -2574,6 +2574,10 @@ resource "azurerm_network_security_rule" "aks_allow_acr_uat" {
 }
 
 # AKS ingress (per subscription)
+locals {
+  aks_ingress_allowed_cidrs = local.is_nonprod ? var.aks_ingress_allowed_cidrs["nonprod"] : var.aks_ingress_allowed_cidrs["prod"]
+}
+
 # HTTPS from Internet
 resource "azurerm_network_security_rule" "aks_allow_https_from_internet_hub" {
   for_each                    = local.aks_targets_hub
@@ -2584,7 +2588,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_hub" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "443"
-  source_address_prefixes     = "Internet"
+  source_address_prefixes     = local.aks_ingress_allowed_cidrs
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2604,7 +2608,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_dev" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "443"
-  source_address_prefixes     = "Internet"
+  source_address_prefixes     = local.aks_ingress_allowed_cidrs
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2624,7 +2628,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_qa" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "443"
-  source_address_prefixes     = "Internet"
+  source_address_prefixes     = local.aks_ingress_allowed_cidrs
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2644,7 +2648,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_prod" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "443"
-  source_address_prefixes     = "Internet"
+  source_address_prefixes     = local.aks_ingress_allowed_cidrs
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2664,7 +2668,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "443"
-  source_address_prefixes     = "Internet"
+  source_address_prefixes     = local.aks_ingress_allowed_cidrs
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2684,7 +2688,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
 #   protocol                    = "Tcp"
 #   source_port_range           = "*"
 #   destination_port_range      = "80"
-#   source_address_prefixes     = "Internet"
+#   source_address_prefixes     = local.aks_ingress_allowed_cidrs
 #   destination_address_prefix  = "*"
 #   resource_group_name         = each.value.rg
 #   network_security_group_name = each.value.name
@@ -2704,7 +2708,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
 #   protocol                    = "Tcp"
 #   source_port_range           = "*"
 #   destination_port_range      = "80"
-#   source_address_prefixes     = "Internet"
+#   source_address_prefixes     = local.aks_ingress_allowed_cidrs
 #   destination_address_prefix  = "*"
 #   resource_group_name         = each.value.rg
 #   network_security_group_name = each.value.name
@@ -2724,7 +2728,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
 #   protocol                    = "Tcp"
 #   source_port_range           = "*"
 #   destination_port_range      = "80"
-#   source_address_prefixes     = "Internet"
+#   source_address_prefixes     = local.aks_ingress_allowed_cidrs
 #   destination_address_prefix  = "*"
 #   resource_group_name         = each.value.rg
 #   network_security_group_name = each.value.name
@@ -2744,7 +2748,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
 #   protocol                    = "Tcp"
 #   source_port_range           = "*"
 #   destination_port_range      = "80"
-#   source_address_prefixes     = "Internet"
+#   source_address_prefixes     = local.aks_ingress_allowed_cidrs
 #   destination_address_prefix  = "*"
 #   resource_group_name         = each.value.rg
 #   network_security_group_name = each.value.name
@@ -2764,7 +2768,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
 #   protocol                    = "Tcp"
 #   source_port_range           = "*"
 #   destination_port_range      = "80"
-#   source_address_prefixes     = "Internet"
+#   source_address_prefixes     = local.aks_ingress_allowed_cidrs
 #   destination_address_prefix  = "*"
 #   resource_group_name         = each.value.rg
 #   network_security_group_name = each.value.name
