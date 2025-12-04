@@ -1182,6 +1182,8 @@ resource "azapi_resource_action" "manual_trigger_callback" {
   method      = "POST"
   body        = {}
 
+  response_export_values = ["value"]
+
   depends_on = [azurerm_resource_group_template_deployment.logicapp]
 }
 
