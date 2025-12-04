@@ -1091,22 +1091,23 @@ locals {
     ""
   )
 
-  hub_subnet_ids = try(
-    data.terraform_remote_state.shared.outputs.subnet_ids_by_env.hub,
+  # Hub subnet IDs from shared-network state (when enabled)
+  hub_subnet_ids = var.shared_state_enabled ? try(
+    data.terraform_remote_state.shared[0].outputs.subnet_ids_by_env.hub,
     {}
-  )
+  ) : {}
 
-  # Replace "snet-privatelink" with whatever your actual key is
+  # Prefer explicit privatelink-hub, fallback to privatelink
   hub_privatelink_subnet_id = coalesce(
     try(local.hub_subnet_ids["privatelink-hub"], null),
     try(local.hub_subnet_ids["privatelink"], null)
   )
 
-  # Private DNS zones coming from shared-network
-  hub_private_dns_zone_ids = try(
-    data.terraform_remote_state.shared.outputs.private_dns.zone_ids,
+  # Private DNS zones coming from shared-network (when enabled)
+  hub_private_dns_zone_ids = var.shared_state_enabled ? try(
+    data.terraform_remote_state.shared[0].outputs.private_dns.zone_ids,
     {}
-  )
+  ) : {}
 
   # Flatten map → list of IDs for the SA module
   hub_private_dns_zone_ids_list = [
@@ -1148,7 +1149,7 @@ module "sa_nsg_flowlogs" {
   depends_on = [
     data.terraform_remote_state.core,
     data.terraform_remote_state.shared,
-    data.azurerm_resource_group.env, 
+    data.azurerm_resource_group.env,
     module.sa1
   ]
 }
