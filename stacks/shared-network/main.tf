@@ -1223,7 +1223,7 @@ resource "azurerm_network_security_rule" "baseline_deny_inbound_hub" {
   for_each = {
     for k, v in local.all_targets_hub :
     k => v
-    if !contains(lower(v.name), "dns-inbound")
+    if !can(regex("dns-inbound", lower(v.name)))
   }
 
   name                        = "deny-all-inbound"
@@ -1244,7 +1244,7 @@ resource "azurerm_network_security_rule" "baseline_deny_inbound_dev" {
   for_each = {
     for k, v in local.all_targets_dev :
     k => v
-    if !contains(lower(v.name), "dns-inbound")
+    if !can(regex("dns-inbound", lower(v.name)))
   }
 
   name                        = "deny-all-inbound"
@@ -1265,7 +1265,7 @@ resource "azurerm_network_security_rule" "baseline_deny_inbound_qa" {
   for_each = {
     for k, v in local.all_targets_qa :
     k => v
-    if !contains(lower(v.name), "dns-inbound")
+    if !can(regex("dns-inbound", lower(v.name)))
   }
 
   name                        = "deny-all-inbound"
@@ -1286,7 +1286,7 @@ resource "azurerm_network_security_rule" "baseline_deny_inbound_prod" {
   for_each = {
     for k, v in local.all_targets_prod :
     k => v
-    if !contains(lower(v.name), "dns-inbound")
+    if !can(regex("dns-inbound", lower(v.name)))
   }
 
   name                        = "deny-all-inbound"
@@ -1307,7 +1307,7 @@ resource "azurerm_network_security_rule" "baseline_deny_inbound_uat" {
   for_each = {
     for k, v in local.all_targets_uat :
     k => v
-    if !contains(lower(v.name), "dns-inbound")
+    if !can(regex("dns-inbound", lower(v.name)))
   }
 
   name                        = "deny-all-inbound"
