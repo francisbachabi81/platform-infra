@@ -1004,8 +1004,6 @@ resource "azapi_resource" "policy_state_changes" {
   }
 }
 
-
-
 locals {
   logicapp_parameters = {
     "$connections" = {

@@ -42,3 +42,15 @@ resource "azurerm_linux_virtual_machine" "this" {
 
   tags = var.tags
 }
+
+resource "azurerm_virtual_machine_extension" "guest_config_linux" {
+  name               = "AzurePolicyforLinux"  # required instance name for GC / Azure Policy
+  virtual_machine_id = azurerm_linux_virtual_machine.this.id
+
+  publisher            = "Microsoft.GuestConfiguration"
+  type                 = "ConfigurationForLinux"
+  type_handler_version = "1.0"
+
+  auto_upgrade_minor_version = true
+  automatic_upgrade_enabled  = true
+}
