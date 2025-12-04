@@ -1219,109 +1219,109 @@ resource "azurerm_network_security_rule" "allow_ghrunner_http_internet_hub" {
   ]
 }
 # ---------- DENY All Inbound ----------
-resource "azurerm_network_security_rule" "baseline_deny_inbound_hub" {
-  for_each = {
-    for k, v in local.all_targets_hub :
-    k => v
-    if !can(regex("dns-inbound", lower(v.name)))
-  }
+# resource "azurerm_network_security_rule" "baseline_deny_inbound_hub" {
+#   for_each = {
+#     for k, v in local.all_targets_hub :
+#     k => v
+#     if !can(regex("dns-inbound", lower(v.name)))
+#   }
 
-  name                        = "deny-all-inbound"
-  priority                    = 4096
-  direction                   = "Inbound"
-  access                      = "Deny"
-  protocol                    = "*"
-  source_port_range           = "*"
-  destination_port_range      = "*"
-  source_address_prefix       = "*"
-  destination_address_prefix  = "*"
-  resource_group_name         = each.value.rg
-  network_security_group_name = each.value.name
-}
+#   name                        = "deny-all-inbound"
+#   priority                    = 4096
+#   direction                   = "Inbound"
+#   access                      = "Deny"
+#   protocol                    = "*"
+#   source_port_range           = "*"
+#   destination_port_range      = "*"
+#   source_address_prefix       = "*"
+#   destination_address_prefix  = "*"
+#   resource_group_name         = each.value.rg
+#   network_security_group_name = each.value.name
+# }
 
-resource "azurerm_network_security_rule" "baseline_deny_inbound_dev" {
-  provider = azurerm.dev
-  for_each = {
-    for k, v in local.all_targets_dev :
-    k => v
-    if !can(regex("dns-inbound", lower(v.name)))
-  }
+# resource "azurerm_network_security_rule" "baseline_deny_inbound_dev" {
+#   provider = azurerm.dev
+#   for_each = {
+#     for k, v in local.all_targets_dev :
+#     k => v
+#     if !can(regex("dns-inbound", lower(v.name)))
+#   }
 
-  name                        = "deny-all-inbound"
-  priority                    = 4096
-  direction                   = "Inbound"
-  access                      = "Deny"
-  protocol                    = "*"
-  source_port_range           = "*"
-  destination_port_range      = "*"
-  source_address_prefix       = "*"
-  destination_address_prefix  = "*"
-  resource_group_name         = each.value.rg
-  network_security_group_name = each.value.name
-}
+#   name                        = "deny-all-inbound"
+#   priority                    = 4096
+#   direction                   = "Inbound"
+#   access                      = "Deny"
+#   protocol                    = "*"
+#   source_port_range           = "*"
+#   destination_port_range      = "*"
+#   source_address_prefix       = "*"
+#   destination_address_prefix  = "*"
+#   resource_group_name         = each.value.rg
+#   network_security_group_name = each.value.name
+# }
 
-resource "azurerm_network_security_rule" "baseline_deny_inbound_qa" {
-  provider = azurerm.qa
-  for_each = {
-    for k, v in local.all_targets_qa :
-    k => v
-    if !can(regex("dns-inbound", lower(v.name)))
-  }
+# resource "azurerm_network_security_rule" "baseline_deny_inbound_qa" {
+#   provider = azurerm.qa
+#   for_each = {
+#     for k, v in local.all_targets_qa :
+#     k => v
+#     if !can(regex("dns-inbound", lower(v.name)))
+#   }
 
-  name                        = "deny-all-inbound"
-  priority                    = 4096
-  direction                   = "Inbound"
-  access                      = "Deny"
-  protocol                    = "*"
-  source_port_range           = "*"
-  destination_port_range      = "*"
-  source_address_prefix       = "*"
-  destination_address_prefix  = "*"
-  resource_group_name         = each.value.rg
-  network_security_group_name = each.value.name
-}
+#   name                        = "deny-all-inbound"
+#   priority                    = 4096
+#   direction                   = "Inbound"
+#   access                      = "Deny"
+#   protocol                    = "*"
+#   source_port_range           = "*"
+#   destination_port_range      = "*"
+#   source_address_prefix       = "*"
+#   destination_address_prefix  = "*"
+#   resource_group_name         = each.value.rg
+#   network_security_group_name = each.value.name
+# }
 
-resource "azurerm_network_security_rule" "baseline_deny_inbound_prod" {
-  provider = azurerm.prod
-  for_each = {
-    for k, v in local.all_targets_prod :
-    k => v
-    if !can(regex("dns-inbound", lower(v.name)))
-  }
+# resource "azurerm_network_security_rule" "baseline_deny_inbound_prod" {
+#   provider = azurerm.prod
+#   for_each = {
+#     for k, v in local.all_targets_prod :
+#     k => v
+#     if !can(regex("dns-inbound", lower(v.name)))
+#   }
 
-  name                        = "deny-all-inbound"
-  priority                    = 4096
-  direction                   = "Inbound"
-  access                      = "Deny"
-  protocol                    = "*"
-  source_port_range           = "*"
-  destination_port_range      = "*"
-  source_address_prefix       = "*"
-  destination_address_prefix  = "*"
-  resource_group_name         = each.value.rg
-  network_security_group_name = each.value.name
-}
+#   name                        = "deny-all-inbound"
+#   priority                    = 4096
+#   direction                   = "Inbound"
+#   access                      = "Deny"
+#   protocol                    = "*"
+#   source_port_range           = "*"
+#   destination_port_range      = "*"
+#   source_address_prefix       = "*"
+#   destination_address_prefix  = "*"
+#   resource_group_name         = each.value.rg
+#   network_security_group_name = each.value.name
+# }
 
-resource "azurerm_network_security_rule" "baseline_deny_inbound_uat" {
-  provider = azurerm.uat
-  for_each = {
-    for k, v in local.all_targets_uat :
-    k => v
-    if !can(regex("dns-inbound", lower(v.name)))
-  }
+# resource "azurerm_network_security_rule" "baseline_deny_inbound_uat" {
+#   provider = azurerm.uat
+#   for_each = {
+#     for k, v in local.all_targets_uat :
+#     k => v
+#     if !can(regex("dns-inbound", lower(v.name)))
+#   }
 
-  name                        = "deny-all-inbound"
-  priority                    = 4096
-  direction                   = "Inbound"
-  access                      = "Deny"
-  protocol                    = "*"
-  source_port_range           = "*"
-  destination_port_range      = "*"
-  source_address_prefix       = "*"
-  destination_address_prefix  = "*"
-  resource_group_name         = each.value.rg
-  network_security_group_name = each.value.name
-}
+#   name                        = "deny-all-inbound"
+#   priority                    = 4096
+#   direction                   = "Inbound"
+#   access                      = "Deny"
+#   protocol                    = "*"
+#   source_port_range           = "*"
+#   destination_port_range      = "*"
+#   source_address_prefix       = "*"
+#   destination_address_prefix  = "*"
+#   resource_group_name         = each.value.rg
+#   network_security_group_name = each.value.name
+# }
 
 # ---------- DENY TO INTERNET (all non-PE, non-appgw NSGs) ----------
 resource "azurerm_network_security_rule" "deny_all_to_internet_hub" {
