@@ -1107,11 +1107,14 @@ locals {
                       "Subject" = "FedRAMP Policy Non-Compliance Detected"
                       "Body" = <<-HTML
                         <p><strong>FedRAMP Moderate non-compliant resource detected.</strong></p>
-                        <p><strong>Resource:</strong> @{first(triggerBody())?['data']?['resourceId']}</p>
+                        <p><strong>Resource:</strong> @{first(triggerBody())?['subject']}</p>
+                        <p><strong>Subscription:</strong> @{first(triggerBody())?['data']?['subscriptionId']}</p>
                         <p><strong>Policy Assignment:</strong> @{first(triggerBody())?['data']?['policyAssignmentId']}</p>
                         <p><strong>Policy Definition:</strong> @{first(triggerBody())?['data']?['policyDefinitionId']}</p>
                         <p><strong>Compliance State:</strong> @{first(triggerBody())?['data']?['complianceState']}</p>
-                        <p><strong>Time:</strong> @{first(triggerBody())?['eventTime']}</p>
+                        <p><strong>Reason Code:</strong> @{first(triggerBody())?['data']?['complianceReasonCode']}</p>
+                        <p><strong>Evaluation Time:</strong> @{first(triggerBody())?['data']?['timestamp']}</p>
+                        <p><strong>Event Time:</strong> @{first(triggerBody())?['eventTime']}</p>
                         <p>Please remediate according to the FedRAMP Moderate baseline or move this workload out of the FedRAMP boundary.</p>
                       HTML
                       "BodyContentType" = "HTML"
