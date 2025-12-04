@@ -430,18 +430,6 @@ variable "aks_ingress_allowed_cidrs" {
   }
 }
 
-variable "enable_aks_http_internet" {
-  description = "Allow port 80 from Internet to AKS (for redirects/ACME only). Recommended: false in prod."
-  type        = bool
-  default     = false
-}
-
-variable "enable_ghrunner_http_internet" {
-  description = "Allow ghrunner egress on port 80 to Internet. Recommended: nonprod only."
-  type        = bool
-  default     = false
-}
-
 variable "baseline_allowed_service_tags" {
   type = list(string)
   default = [
