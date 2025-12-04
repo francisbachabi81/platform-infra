@@ -420,3 +420,36 @@ variable "dnsresolver_enable_outbound" {
   description = "Whether to create an outbound endpoint and forwarding rules."
   default     = true
 }
+
+variable "aks_ingress_allowed_cidrs" {
+  description = "CIDR(s) or service tags allowed to reach AKS LB/Ingress from Internet side"
+  type        = map(list(string))
+  default = {
+    nonprod = ["Internet"]
+    prod    = ["AzureFrontDoor.Backend"] # or your WAF/AppGW public IP range later
+  }
+}
+
+variable "enable_aks_http_internet" {
+  description = "Allow port 80 from Internet to AKS (for redirects/ACME only). Recommended: false in prod."
+  type        = bool
+  default     = false
+}
+
+variable "enable_ghrunner_http_internet" {
+  description = "Allow ghrunner egress on port 80 to Internet. Recommended: nonprod only."
+  type        = bool
+  default     = false
+}
+
+variable "baseline_allowed_service_tags" {
+  type = list(string)
+  default = [
+    "Storage",
+    "AzureMonitor",
+    "AzureContainerRegistry",
+    # add when needed:
+    # "AzureKeyVault",
+    # "AzureActiveDirectory",
+  ]
+}

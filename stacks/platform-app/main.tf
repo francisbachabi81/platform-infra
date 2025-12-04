@@ -1077,3 +1077,58 @@ module "redis1" {
 
   depends_on  = [data.azurerm_resource_group.env, module.postgres, module.postgres_replica]
 }
+
+locals {
+  sa_nsg_flowlogs_name = substr(
+    "saobs-${var.product}-${local.plane_code}-${var.region}-nsg",
+    0,
+    24
+  )
+
+  sa_nsg_flowlogs_name_cleaned = replace(
+    lower(trimspace(local.sa_nsg_flowlogs_name)),
+    "-",
+    ""
+  )
+
+  sa_nsg_flowlogs_id_effective = try(module.sa_nsg_flowlogs[0].id, null)
+}
+
+module "sa_nsg_flowlogs" {
+  # Create once per plane:
+  # - env=dev  → nonprod plane (shared dev/qa)
+  # - env=prod → prod plane (shared prod/uat)
+  count = contains(["dev", "prod"], var.env) ? 1 : 0
+
+  source    = "../../modules/storage-account"
+  providers = { azurerm = azurerm.hub }
+
+  product             = var.product
+  name                = local.sa_nsg_flowlogs_name
+  location            = var.location
+  resource_group_name = local.rg_hub
+
+  replication_type     = var.sa_replication_type
+  container_names      = ["nsg-flowlogs"]
+  pe_subnet_id         = null
+  private_dns_zone_ids = {}
+
+  pe_blob_name         = "pep-${local.sa_nsg_flowlogs_name_cleaned}-blob"
+  psc_blob_name        = "psc-${local.sa_nsg_flowlogs_name_cleaned}-blob"
+  blob_zone_group_name = "pdns-${local.sa_nsg_flowlogs_name_cleaned}-blob"
+  pe_file_name         = "pep-${local.sa_nsg_flowlogs_name_cleaned}-file"
+  psc_file_name        = "psc-${local.sa_nsg_flowlogs_name_cleaned}-file"
+  file_zone_group_name = "pdns-${local.sa_nsg_flowlogs_name_cleaned}-file"
+
+  tags = merge(
+    local.tags_common,
+    {
+      purpose     = "nsg-flowlogs"
+      service     = "observability"
+      layer       = "shared-observability"
+      lane        = local.plane
+      shared_with = local.plane == "nonprod" ? "dev,qa" : "prod,uat"
+    },
+    var.tags
+  )
+}

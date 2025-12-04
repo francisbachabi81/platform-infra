@@ -24,6 +24,22 @@ locals {
   prod_ten = (var.prod_tenant_id       != null && trimspace(var.prod_tenant_id)       != "") ? var.prod_tenant_id       : var.hub_tenant_id
 }
 
+locals {
+  aks_ingress_allowed_cidrs = local.is_nonprod ? var.aks_ingress_allowed_cidrs["nonprod"] : var.aks_ingress_allowed_cidrs["prod"]
+}
+
+locals {
+  fedramp_common_tags = {
+    system                 = "shared-network"
+    component              = "nsg"
+    fedramp_boundary       = "network"
+    fedramp_impact_level   = "moderate"
+    compliance             = "fedramp-moderate"
+    data_owner             = "it-operations"
+    business_unit          = "core-it"
+  }
+}
+
 # Default = HUB subscription
 provider "azurerm" {
   features {}
@@ -113,13 +129,74 @@ locals {
     deployed_via = "github-actions"
   }
 
+  fedramp_common_tags = {
+    system                 = "shared-network"
+    component              = "nsg"
+    fedramp_boundary       = "network"
+    fedramp_impact_level   = "moderate"
+    compliance             = "fedramp-moderate"
+    data_owner             = "it-operations"
+    business_unit          = "core-it"
+  }
+
   # consolidated base for most tags
   tag_base = merge(var.tags, local.org_base_tags, local.base_layer_tags)
 
-  dev_only_tags  = { environment = "dev",  purpose = "env-dev",  criticality = "Low",    patchgroup = "Test",    lane = "nonprod" }
-  qa_only_tags   = { environment = "qa",   purpose = "env-qa",   criticality = "Medium", patchgroup = "Test",    lane = "nonprod" }
-  uat_only_tags  = { environment = "uat",  purpose = "env-uat",  criticality = "Medium", patchgroup = "Monthly", lane = "prod" }
-  prod_only_tags = { environment = "prod", purpose = "env-prod", criticality = "High",   patchgroup = "Monthly", lane = "prod" }
+  dev_only_tags = {
+    environment           = "dev"
+    purpose               = "env-dev"
+    criticality           = "Low"
+    patchgroup            = "Test"
+    lane                  = "nonprod"
+
+    # FedRAMP / classification metadata
+    environment_stage     = "non-production"
+    data_classification   = "internal"
+    fedramp_data_profile  = "non-production"
+    asset_criticality     = "low"
+  }
+
+  qa_only_tags = {
+    environment           = "qa"
+    purpose               = "env-qa"
+    criticality           = "Medium"
+    patchgroup            = "Test"
+    lane                  = "nonprod"
+
+    # FedRAMP / classification metadata
+    environment_stage     = "non-production"
+    data_classification   = "internal"
+    fedramp_data_profile  = "non-production"
+    asset_criticality     = "low"
+  }
+
+  uat_only_tags = {
+    environment           = "uat"
+    purpose               = "env-uat"
+    criticality           = "Medium"
+    patchgroup            = "Monthly"
+    lane                  = "prod"
+
+    # FedRAMP / classification metadata
+    environment_stage     = "pre-production"
+    data_classification   = "internal"
+    fedramp_data_profile  = "pre-production"
+    asset_criticality     = "medium"
+  }
+
+  prod_only_tags = {
+    environment           = "prod"
+    purpose               = "env-prod"
+    criticality           = "High"
+    patchgroup            = "Monthly"
+    lane                  = "prod"
+
+    # FedRAMP / classification metadata
+    environment_stage     = "production"
+    data_classification   = "restricted"
+    fedramp_data_profile  = "production"
+    asset_criticality     = "high"
+  }
 
   short_zone_map = {
     # Commercial
@@ -216,17 +293,30 @@ module "rg_hub" {
   source   = "../../modules/resource-group"
   name     = local.hub_rg_name
   location = var.location
-  tags     = merge(local.tag_base, local.plane_tags, { layer = local.is_nonprod ? local.rg_layer_by_key["nphub"] : local.rg_layer_by_key["prhub"] })
+
+  tags = merge(
+    local.tag_base,
+    local.plane_tags,          # nonprod/prod plane
+    local.fedramp_common_tags, # shared FedRAMP metadata
+    {
+      layer = local.is_nonprod ? local.rg_layer_by_key["nphub"] : local.rg_layer_by_key["prhub"]
+    }
+  )
 }
 
 module "rg_dev" {
   count     = local.is_nonprod ? 1 : 0
   providers = { azurerm = azurerm.dev }
   source    = "../../modules/resource-group"
-  # name      = local.dev_rg_name
   name      = local.dev_rg_name
   location  = var.location
-  tags      = merge(local.tag_base, local.dev_only_tags, { layer = local.rg_layer_by_key["dev"] })
+
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.dev_only_tags,
+    { layer = local.rg_layer_by_key["dev"] }
+  )
 }
 
 module "rg_dev_core" {
@@ -235,17 +325,28 @@ module "rg_dev_core" {
   source    = "../../modules/resource-group"
   name      = local.dev_rg_name_core
   location  = var.location
-  tags      = merge(local.tag_base, local.dev_only_tags, { layer = local.rg_layer_by_key["dev"] })
+
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.dev_only_tags,
+    { layer = local.rg_layer_by_key["dev"] }
+  )
 }
 
 module "rg_qa" {
   count     = local.is_nonprod ? 1 : 0
   providers = { azurerm = azurerm.qa }
   source    = "../../modules/resource-group"
-  # name      = local.qa_rg_name
   name      = local.qa_rg_name
   location  = var.location
-  tags      = merge(local.tag_base, local.qa_only_tags, { layer = local.rg_layer_by_key["qa"] })
+
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.qa_only_tags,
+    { layer = local.rg_layer_by_key["qa"] }
+  )
 }
 
 module "rg_qa_core" {
@@ -254,17 +355,28 @@ module "rg_qa_core" {
   source    = "../../modules/resource-group"
   name      = local.qa_rg_name_core
   location  = var.location
-  tags      = merge(local.tag_base, local.qa_only_tags, { layer = local.rg_layer_by_key["qa"] })
+
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.qa_only_tags,
+    { layer = local.rg_layer_by_key["qa"] }
+  )
 }
 
 module "rg_prod" {
   count     = local.is_prod ? 1 : 0
   providers = { azurerm = azurerm.prod }
   source    = "../../modules/resource-group"
-  # name      = local.prod_rg_name
   name      = local.prod_rg_name
   location  = var.location
-  tags      = merge(local.tag_base, local.prod_only_tags, { layer = local.rg_layer_by_key["prod"] })
+
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.prod_only_tags,
+    { layer = local.rg_layer_by_key["prod"] }
+  )
 }
 
 module "rg_prod_core" {
@@ -273,17 +385,28 @@ module "rg_prod_core" {
   source    = "../../modules/resource-group"
   name      = local.prod_rg_name_core
   location  = var.location
-  tags      = merge(local.tag_base, local.prod_only_tags, { layer = local.rg_layer_by_key["prod"] })
+
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.prod_only_tags,
+    { layer = local.rg_layer_by_key["prod"] }
+  )
 }
 
 module "rg_uat" {
   count     = local.is_prod ? 1 : 0
   providers = { azurerm = azurerm.uat }
   source    = "../../modules/resource-group"
-  # name      = local.uat_rg_name
   name      = local.uat_rg_name
   location  = var.location
-  tags      = merge(local.tag_base, local.uat_only_tags, { layer = local.rg_layer_by_key["uat"] })
+
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.uat_only_tags,
+    { layer = local.rg_layer_by_key["uat"] }
+  )
 }
 
 module "rg_uat_core" {
@@ -292,20 +415,33 @@ module "rg_uat_core" {
   source    = "../../modules/resource-group"
   name      = local.uat_rg_name_core
   location  = var.location
-  tags      = merge(local.tag_base, local.uat_only_tags, { layer = local.rg_layer_by_key["uat"] })
+
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.uat_only_tags,
+    { layer = local.rg_layer_by_key["uat"] }
+  )
 }
 
 # vnets (per-env with proper provider)
 module "vnet_hub" {
   source              = "../../modules/vnet"
-  # name                = local.is_nonprod ? var.nonprod_hub.vnet : var.prod_hub.vnet
-  # resource_group_name = local.is_nonprod ? local.hub_rg_name   : var.prod_hub.rg
   name                = local.hub_vnet_name
   resource_group_name = local.hub_rg_name
   location            = var.location
   address_space       = (local.is_nonprod ? var.nonprod_hub : var.prod_hub).cidrs
   subnets             = (local.is_nonprod ? var.nonprod_hub : var.prod_hub).subnets
-  tags                = merge(local.tag_base, { purpose = "shared-hub-connectivity" }, { layer = local.is_nonprod ? local.vnet_layer_by_key["nphub"] : local.vnet_layer_by_key["prhub"] })
+
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    {
+      purpose = "shared-hub-connectivity"
+      layer   = local.is_nonprod ? local.vnet_layer_by_key["nphub"] : local.vnet_layer_by_key["prhub"]
+    }
+  )
+
   depends_on          = [module.rg_hub]
 }
 
@@ -313,14 +449,19 @@ module "vnet_dev" {
   count               = local.is_nonprod ? 1 : 0
   providers           = { azurerm = azurerm.dev }
   source              = "../../modules/vnet"
-  # name                = var.dev_spoke.vnet
-  # resource_group_name = local.dev_rg_name
   name                = local.dev_vnet_name
   resource_group_name = local.dev_rg_name
   location            = var.location
   address_space       = var.dev_spoke.cidrs
   subnets             = var.dev_spoke.subnets
-  tags                = merge(local.tag_base, local.dev_only_tags, { layer = local.vnet_layer_by_key["dev"] })
+
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.dev_only_tags,
+    { layer = local.vnet_layer_by_key["dev"] }
+  )
+
   depends_on          = [module.rg_dev]
 }
 
@@ -328,14 +469,19 @@ module "vnet_qa" {
   count               = local.is_nonprod ? 1 : 0
   providers           = { azurerm = azurerm.qa }
   source              = "../../modules/vnet"
-  # name                = var.qa_spoke.vnet
-  # resource_group_name = local.qa_rg_name
   name                = local.qa_vnet_name
   resource_group_name = local.qa_rg_name
   location            = var.location
   address_space       = var.qa_spoke.cidrs
   subnets             = var.qa_spoke.subnets
-  tags                = merge(local.tag_base, local.qa_only_tags, { layer = local.vnet_layer_by_key["qa"] })
+
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.qa_only_tags,
+    { layer = local.vnet_layer_by_key["qa"] }
+  )
+
   depends_on          = [module.rg_qa]
 }
 
@@ -343,14 +489,19 @@ module "vnet_prod" {
   count               = local.is_prod ? 1 : 0
   providers           = { azurerm = azurerm.prod }
   source              = "../../modules/vnet"
-  # name                = var.prod_spoke.vnet
-  # resource_group_name = local.prod_rg_name
   name                = local.prod_vnet_name
   resource_group_name = local.prod_rg_name
   location            = var.location
   address_space       = var.prod_spoke.cidrs
   subnets             = var.prod_spoke.subnets
-  tags                = merge(local.tag_base, local.prod_only_tags, { layer = local.vnet_layer_by_key["prod"] })
+
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.prod_only_tags,
+    { layer = local.vnet_layer_by_key["prod"] }
+  )
+
   depends_on          = [module.rg_prod]
 }
 
@@ -365,7 +516,14 @@ module "vnet_uat" {
   location            = var.location
   address_space       = var.uat_spoke.cidrs
   subnets             = var.uat_spoke.subnets
-  tags                = merge(local.tag_base, local.uat_only_tags, { layer = local.vnet_layer_by_key["uat"] })
+
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.uat_only_tags,
+    { layer = local.vnet_layer_by_key["uat"] }
+  )
+
   depends_on          = [module.rg_uat]
 }
 
@@ -528,7 +686,16 @@ module "pdns" {
   resource_group_name = local.hub_rg_name
   zones               = var.private_zones
   vnet_links          = local.vnet_links
-  tags                = merge(local.tag_base, { purpose = "private-dns" })
+
+  tags = merge(
+    local.tag_base,
+    local.plane_tags,          # nonprod/prod plane for the hub
+    local.fedramp_common_tags, # shared FedRAMP / boundary metadata
+    {
+      purpose = "private-dns"
+    }
+  )
+
   depends_on = [
     module.rg_hub,
     module.vnet_hub,
@@ -575,14 +742,25 @@ module "vpng" {
   gateway_subnet_id   = local.vpng_gateway_subnet_id
   tenant_id           = var.hub_tenant_id
   azure_environment   = var.product == "hrz" ? "usgovernment" : "public"
-  tags = merge(local.tag_base, {
-    purpose = "p2s-vpn-gateway"
-    service = "connectivity"
-    lane    = local.lane
-  })
+
+  tags = merge(
+    local.tag_base,
+    local.plane_tags,          # nonprod/prod hub plane
+    local.fedramp_common_tags, # shared FedRAMP/boundary metadata
+    {
+      purpose = "p2s-vpn-gateway"
+      service = "connectivity"
+      lane    = local.lane      # keep existing lane behavior
+    }
+  )
+
   depends_on = [
     module.vnet_hub,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+    module.nsg_hub,
+    module.nsg_dev,
+    module.nsg_qa,
+    module.nsg_prod,
+    module.nsg_uat
   ]
 }
 
@@ -601,8 +779,22 @@ module "waf" {
   location            = var.location
   resource_group_name = local.appgw_hub_rg
   mode                = var.waf_mode
-  tags                = merge(local.tag_base, { purpose = "app-gateway-waf-policy", service = "ingress", lane = local.lane })
-  depends_on = [module.rg_hub, module.vnet_hub]
+
+  tags = merge(
+    local.tag_base,
+    local.plane_tags,          # nonprod/prod plane for this hub
+    local.fedramp_common_tags, # shared FedRAMP/boundary metadata
+    {
+      purpose = "app-gateway-waf-policy"
+      service = "ingress"
+      lane    = local.lane
+    }
+  )
+
+  depends_on = [
+    module.rg_hub,
+    module.vnet_hub
+  ]
 }
 
 resource "azurerm_network_security_group" "appgw_nsg" {
@@ -610,8 +802,21 @@ resource "azurerm_network_security_group" "appgw_nsg" {
   name                = local.name_appgw_nsg
   location            = var.location
   resource_group_name = local.appgw_hub_rg
-  tags                = merge(local.tag_base, { purpose = "app-gateway-subnet-nsg", lane = local.lane })
-  depends_on = [module.rg_hub, module.vnet_hub]
+
+  tags = merge(
+    local.tag_base,
+    local.plane_tags,
+    local.fedramp_common_tags,
+    {
+      purpose = "app-gateway-subnet-nsg"
+      lane    = local.lane
+    }
+  )
+
+  depends_on = [
+    module.rg_hub,
+    module.vnet_hub
+  ]
 }
 
 resource "azurerm_network_security_rule" "appgw_allow_gwmgr" {
@@ -684,8 +889,21 @@ module "appgw" {
   capacity              = var.appgw_capacity
   cookie_based_affinity = var.appgw_cookie_based_affinity
   waf_policy_id         = try(module.waf[0].id, null)
-  tags                  = merge(local.tag_base, { purpose = "app-gateway-waf", service = "ingress", lane = local.lane })
-  depends_on            = [azurerm_subnet_network_security_group_association.appgw_assoc]
+
+  tags = merge(
+    local.tag_base,
+    local.plane_tags,          # nonprod/prod plane
+    local.fedramp_common_tags, # shared FedRAMP/boundary metadata
+    {
+      purpose = "app-gateway-waf"
+      service = "ingress"
+      lane    = local.lane
+    }
+  )
+
+  depends_on = [
+    azurerm_subnet_network_security_group_association.appgw_assoc
+  ]
 }
 
 # generic nsgs (except excluded)
@@ -759,7 +977,13 @@ module "nsg_hub" {
   location            = var.location
   resource_group_name = local.hub_rg_name
   subnet_nsgs         = local.nsgs_hub
-  tags                = merge(local.tag_base, { lane = local.lane })
+
+  tags = merge(
+    local.tag_base,
+    local.plane_tags,          # e.g. nonprod / prod plane
+    local.fedramp_common_tags  # shared FedRAMP metadata (boundary, impact, etc.)
+  )
+
   depends_on          = [module.vnet_hub]
 }
 
@@ -770,7 +994,13 @@ module "nsg_dev" {
   location            = var.location
   resource_group_name = local.dev_rg_name
   subnet_nsgs         = local.nsgs_dev
-  tags                = merge(local.tag_base, local.dev_only_tags, { lane = "nonprod" })
+
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.dev_only_tags        # includes env = dev, purpose, criticality, lane, + FedRAMP fields
+  )
+
   depends_on          = [module.vnet_dev]
 }
 
@@ -781,7 +1011,13 @@ module "nsg_qa" {
   location            = var.location
   resource_group_name = local.qa_rg_name
   subnet_nsgs         = local.nsgs_qa
-  tags                = merge(local.tag_base, local.qa_only_tags, { lane = "nonprod" })
+
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.qa_only_tags
+  )
+
   depends_on          = [module.vnet_qa]
 }
 
@@ -792,7 +1028,13 @@ module "nsg_prod" {
   location            = var.location
   resource_group_name = local.prod_rg_name
   subnet_nsgs         = local.nsgs_prod
-  tags                = merge(local.tag_base, local.prod_only_tags, { lane = "prod" })
+
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.prod_only_tags
+  )
+
   depends_on          = [module.vnet_prod]
 }
 
@@ -803,7 +1045,13 @@ module "nsg_uat" {
   location            = var.location
   resource_group_name = local.uat_rg_name
   subnet_nsgs         = local.nsgs_uat
-  tags                = merge(local.tag_base, local.uat_only_tags, { lane = "prod" })
+
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.uat_only_tags
+  )
+
   depends_on          = [module.vnet_uat]
 }
 
@@ -1000,6 +1248,7 @@ resource "azurerm_network_security_rule" "allow_ghrunner_https_internet_hub" {
 }
 
 resource "azurerm_network_security_rule" "allow_ghrunner_http_internet_hub" {
+  count                       = var.enable_ghrunner_http_internet ? 1 : 0
   for_each                    = local.ghrunner_targets_hub
   name                        = "allow-ghrunner-http-internet"
   priority                    = 365
@@ -1016,6 +1265,85 @@ resource "azurerm_network_security_rule" "allow_ghrunner_http_internet_hub" {
     module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
     module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
   ]
+}
+# ---------- DENY All Inbound ----------
+resource "azurerm_network_security_rule" "baseline_deny_inbound_hub" {
+  for_each                    = local.all_targets_hub
+  name                        = "deny-all-inbound"
+  priority                    = 4096
+  direction                   = "Inbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "baseline_deny_inbound_dev" {
+  provider                    = azurerm.dev
+  for_each                    = local.all_targets_dev
+  name                        = "deny-all-inbound"
+  priority                    = 4096
+  direction                   = "Inbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "baseline_deny_inbound_qa" {
+  provider                    = azurerm.qa
+  for_each                    = local.all_targets_qa
+  name                        = "deny-all-inbound"
+  priority                    = 4096
+  direction                   = "Inbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "baseline_deny_inbound_prod" {
+  provider                    = azurerm.prod
+  for_each                    = local.all_targets_prod
+  name                        = "deny-all-inbound"
+  priority                    = 4096
+  direction                   = "Inbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "baseline_deny_inbound_uat" {
+  provider                    = azurerm.uat
+  for_each                    = local.all_targets_uat
+  name                        = "deny-all-inbound"
+  priority                    = 4096
+  direction                   = "Inbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
 }
 
 # ---------- DENY TO INTERNET (all non-PE, non-appgw NSGs) ----------
@@ -2304,7 +2632,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_hub" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "443"
-  source_address_prefix       = "Internet"
+  source_address_prefixes     = local.aks_ingress_allowed_cidrs
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2324,7 +2652,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_dev" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "443"
-  source_address_prefix       = "Internet"
+  source_address_prefixes     = local.aks_ingress_allowed_cidrs
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2344,7 +2672,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_qa" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "443"
-  source_address_prefix       = "Internet"
+  source_address_prefixes     = local.aks_ingress_allowed_cidrs
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2364,7 +2692,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_prod" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "443"
-  source_address_prefix       = "Internet"
+  source_address_prefixes     = local.aks_ingress_allowed_cidrs
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2384,7 +2712,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "443"
-  source_address_prefix       = "Internet"
+  source_address_prefixes     = local.aks_ingress_allowed_cidrs
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2396,6 +2724,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
 
 # HTTP from Internet
 resource "azurerm_network_security_rule" "aks_allow_http_from_internet_hub" {
+  count                       = var.enable_aks_http_internet ? 1 : 0
   for_each                    = local.aks_targets_hub
   name                        = "allow-aks-http-from-internet"
   priority                    = 225
@@ -2404,7 +2733,7 @@ resource "azurerm_network_security_rule" "aks_allow_http_from_internet_hub" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "80"
-  source_address_prefix       = "Internet"
+  source_address_prefixes     = local.aks_ingress_allowed_cidrs
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2415,6 +2744,7 @@ resource "azurerm_network_security_rule" "aks_allow_http_from_internet_hub" {
 }
 
 resource "azurerm_network_security_rule" "aks_allow_http_from_internet_dev" {
+  count                       = var.enable_aks_http_internet ? 1 : 0
   provider                    = azurerm.dev
   for_each                    = local.aks_targets_dev
   name                        = "allow-aks-http-from-internet"
@@ -2424,7 +2754,7 @@ resource "azurerm_network_security_rule" "aks_allow_http_from_internet_dev" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "80"
-  source_address_prefix       = "Internet"
+  source_address_prefixes     = local.aks_ingress_allowed_cidrs
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2435,6 +2765,7 @@ resource "azurerm_network_security_rule" "aks_allow_http_from_internet_dev" {
 }
 
 resource "azurerm_network_security_rule" "aks_allow_http_from_internet_qa" {
+  count                       = var.enable_aks_http_internet ? 1 : 0
   provider                    = azurerm.qa
   for_each                    = local.aks_targets_qa
   name                        = "allow-aks-http-from-internet"
@@ -2444,7 +2775,7 @@ resource "azurerm_network_security_rule" "aks_allow_http_from_internet_qa" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "80"
-  source_address_prefix       = "Internet"
+  source_address_prefixes     = local.aks_ingress_allowed_cidrs
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2455,6 +2786,7 @@ resource "azurerm_network_security_rule" "aks_allow_http_from_internet_qa" {
 }
 
 resource "azurerm_network_security_rule" "aks_allow_http_from_internet_prod" {
+  count                       = var.enable_aks_http_internet ? 1 : 0
   provider                    = azurerm.prod
   for_each                    = local.aks_targets_prod
   name                        = "allow-aks-http-from-internet"
@@ -2464,7 +2796,7 @@ resource "azurerm_network_security_rule" "aks_allow_http_from_internet_prod" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "80"
-  source_address_prefix       = "Internet"
+  source_address_prefixes     = local.aks_ingress_allowed_cidrs
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2475,6 +2807,7 @@ resource "azurerm_network_security_rule" "aks_allow_http_from_internet_prod" {
 }
 
 resource "azurerm_network_security_rule" "aks_allow_http_from_internet_uat" {
+  count                       = var.enable_aks_http_internet ? 1 : 0
   provider                    = azurerm.uat
   for_each                    = local.aks_targets_uat
   name                        = "allow-aks-http-from-internet"
@@ -2484,7 +2817,7 @@ resource "azurerm_network_security_rule" "aks_allow_http_from_internet_uat" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "80"
-  source_address_prefix       = "Internet"
+  source_address_prefixes     = local.aks_ingress_allowed_cidrs
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -2625,11 +2958,23 @@ module "dns_resolver" {
   inbound_static_ip   = var.dnsr_inbound_static_ip
   forwarding_rules    = var.dns_forwarding_rules
   vnet_links          = local.dnsr_ruleset_links
-  tags                = local.dnsr_tags
   enable_outbound     = var.dnsresolver_enable_outbound   # disable outbound when you want inbound-only
+
+  tags = merge(
+    local.tag_base,
+    local.plane_tags,          # nonprod/prod hub plane
+    local.fedramp_common_tags, # shared FedRAMP/boundary metadata
+    local.dnsr_tags            # your existing DNS resolver–specific tags
+  )
+
   depends_on = [
     module.vnet_hub,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat, module.vpng
+    module.nsg_hub,
+    module.nsg_dev,
+    module.nsg_qa,
+    module.nsg_prod,
+    module.nsg_uat,
+    module.vpng
   ]
 }
 
@@ -2643,12 +2988,21 @@ resource "azurerm_dns_zone" "public" {
   for_each            = local.public_dns_zones_active
   name                = each.value
   resource_group_name = local.hub_rg_name
-  tags = merge(local.tag_base, {
-    purpose     = "public-dns-zone"
-    environment = local.public_dns_env
-    lane        = local.public_dns_env
-  })
-  depends_on = [module.rg_hub]
+
+  tags = merge(
+    local.tag_base,
+    local.plane_tags,          # nonprod/prod plane
+    local.fedramp_common_tags, # shared FedRAMP/boundary metadata
+    {
+      purpose     = "public-dns-zone"
+      environment = local.public_dns_env
+      lane        = local.public_dns_env
+    }
+  )
+
+  depends_on = [
+    module.rg_hub
+  ]
 }
 
 # front door (shared-network rg)
@@ -2688,24 +3042,40 @@ module "fd" {
   profile_name        = local.fd_profile_name
   endpoint_name       = local.fd_endpoint_name
   sku_name            = var.fd_sku_name
-  tags                = local.fd_tags
 
-  depends_on = [module.rg_hub]
+  tags = merge(
+    local.tag_base,
+    local.plane_tags,          # nonprod/prod plane
+    local.fedramp_common_tags, # FedRAMP/boundary metadata
+    local.fd_tags              # existing FD-specific tags
+  )
+
+  depends_on = [
+    module.rg_hub
+  ]
 }
 
 # network watcher (regional, managed by this stack) 
 resource "azurerm_network_watcher" "hub" {
+  count = local.is_nonprod || local.is_prod ? 1 : 0
   name                = "nw-${var.product}-${local.plane_code}-${var.region}-01"
   location            = var.location
   resource_group_name = local.hub_rg_name
 
-  tags = merge(local.tag_base, {
-    purpose = "network-watcher"
-    service = "netops"
-    lane    = local.lane
-  })
+  tags = merge(
+    local.tag_base,
+    local.plane_tags,
+    local.fedramp_common_tags,
+    {
+      purpose = "network-watcher"
+      service = "netops"
+      lane    = local.lane
+    }
+  )
 
-  depends_on = [module.rg_hub]
+  depends_on = [
+    module.rg_hub
+  ]
 }
 
 # network watcher (spokes, subscription-local)
@@ -2718,12 +3088,19 @@ resource "azurerm_network_watcher" "dev" {
   location            = var.location
   resource_group_name = local.dev_rg_name
 
-  tags = merge(local.tag_base, local.dev_only_tags, {
-    purpose = "network-watcher"
-    service = "netops"
-  })
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.dev_only_tags,  # includes env, purpose/env-dev, criticality, lane, etc.
+    {
+      purpose = "network-watcher"
+      service = "netops"
+    }
+  )
 
-  depends_on = [module.rg_dev]
+  depends_on = [
+    module.rg_dev
+  ]
 }
 
 # QA (nonprod plane only)
@@ -2734,12 +3111,19 @@ resource "azurerm_network_watcher" "qa" {
   location            = var.location
   resource_group_name = local.qa_rg_name
 
-  tags = merge(local.tag_base, local.qa_only_tags, {
-    purpose = "network-watcher"
-    service = "netops"
-  })
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.qa_only_tags,
+    {
+      purpose = "network-watcher"
+      service = "netops"
+    }
+  )
 
-  depends_on = [module.rg_qa]
+  depends_on = [
+    module.rg_qa
+  ]
 }
 
 # PROD (prod plane only)
@@ -2750,12 +3134,19 @@ resource "azurerm_network_watcher" "prod" {
   location            = var.location
   resource_group_name = local.prod_rg_name
 
-  tags = merge(local.tag_base, local.prod_only_tags, {
-    purpose = "network-watcher"
-    service = "netops"
-  })
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.prod_only_tags,
+    {
+      purpose = "network-watcher"
+      service = "netops"
+    }
+  )
 
-  depends_on = [module.rg_prod]
+  depends_on = [
+    module.rg_prod
+  ]
 }
 
 # UAT (prod plane only)
@@ -2766,10 +3157,17 @@ resource "azurerm_network_watcher" "uat" {
   location            = var.location
   resource_group_name = local.uat_rg_name
 
-  tags = merge(local.tag_base, local.uat_only_tags, {
-    purpose = "network-watcher"
-    service = "netops"
-  })
+  tags = merge(
+    local.tag_base,
+    local.fedramp_common_tags,
+    local.uat_only_tags,
+    {
+      purpose = "network-watcher"
+      service = "netops"
+    }
+  )
 
-  depends_on = [module.rg_uat]
+  depends_on = [
+    module.rg_uat
+  ]
 }

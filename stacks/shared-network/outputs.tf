@@ -139,11 +139,37 @@ output "frontdoor" {
   }, null)
 }
 
-output "network_watcher" {
+output "network_watchers" {
   value = {
-    id   = try(azurerm_network_watcher.hub.id, null)
-    name = try(azurerm_network_watcher.hub.name, null)
-    rg   = local.hub_rg_name
+    hub = try({
+      id   = azurerm_network_watcher.hub[0].id
+      name = azurerm_network_watcher.hub[0].name
+      rg   = local.hub_rg_name
+    }, null)
+
+    dev = try({
+      id   = azurerm_network_watcher.dev[0].id
+      name = azurerm_network_watcher.dev[0].name
+      rg   = local.dev_rg_name
+    }, null)
+
+    qa = try({
+      id   = azurerm_network_watcher.qa[0].id
+      name = azurerm_network_watcher.qa[0].name
+      rg   = local.qa_rg_name
+    }, null)
+
+    prod = try({
+      id   = azurerm_network_watcher.prod[0].id
+      name = azurerm_network_watcher.prod[0].name
+      rg   = local.prod_rg_name
+    }, null)
+
+    uat = try({
+      id   = azurerm_network_watcher.uat[0].id
+      name = azurerm_network_watcher.uat[0].name
+      rg   = local.uat_rg_name
+    }, null)
   }
 }
 

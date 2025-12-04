@@ -219,3 +219,27 @@ variable "budget_alert_emails" {
   description = "Emails to receive budget notifications (falls back to alert_emails if empty)"
   default     = []
 }
+
+variable "enable_nsg_flow_logs" {
+  description = "Enable NSG flow logs for all NSGs emitted by shared-network."
+  type        = bool
+  default     = true
+}
+
+variable "nsg_flow_logs_retention_days" {
+  description = "Retention (days) for NSG flow logs in Traffic Analytics."
+  type        = number
+  default     = 30
+}
+
+variable "nsg_flow_logs_storage_account_id_override" {
+  description = "Optional override for the Storage Account used for NSG flow logs. Must live in Core subscription."
+  type        = string
+  default     = null
+}
+
+variable "law_workspace_guid_override" {
+  description = "Optional override for the Log Analytics workspace GUID for Traffic Analytics, if not exposed via core remote state."
+  type        = string
+  default     = null
+}

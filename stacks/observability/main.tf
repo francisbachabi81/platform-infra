@@ -325,6 +325,14 @@ locals {
     for id in local.ids_nsg :
     id => id
   }
+  nsg_map_env = {
+    for id in local.ids_nsg :
+    id => id
+    if local.sub_env_resolved != null && local.sub_env_resolved == element(split(id, "/"), 2)
+  }
+
+  nsg_flow_logs_storage = try(data.terraform_remote_state.platform.outputs.nsg_flow_logs_storage, null)
+  nsg_flow_logs_sa_id   = try(local.nsg_flow_logs_storage.id, null)
 }
 
 # Diagnostic categories
@@ -1262,5 +1270,72 @@ resource "azurerm_consumption_budget_subscription" "policy_source_budgets" {
     contact_emails = local.budget_emails_effective
     # You can also add contact_roles = ["Owner"] if you want owners to be notified
     # contact_roles  = ["Owner"]
+  }
+}
+
+locals {
+  # Network watcher per env / plane (shared-network convention)
+  network_watcher_name_env = (
+    local.plane_effective == "nonprod" && local.env_effective == "dev"  ? "nw-${var.product}-dev-${var.region}-01"  :
+    local.plane_effective == "nonprod" && local.env_effective == "qa"   ? "nw-${var.product}-qa-${var.region}-01"   :
+    local.plane_effective == "prod"    && local.env_effective == "prod" ? "nw-${var.product}-prod-${var.region}-01" :
+    local.plane_effective == "prod"    && local.env_effective == "uat"  ? "nw-${var.product}-uat-${var.region}-01"  :
+                                      /* fallback – hub */                "nw-${var.product}-${local.plane_code}-${var.region}-01"
+  )
+
+  network_watcher_rg_env = (
+    local.plane_effective == "nonprod" && local.env_effective == "dev"  ? "rg-${var.product}-dev-${var.region}-net-01"  :
+    local.plane_effective == "nonprod" && local.env_effective == "qa"   ? "rg-${var.product}-qa-${var.region}-net-01"   :
+    local.plane_effective == "prod"    && local.env_effective == "prod" ? "rg-${var.product}-prod-${var.region}-net-01" :
+    local.plane_effective == "prod"    && local.env_effective == "uat"  ? "rg-${var.product}-uat-${var.region}-net-01"  :
+                                      /* fallback – hub */                "rg-${var.product}-${local.plane_code}-${var.region}-net-01"
+  )
+
+  # Gate: only enable flow logs when LAW + SA are resolved
+  nsg_flowlogs_enabled = local.law_id != null && local.nsg_flow_logs_sa_id != null
+}
+
+resource "azurerm_monitor_flow_log" "nsg" {
+  provider = azurerm.env
+
+  # One flow log per NSG in the current env subscription
+  for_each = local.nsg_flowlogs_enabled ? local.nsg_map_env : {}
+
+  # Stable, readable name derived from the NSG name in the ID
+  name = "fl-${var.product}-${local.env_effective}-${var.region}-${
+    element(split(each.key, "/"), length(split(each.key, "/")) - 1)
+  }"
+
+  # Network watcher already created by shared-network, per subscription
+  network_watcher_name = local.network_watcher_name_env
+  resource_group_name  = local.network_watcher_rg_env
+  location             = var.location
+
+  network_security_group_id = each.key
+  storage_account_id        = local.nsg_flow_logs_sa_id
+
+  enabled = true
+  version = "2"
+
+  # FedRAMP Moderate: ensure logs are retained and not silently dropped
+  retention_policy {
+    enabled = true
+    days    = var.flow_log_retention_days
+  }
+
+  # Traffic Analytics → centralized LAW in Core subscription
+  traffic_analytics {
+    enabled               = true
+    workspace_id          = local.law_id
+    workspace_region      = var.location
+    workspace_resource_id = local.law_id
+    interval_in_minutes   = 10
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null && local.nsg_flow_logs_sa_id != null
+      error_message = "LAW workspace or NSG flow-logs storage account is not resolved; cannot configure NSG flow logs."
+    }
   }
 }

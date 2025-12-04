@@ -25,8 +25,8 @@ action_group_email_receivers = [
     use_common_alert_schema = true
   },
   {
-    name                    = "Ops Azure Alerts"
-    email_address           = "azure-alerts@intterragroup.com"
+    name                    = "Cloud Ops Alerts"
+    email_address           = "cloudops@intterragroup.com"
     use_common_alert_schema = true
   }
 ]

@@ -252,3 +252,12 @@ output "kubernetes" {
     name = local.aks_name
   } : null
 }
+
+output "nsg_flow_logs_storage" {
+  value = local.sa_nsg_flowlogs_id_effective == null ? null : {
+    id   = module.sa_nsg_flowlogs[0].id
+    name = module.sa_nsg_flowlogs[0].name
+    rg   = local.rg_hub
+    plane = local.plane
+  }
+}
