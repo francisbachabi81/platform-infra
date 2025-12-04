@@ -2293,6 +2293,207 @@ resource "azurerm_network_security_rule" "aks_allow_acr_uat" {
   ]
 }
 
+# AKS ingress (per subscription)
+# HTTPS from Internet
+resource "azurerm_network_security_rule" "aks_allow_https_from_internet_hub" {
+  for_each                    = local.aks_targets_hub
+  name                        = "allow-aks-https-from-internet"
+  priority                    = 220
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "Internet"
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+resource "azurerm_network_security_rule" "aks_allow_https_from_internet_dev" {
+  provider                    = azurerm.dev
+  for_each                    = local.aks_targets_dev
+  name                        = "allow-aks-https-from-internet"
+  priority                    = 220
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "Internet"
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+resource "azurerm_network_security_rule" "aks_allow_https_from_internet_qa" {
+  provider                    = azurerm.qa
+  for_each                    = local.aks_targets_qa
+  name                        = "allow-aks-https-from-internet"
+  priority                    = 220
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "Internet"
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+resource "azurerm_network_security_rule" "aks_allow_https_from_internet_prod" {
+  provider                    = azurerm.prod
+  for_each                    = local.aks_targets_prod
+  name                        = "allow-aks-https-from-internet"
+  priority                    = 220
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "Internet"
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
+  provider                    = azurerm.uat
+  for_each                    = local.aks_targets_uat
+  name                        = "allow-aks-https-from-internet"
+  priority                    = 220
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "443"
+  source_address_prefix       = "Internet"
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+# HTTP from Internet
+resource "azurerm_network_security_rule" "aks_allow_http_from_internet_hub" {
+  for_each                    = local.aks_targets_hub
+  name                        = "allow-aks-http-from-internet"
+  priority                    = 225
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "80"
+  source_address_prefix       = "Internet"
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+resource "azurerm_network_security_rule" "aks_allow_http_from_internet_dev" {
+  provider                    = azurerm.dev
+  for_each                    = local.aks_targets_dev
+  name                        = "allow-aks-http-from-internet"
+  priority                    = 225
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "80"
+  source_address_prefix       = "Internet"
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+resource "azurerm_network_security_rule" "aks_allow_http_from_internet_qa" {
+  provider                    = azurerm.qa
+  for_each                    = local.aks_targets_qa
+  name                        = "allow-aks-http-from-internet"
+  priority                    = 225
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "80"
+  source_address_prefix       = "Internet"
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+resource "azurerm_network_security_rule" "aks_allow_http_from_internet_prod" {
+  provider                    = azurerm.prod
+  for_each                    = local.aks_targets_prod
+  name                        = "allow-aks-http-from-internet"
+  priority                    = 225
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "80"
+  source_address_prefix       = "Internet"
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+resource "azurerm_network_security_rule" "aks_allow_http_from_internet_uat" {
+  provider                    = azurerm.uat
+  for_each                    = local.aks_targets_uat
+  name                        = "allow-aks-http-from-internet"
+  priority                    = 225
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "80"
+  source_address_prefix       = "Internet"
+  destination_address_prefix  = "*"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
 # PE (Cosmos DB for PostgreSQL) - outbound baseline (per subscription) ─────
 resource "azurerm_network_security_rule" "pe_cdbpg_deny_internet_hub" {
   for_each                    = local.pe_cdbpg_hub
