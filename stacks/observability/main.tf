@@ -1408,22 +1408,20 @@ locals {
 
   # Gate: only enable flow logs when LAW + SA are resolved AND we have targets
   nsg_flowlogs_enabled = local.law_id != null && local.nsg_flow_logs_sa_id != null && length(local.nsg_flowlog_map) > 0
+
+  law_workspace_guid = try(
+    element(split(local.law_id, "/"), length(split(local.law_id, "/")) - 1),
+    local.law_id
+  )
 }
 
 resource "azurerm_network_watcher_flow_log" "nsg" {
   provider = azurerm.core
 
-  # When env_effective == dev → NSGs in hub + dev + qa (for this plane)
-  # When env_effective == prod → NSGs in hub + prod + uat
   for_each = local.nsg_flowlogs_enabled ? local.nsg_flowlog_map : {}
 
-  # Stable, readable name derived from NSG name in the ID
-  name = "fl-${var.product}-${local.env_effective}-${var.region}-${
-    element(
-      split(each.key, "/"),
-      length(split(each.key, "/")) - 1
-    )
-  }"
+  # Use basename() to safely extract NSG name
+  name = "fl-${var.product}-${local.env_effective}-${var.region}-${basename(each.key)}"
 
   network_watcher_name = local.network_watcher_name_env
   resource_group_name  = local.network_watcher_rg_env
@@ -1440,16 +1438,16 @@ resource "azurerm_network_watcher_flow_log" "nsg" {
 
   traffic_analytics {
     enabled               = true
-    workspace_id          = local.law_id
+    workspace_id          = local.law_workspace_guid    # MUST be GUID
     workspace_region      = var.location
-    workspace_resource_id = local.law_id
+    workspace_resource_id = local.law_id                # ARM ID OK
     interval_in_minutes   = 10
   }
 
   lifecycle {
     precondition {
       condition     = local.law_id != null && local.nsg_flow_logs_sa_id != null
-      error_message = "LAW workspace or NSG flow-logs storage account is not resolved; cannot configure NSG flow logs."
+      error_message = "LAW workspace or NSG flow-logs storage account not resolved."
     }
   }
 }
