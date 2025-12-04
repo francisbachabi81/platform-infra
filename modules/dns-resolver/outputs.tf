@@ -9,11 +9,11 @@ output "inbound_endpoint_id" {
 }
 
 output "outbound_endpoint_id" {
-  description = "Outbound endpoint ID."
-  value       = azurerm_private_dns_resolver_outbound_endpoint.outbound.id
+  description = "ID of the outbound endpoint (if created)"
+  value       = try(azurerm_private_dns_resolver_outbound_endpoint.outbound[0].id, null)
 }
 
 output "ruleset_id" {
-  description = "Forwarding ruleset ID (null when no rules)."
+  description = "ID of the DNS forwarding ruleset (if created)"
   value       = try(azurerm_private_dns_resolver_dns_forwarding_ruleset.rs[0].id, null)
 }
