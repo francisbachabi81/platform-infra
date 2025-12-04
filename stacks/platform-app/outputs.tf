@@ -254,10 +254,10 @@ output "kubernetes" {
 }
 
 output "nsg_flow_logs_storage" {
-  value = local.sa_nsg_flowlogs_id_effective == null ? null : {
-    id   = module.sa_nsg_flowlogs[0].id
-    name = module.sa_nsg_flowlogs[0].name
-    rg   = local.rg_hub
+  value = try(module.sa_nsg_flowlogs[0].id, null) == null ? null : {
+    id    = module.sa_nsg_flowlogs[0].id
+    name  = module.sa_nsg_flowlogs[0].name
+    rg    = local.shared_np_core_rg_name
     plane = local.plane
   }
 }

@@ -1091,27 +1091,41 @@ locals {
     ""
   )
 
-  sa_nsg_flowlogs_id_effective = try(module.sa_nsg_flowlogs[0].id, null)
+  hub_subnet_ids = try(
+    data.terraform_remote_state.shared_network.outputs.subnet_ids_by_env.hub,
+    {}
+  )
+
+  # Replace "snet-privatelink" with whatever your actual key is
+  hub_privatelink_subnet_id = coalesce(
+    try(local.hub_subnet_ids["snet-privatelink"], null),
+    try(local.hub_subnet_ids["privatelink"], null)
+  )
+
+  # Private DNS zones coming from shared-network
+  hub_private_dns_zone_ids = try(
+    data.terraform_remote_state.shared_network.outputs.private_dns.zone_ids,
+    {}
+  )
+
+  # Flatten map → list of IDs for the SA module
+  hub_private_dns_zone_ids_list = [
+    for _, id in local.hub_private_dns_zone_ids : id
+  ]
 }
 
 module "sa_nsg_flowlogs" {
-  # Create once per plane:
-  # - env=dev  → nonprod plane (shared dev/qa)
-  # - env=prod → prod plane (shared prod/uat)
-  count = contains(["dev", "prod"], var.env) ? 1 : 0
-
-  source    = "../../modules/storage-account"
-  providers = { azurerm = azurerm.hub }
-
+  count               = local.enable_both ? 1 : 0
+  source              = "../../modules/storage-account"
   product             = var.product
-  name                = local.sa_nsg_flowlogs_name_cleaned
+  name                = local.sa_nsg_flowlogs_name
   location            = var.location
-  resource_group_name = local.rg_hub
+  resource_group_name = local.shared_np_core_rg_name
+  replication_type    = var.sa_replication_type
+  container_names     = ["nsg-flow-logs"]
 
-  replication_type     = var.sa_replication_type
-  container_names      = ["nsg-flowlogs"]
-  pe_subnet_id         = local.pe_subnet_id_effective
-  private_dns_zone_ids = local.zone_ids_effective
+  pe_subnet_id         = local.hub_privatelink_subnet_id
+  private_dns_zone_ids = local.hub_private_dns_zone_ids_list
 
   pe_blob_name         = "pep-${local.sa_nsg_flowlogs_name_cleaned}-blob"
   psc_blob_name        = "psc-${local.sa_nsg_flowlogs_name_cleaned}-blob"
@@ -1123,11 +1137,10 @@ module "sa_nsg_flowlogs" {
   tags = merge(
     local.tags_common,
     {
-      purpose     = "nsg-flowlogs"
-      service     = "observability"
-      layer       = "shared-observability"
-      lane        = local.plane
-      shared_with = local.plane == "nonprod" ? "dev,qa" : "prod,uat"
+      purpose = "nsg-flow-logs"
+      lane    = local.plane
+      layer   = "core-network-logging"
+      service = "blob"
     },
     var.tags
   )

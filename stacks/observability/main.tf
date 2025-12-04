@@ -1092,8 +1092,57 @@ locals {
               "expression" = "@equals(first(triggerBody())?['data']?['complianceState'], 'NonCompliant')"
 
               "actions" = {
+                // Raw subject (ARM resource ID)
+                "Compose_SubjectRaw" = {
+                  "type"   = "Compose"
+                  "inputs" = "@first(triggerBody())?['subject']"
+                },
+                // Subscription ID from data (already present in payload)
+                "Compose_SubscriptionId" = {
+                  "type"   = "Compose"
+                  "inputs" = "@first(triggerBody())?['data']?['subscriptionId']"
+                  "runAfter" = {
+                    "Compose_SubjectRaw" = [ "Succeeded" ]
+                  }
+                },
+                // Resource group (index 4 after split on '/')
+                "Compose_ResourceGroup" = {
+                  "type"   = "Compose"
+                  "inputs" = "@split(outputs('Compose_SubjectRaw'), '/')[4]"
+                  "runAfter" = {
+                    "Compose_SubscriptionId" = [ "Succeeded" ]
+                  }
+                },
+                // Provider namespace (e.g. 'microsoft.network')
+                "Compose_ProviderNamespace" = {
+                  "type"   = "Compose"
+                  "inputs" = "@split(outputs('Compose_SubjectRaw'), '/')[6]"
+                  "runAfter" = {
+                    "Compose_ResourceGroup" = [ "Succeeded" ]
+                  }
+                },
+                // Resource type (e.g. 'applicationgateways')
+                "Compose_ResourceType" = {
+                  "type"   = "Compose"
+                  "inputs" = "@split(outputs('Compose_SubjectRaw'), '/')[7]"
+                  "runAfter" = {
+                    "Compose_ProviderNamespace" = [ "Succeeded" ]
+                  }
+                },
+                // Resource name (last segment of the ARM ID)
+                "Compose_ResourceName" = {
+                  "type"   = "Compose"
+                  "inputs" = "@last(split(outputs('Compose_SubjectRaw'), '/'))"
+                  "runAfter" = {
+                    "Compose_ResourceType" = [ "Succeeded" ]
+                  }
+                },
+
                 "Send_Email" = {
                   "type"   = "ApiConnection"
+                  "runAfter" = {
+                    "Compose_ResourceName" = [ "Succeeded" ]
+                  }
                   "inputs" = {
                     "host" = {
                       "connection" = {
@@ -1103,19 +1152,58 @@ locals {
                     "method" = "post"
                     "path"   = "/v2/Mail"
                     "body" = {
-                      "To"      = var.policy_alert_email
-                      "Subject" = "FedRAMP Policy Non-Compliance Detected"
+                      // More actionable subject line
+                      "To" = var.policy_alert_email
+                      "Subject" = "@{concat('FedRAMP Non-Compliant: ', outputs('Compose_ResourceName'), ' (', outputs('Compose_ResourceType'), ') in RG ', outputs('Compose_ResourceGroup'), ' [', outputs('Compose_SubscriptionId'), ']')}"
                       "Body" = <<-HTML
                         <p><strong>FedRAMP Moderate non-compliant resource detected.</strong></p>
-                        <p><strong>Resource:</strong> @{first(triggerBody())?['subject']}</p>
-                        <p><strong>Subscription:</strong> @{first(triggerBody())?['data']?['subscriptionId']}</p>
-                        <p><strong>Policy Assignment:</strong> @{first(triggerBody())?['data']?['policyAssignmentId']}</p>
-                        <p><strong>Policy Definition:</strong> @{first(triggerBody())?['data']?['policyDefinitionId']}</p>
-                        <p><strong>Compliance State:</strong> @{first(triggerBody())?['data']?['complianceState']}</p>
-                        <p><strong>Reason Code:</strong> @{first(triggerBody())?['data']?['complianceReasonCode']}</p>
-                        <p><strong>Evaluation Time:</strong> @{first(triggerBody())?['data']?['timestamp']}</p>
-                        <p><strong>Event Time:</strong> @{first(triggerBody())?['eventTime']}</p>
-                        <p>Please remediate according to the FedRAMP Moderate baseline or move this workload out of the FedRAMP boundary.</p>
+
+                        <h3>Resource Context</h3>
+                        <p><strong>Resource ID:</strong><br />
+                          @{outputs('Compose_SubjectRaw')}
+                        </p>
+                        <p><strong>Subscription:</strong><br />
+                          @{outputs('Compose_SubscriptionId')}
+                        </p>
+                        <p><strong>Resource Group:</strong><br />
+                          @{outputs('Compose_ResourceGroup')}
+                        </p>
+                        <p><strong>Provider Namespace:</strong><br />
+                          @{outputs('Compose_ProviderNamespace')}
+                        </p>
+                        <p><strong>Resource Type:</strong><br />
+                          @{outputs('Compose_ResourceType')}
+                        </p>
+                        <p><strong>Resource Name:</strong><br />
+                          @{outputs('Compose_ResourceName')}
+                        </p>
+
+                        <h3>Policy Context</h3>
+                        <p><strong>Policy Assignment:</strong><br />
+                          @{first(triggerBody())?['data']?['policyAssignmentId']}
+                        </p>
+                        <p><strong>Policy Definition:</strong><br />
+                          @{first(triggerBody())?['data']?['policyDefinitionId']}
+                        </p>
+                        <p><strong>Compliance State:</strong><br />
+                          @{first(triggerBody())?['data']?['complianceState']}
+                        </p>
+                        <p><strong>Reason Code:</strong><br />
+                          @{first(triggerBody())?['data']?['complianceReasonCode']}
+                        </p>
+
+                        <h3>Timestamps</h3>
+                        <p><strong>Evaluation Time (Policy Scan):</strong><br />
+                          @{first(triggerBody())?['data']?['timestamp']}
+                        </p>
+                        <p><strong>Event Time (Event Grid):</strong><br />
+                          @{first(triggerBody())?['eventTime']}
+                        </p>
+
+                        <p>
+                          Please remediate according to the FedRAMP Moderate baseline or move
+                          this workload out of the FedRAMP boundary.
+                        </p>
                       HTML
                       "BodyContentType" = "HTML"
                     }
@@ -1125,7 +1213,7 @@ locals {
 
               "else" = {}
             }
-                   }
+          }
         }
       }
     }
