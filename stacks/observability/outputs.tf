@@ -87,9 +87,6 @@ output "debug_nsg_flowlogs_v2" {
       element(split(id, "/"), 2)
     ])
 
-    # The subscription we derived for the network provider
-    nsg_subscription_id = try(local.nsg_subscription_id, null)
-
     # Final map used for for_each on azurerm_network_watcher_flow_log.nsg
     nsg_flowlog_map       = try(local.nsg_flowlog_map, null)
     nsg_flowlog_map_keys  = try(keys(local.nsg_flowlog_map), null)

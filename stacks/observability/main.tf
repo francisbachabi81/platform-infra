@@ -1400,13 +1400,6 @@ locals {
     )
   ]))
 
-  # Derive the *network* subscription ID from the NSG IDs (they all live in the same sub)
-  nsg_subscription_id = (
-    length(local.nsg_flowlog_ids) > 0
-      ? element(split(local.nsg_flowlog_ids[0], "/"), 2)
-      : null
-  )
-
   # Map for for_each, no extra subscription filtering (we'll use the network provider)
   nsg_flowlog_map = {
     for id in local.nsg_flowlog_ids :
@@ -1417,18 +1410,8 @@ locals {
   nsg_flowlogs_enabled = local.law_id != null && local.nsg_flow_logs_sa_id != null && length(local.nsg_flowlog_map) > 0
 }
 
-provider "azurerm" {
-  alias   = "network"
-  features {}
-
-  # Use the subscription where the NSGs actually live
-  subscription_id = coalesce(local.nsg_subscription_id, local.core_sub)
-  tenant_id       = local.core_tenant
-  environment     = local.product_env
-}
-
 resource "azurerm_network_watcher_flow_log" "nsg" {
-  provider = azurerm.network
+  provider = azurerm.core
 
   # When env_effective == dev → NSGs in hub + dev + qa (for this plane)
   # When env_effective == prod → NSGs in hub + prod + uat
