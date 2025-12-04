@@ -183,3 +183,39 @@ DESC
   }))
   default = {}
 }
+
+variable "enable_subscription_budgets" {
+  type        = bool
+  description = "Enable subscription-level consumption budgets for policy_source_subscriptions"
+  default     = false
+}
+
+variable "subscription_budget_amount" {
+  type        = number
+  description = "Monthly budget amount (in currency of the subscription, e.g. USD)"
+  default     = 500
+}
+
+variable "subscription_budget_threshold" {
+  type        = number
+  description = "Alert threshold percentage for budgets (e.g. 80 = 80%)"
+  default     = 80
+}
+
+variable "subscription_budget_start_date" {
+  type        = string
+  description = "ISO8601 start date for budget (e.g. 2025-01-01T00:00:00Z)"
+  default     = "2025-01-01T00:00:00Z"
+}
+
+variable "subscription_budget_end_date" {
+  type        = string
+  description = "ISO8601 end date for budget (far in the future is OK)"
+  default     = "2030-01-01T00:00:00Z"
+}
+
+variable "budget_alert_emails" {
+  type        = list(string)
+  description = "Emails to receive budget notifications (falls back to alert_emails if empty)"
+  default     = []
+}

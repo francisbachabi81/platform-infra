@@ -32,6 +32,16 @@ policy_source_subscriptions = {
   }
 }
 
+enable_subscription_budgets = true
+subscription_budget_amount = 500
+subscription_budget_threshold = 80
+subscription_budget_start_date = "2025-01-01T00:00:00Z"
+subscription_budget_end_date   = "2035-01-01T00:00:00Z"
+budget_alert_emails = [
+  "francis.bachabi@intterragroup.com",
+  "finops@intterragroup.com",
+]
+
 # tags
 tags_extra = {
   purpose = "observability"

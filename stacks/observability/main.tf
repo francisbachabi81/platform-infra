@@ -1230,3 +1230,37 @@ resource "azapi_resource" "policy_to_logicapp" {
     azurerm_resource_group_template_deployment.logicapp,
   ]
 }
+
+locals {
+  # Use explicit budget emails if provided, otherwise reuse your alert_emails_effective
+  budget_emails_effective = length(var.budget_alert_emails) > 0 ? var.budget_alert_emails : local.alert_emails_effective
+
+  budget_subscriptions = {
+    for label, cfg in var.policy_source_subscriptions :
+    label => cfg.subscription_id
+  }
+}
+
+resource "azurerm_consumption_budget_subscription" "policy_source_budgets" {
+  for_each = var.enable_subscription_budgets ? local.budget_subscriptions : {}
+
+  name            = "bud-${var.product}-${local.plane_code}-${var.region}-${each.key}"
+  subscription_id = each.value
+
+  amount     = var.subscription_budget_amount
+  time_grain = "Monthly"
+
+  time_period {
+    start_date = var.subscription_budget_start_date
+    end_date   = var.subscription_budget_end_date
+  }
+
+  notification {
+    enabled        = true
+    operator       = "GreaterThan"
+    threshold      = var.subscription_budget_threshold
+    contact_emails = local.budget_emails_effective
+    # You can also add contact_roles = ["Owner"] if you want owners to be notified
+    # contact_roles  = ["Owner"]
+  }
+}
