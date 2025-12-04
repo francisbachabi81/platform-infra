@@ -1098,7 +1098,7 @@ locals {
 
   # Replace "snet-privatelink" with whatever your actual key is
   hub_privatelink_subnet_id = coalesce(
-    try(local.hub_subnet_ids["snet-privatelink"], null),
+    try(local.hub_subnet_ids["privatelink-hub"], null),
     try(local.hub_subnet_ids["privatelink"], null)
   )
 

@@ -1220,7 +1220,12 @@ resource "azurerm_network_security_rule" "allow_ghrunner_http_internet_hub" {
 }
 # ---------- DENY All Inbound ----------
 resource "azurerm_network_security_rule" "baseline_deny_inbound_hub" {
-  for_each                    = local.all_targets_hub
+  for_each = {
+    for k, v in local.all_targets_hub :
+    k => v
+    if !contains(lower(v.name), "dns-inbound")
+  }
+
   name                        = "deny-all-inbound"
   priority                    = 4096
   direction                   = "Inbound"
@@ -1235,8 +1240,13 @@ resource "azurerm_network_security_rule" "baseline_deny_inbound_hub" {
 }
 
 resource "azurerm_network_security_rule" "baseline_deny_inbound_dev" {
-  provider                    = azurerm.dev
-  for_each                    = local.all_targets_dev
+  provider = azurerm.dev
+  for_each = {
+    for k, v in local.all_targets_dev :
+    k => v
+    if !contains(lower(v.name), "dns-inbound")
+  }
+
   name                        = "deny-all-inbound"
   priority                    = 4096
   direction                   = "Inbound"
@@ -1251,8 +1261,13 @@ resource "azurerm_network_security_rule" "baseline_deny_inbound_dev" {
 }
 
 resource "azurerm_network_security_rule" "baseline_deny_inbound_qa" {
-  provider                    = azurerm.qa
-  for_each                    = local.all_targets_qa
+  provider = azurerm.qa
+  for_each = {
+    for k, v in local.all_targets_qa :
+    k => v
+    if !contains(lower(v.name), "dns-inbound")
+  }
+
   name                        = "deny-all-inbound"
   priority                    = 4096
   direction                   = "Inbound"
@@ -1267,8 +1282,13 @@ resource "azurerm_network_security_rule" "baseline_deny_inbound_qa" {
 }
 
 resource "azurerm_network_security_rule" "baseline_deny_inbound_prod" {
-  provider                    = azurerm.prod
-  for_each                    = local.all_targets_prod
+  provider = azurerm.prod
+  for_each = {
+    for k, v in local.all_targets_prod :
+    k => v
+    if !contains(lower(v.name), "dns-inbound")
+  }
+
   name                        = "deny-all-inbound"
   priority                    = 4096
   direction                   = "Inbound"
@@ -1283,8 +1303,13 @@ resource "azurerm_network_security_rule" "baseline_deny_inbound_prod" {
 }
 
 resource "azurerm_network_security_rule" "baseline_deny_inbound_uat" {
-  provider                    = azurerm.uat
-  for_each                    = local.all_targets_uat
+  provider = azurerm.uat
+  for_each = {
+    for k, v in local.all_targets_uat :
+    k => v
+    if !contains(lower(v.name), "dns-inbound")
+  }
+
   name                        = "deny-all-inbound"
   priority                    = 4096
   direction                   = "Inbound"
