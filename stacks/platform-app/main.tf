@@ -1119,7 +1119,7 @@ module "sa_nsg_flowlogs" {
   count               = local.enable_both ? 1 : 0
   source              = "../../modules/storage-account"
   product             = var.product
-  name                = local.sa_nsg_flowlogs_name
+  name                = local.sa_nsg_flowlogs_name_cleaned
   location            = var.location
   resource_group_name = local.shared_np_core_rg_name
   replication_type    = var.sa_replication_type
