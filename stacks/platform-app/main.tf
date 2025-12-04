@@ -1111,9 +1111,9 @@ module "sa_nsg_flowlogs" {
   count               = local.enable_both ? 1 : 0
 
   providers = {
-    azurerm = azurerm.core
+    azurerm = azurerm.hub
   }
-  
+
   source              = "../../modules/storage-account"
   product             = var.product
   name                = local.sa_nsg_flowlogs_name_cleaned
