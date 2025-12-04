@@ -1237,7 +1237,7 @@ locals {
 
   budget_subscriptions = {
     for label, cfg in var.policy_source_subscriptions :
-    label => cfg.subscription_id
+    label => "/subscriptions/${cfg.subscription_id}"
   }
 }
 
