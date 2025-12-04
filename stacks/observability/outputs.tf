@@ -61,3 +61,34 @@ output "nsg_diag_categories_debug" {
     }
   }
 }
+
+output "debug_nsg_flowlogs" {
+  value = {
+    # High-level
+    env_effective        = local.env_effective
+    plane_effective      = local.plane_effective
+    plane_code           = local.plane_code
+
+    # What envs we *intend* to include
+    nsg_flowlog_env_sets  = local.nsg_flowlog_env_sets
+    nsg_flowlog_env_keys  = local.nsg_flowlog_env_keys
+
+    # Raw NSG IDs from shared-network
+    nsg_flowlog_ids       = local.nsg_flowlog_ids
+
+    # Partition by subscription
+    sub_env_resolved      = local.sub_env_resolved
+    sub_core_resolved     = local.sub_core_resolved
+    nsg_flowlog_map_env   = local.nsg_flowlog_map_env
+    nsg_flowlog_map_core  = local.nsg_flowlog_map_core
+
+    # Storage + LAW resolution
+    nsg_flow_logs_storage = local.nsg_flow_logs_storage
+    nsg_flow_logs_sa_id   = local.nsg_flow_logs_sa_id
+    law_id                = local.law_id
+
+    # Final gates
+    nsg_flowlogs_enabled_env  = local.nsg_flowlogs_enabled_env
+    nsg_flowlogs_enabled_core = local.nsg_flowlogs_enabled_core
+  }
+}
