@@ -291,9 +291,3 @@ variable "uat_tenant_id" {
   type        = string
   default     = null
 }
-
-variable "enable_nsg_flow_logs" {
-  type        = bool
-  description = "Enable creation of NSG flow logs and Traffic Analytics."
-  default     = true
-}
