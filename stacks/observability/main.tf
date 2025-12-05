@@ -173,6 +173,21 @@ locals {
   env_tenant  = trimspace(coalesce(var.env_tenant_id, var.tenant_id))
 }
 
+# Per-env subscription/tenant fallbacks (prefer explicit IDs, else hub)
+locals {
+  dev_sub  = (var.dev_subscription_id  != null && trimspace(var.dev_subscription_id)  != "") ? var.dev_subscription_id  : var.core_subscription_id
+  dev_ten  = (var.dev_tenant_id        != null && trimspace(var.dev_tenant_id)        != "") ? var.dev_tenant_id        : var.core_tenant_id
+
+  qa_sub   = (var.qa_subscription_id   != null && trimspace(var.qa_subscription_id)   != "") ? var.qa_subscription_id   : var.core_subscription_id
+  qa_ten   = (var.qa_tenant_id         != null && trimspace(var.qa_tenant_id)         != "") ? var.qa_tenant_id         : var.core_tenant_id
+
+  uat_sub  = (var.uat_subscription_id  != null && trimspace(var.uat_subscription_id)  != "") ? var.uat_subscription_id  : var.core_subscription_id
+  uat_ten  = (var.uat_tenant_id        != null && trimspace(var.uat_tenant_id)        != "") ? var.uat_tenant_id        : var.core_tenant_id
+
+  prod_sub = (var.prod_subscription_id != null && trimspace(var.prod_subscription_id) != "") ? var.prod_subscription_id : var.core_subscription_id
+  prod_ten = (var.prod_tenant_id       != null && trimspace(var.prod_tenant_id)       != "") ? var.prod_tenant_id       : var.core_tenant_id
+}
+
 # Explicit ENV alias
 provider "azurerm" {
   alias           = "env"
@@ -189,6 +204,36 @@ provider "azurerm" {
   subscription_id = local.core_sub
   tenant_id       = local.core_tenant
   environment     = local.product_env
+}
+
+# Per-env aliases (each can be pointed to distinct subs/tenants)
+provider "azurerm" {
+  alias    = "dev"
+  features {}
+  subscription_id = local.dev_sub
+  tenant_id       = local.dev_ten
+  environment     = var.product == "hrz" ? "usgovernment" : "public"
+}
+provider "azurerm" {
+  alias    = "qa"
+  features {}
+  subscription_id = local.qa_sub
+  tenant_id       = local.qa_ten
+  environment     = var.product == "hrz" ? "usgovernment" : "public"
+}
+provider "azurerm" {
+  alias    = "uat"
+  features {}
+  subscription_id = local.uat_sub
+  tenant_id       = local.uat_ten
+  environment     = var.product == "hrz" ? "usgovernment" : "public"
+}
+provider "azurerm" {
+  alias    = "prod"
+  features {}
+  subscription_id = local.prod_sub
+  tenant_id       = local.prod_ten
+  environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
 # Who am I
@@ -1376,7 +1421,15 @@ locals {
   # List of env keys we should target in this run (only when env is dev/prod)
   nsg_flowlog_env_keys = lookup(local.nsg_flowlog_env_sets, local.env_effective, [])
 
-  # Flatten NSGs into (id, env_key) objects
+  # Flatten NSGs into (id, env_key) objects from shared-network state
+  # Assumes:
+  #   nsg_ids_by_env = {
+  #     hub  = { ... }
+  #     dev  = { ... }
+  #     qa   = { ... }
+  #     prod = { ... }
+  #     uat  = { ... }
+  #   }
   nsg_flowlog_items = flatten([
     for env_key in local.nsg_flowlog_env_keys : [
       for _, nsg_id in try(data.terraform_remote_state.network.outputs.nsg_ids_by_env[env_key], {}) : {
@@ -1395,8 +1448,8 @@ locals {
   # Network Watcher name + RG per NSG env_key
   network_watcher_by_env = {
     hub = {
-      name = "nw-${var.product}-${local.plane_code}-${var.region}-01"      # e.g. nw-hrz-np-usaz-01
-      rg   = "rg-${var.product}-${local.plane_code}-${var.region}-net-01" # e.g. rg-hrz-np-usaz-net-01
+      name = "nw-${var.product}-${local.plane_code}-${var.region}-01"      # e.g. nw-hrz-np-usaz-01 or nw-hrz-pr-usaz-01
+      rg   = "rg-${var.product}-${local.plane_code}-${var.region}-net-01" # e.g. rg-hrz-np-usaz-net-01 / rg-hrz-pr-usaz-net-01
     }
     dev = {
       name = "nw-${var.product}-dev-${var.region}-01"
@@ -1416,6 +1469,14 @@ locals {
     }
   }
 
+  # LAW workspace GUID (for Traffic Analytics)
+  law_workspace_guid = coalesce(
+    # optional override: var.law_workspace_guid_override,
+    try(data.terraform_remote_state.core.outputs.observability.law_workspace_guid, null),
+    try(data.terraform_remote_state.platform.outputs.observability.law_workspace_guid, null),
+    null
+  )
+
   # Gate: only enable flow logs when LAW + SA + GUID are resolved AND we have targets
   nsg_flowlogs_enabled = (
     local.law_id != null &&
@@ -1424,27 +1485,212 @@ locals {
     length(local.nsg_flowlog_map) > 0
   )
 
-  law_workspace_guid = coalesce(
-    # (optional) if you want an override var, declare it and put it here:
-    # var.law_workspace_guid_override,
-    try(data.terraform_remote_state.core.outputs.observability.law_workspace_guid, null),
-    try(data.terraform_remote_state.platform.outputs.observability.law_workspace_guid, null),
-    null
-  )
+  # ---- SPLIT MAP BY env_key FOR PROVIDER ROUTING ----
+  nsg_flowlog_map_hub = {
+    for id, item in local.nsg_flowlog_map :
+    id => item
+    if item.env_key == "hub"
+  }
+
+  nsg_flowlog_map_dev = {
+    for id, item in local.nsg_flowlog_map :
+    id => item
+    if item.env_key == "dev"
+  }
+
+  nsg_flowlog_map_qa = {
+    for id, item in local.nsg_flowlog_map :
+    id => item
+    if item.env_key == "qa"
+  }
+
+  nsg_flowlog_map_prod = {
+    for id, item in local.nsg_flowlog_map :
+    id => item
+    if item.env_key == "prod"
+  }
+
+  nsg_flowlog_map_uat = {
+    for id, item in local.nsg_flowlog_map :
+    id => item
+    if item.env_key == "uat"
+  }
 }
 
-resource "azurerm_network_watcher_flow_log" "nsg" {
+resource "azurerm_network_watcher_flow_log" "nsg_core" {
   provider = azurerm.core
 
-  for_each = local.nsg_flowlogs_enabled ? local.nsg_flowlog_map : {}
+  # hub/core NSGs should be enabled when env is dev or prod
+  for_each = (local.nsg_flowlogs_enabled && contains(["dev", "prod"], local.env_effective)) ? local.nsg_flowlog_map_hub : {}
 
-  # each.value = { id = <nsg_id>, env_key = "hub" | "dev" | "qa" | ... }
-
-  # Name includes the NSG env_key so it's obvious
   name = "fl-${var.product}-${each.value.env_key}-${var.region}-${basename(each.value.id)}"
 
   network_watcher_name = local.network_watcher_by_env[each.value.env_key].name
   resource_group_name  = local.network_watcher_by_env[each.value.env_key].rg
+
+  target_resource_id = each.value.id
+  storage_account_id = local.nsg_flow_logs_sa_id
+
+  enabled = true
+  version = 2
+
+  retention_policy {
+    enabled = true
+    days    = var.nsg_flow_logs_retention_days
+  }
+
+  traffic_analytics {
+    enabled               = true
+    workspace_id          = local.law_workspace_guid
+    workspace_region      = var.location
+    workspace_resource_id = local.law_id
+    interval_in_minutes   = 10
+  }
+
+  lifecycle {
+    precondition {
+      condition = (
+        local.law_id != null &&
+        local.law_workspace_guid != null &&
+        local.nsg_flow_logs_sa_id != null
+      )
+      error_message = "LAW workspace (ID/GUID) or NSG flow-logs storage account not resolved."
+    }
+  }
+}
+
+resource "azurerm_network_watcher_flow_log" "nsg_dev" {
+  provider = azurerm.dev
+
+  for_each = (local.nsg_flowlogs_enabled && local.env_effective == "dev") ? local.nsg_flowlog_map_dev : {}
+
+  name = "fl-${var.product}-${each.value.env_key}-${var.region}-${basename(each.value.id)}"
+
+  network_watcher_name = local.network_watcher_by_env["dev"].name
+  resource_group_name  = local.network_watcher_by_env["dev"].rg
+
+  target_resource_id = each.value.id
+  storage_account_id = local.nsg_flow_logs_sa_id
+
+  enabled = true
+  version = 2
+
+  retention_policy {
+    enabled = true
+    days    = var.nsg_flow_logs_retention_days
+  }
+
+  traffic_analytics {
+    enabled               = true
+    workspace_id          = local.law_workspace_guid
+    workspace_region      = var.location
+    workspace_resource_id = local.law_id
+    interval_in_minutes   = 10
+  }
+
+  lifecycle {
+    precondition {
+      condition = (
+        local.law_id != null &&
+        local.law_workspace_guid != null &&
+        local.nsg_flow_logs_sa_id != null
+      )
+      error_message = "LAW workspace (ID/GUID) or NSG flow-logs storage account not resolved."
+    }
+  }
+}
+
+resource "azurerm_network_watcher_flow_log" "nsg_qa" {
+  provider = azurerm.qa
+
+  for_each = (local.nsg_flowlogs_enabled && local.env_effective == "dev") ? local.nsg_flowlog_map_qa : {}
+
+  name = "fl-${var.product}-${each.value.env_key}-${var.region}-${basename(each.value.id)}"
+
+  network_watcher_name = local.network_watcher_by_env["qa"].name
+  resource_group_name  = local.network_watcher_by_env["qa"].rg
+
+  target_resource_id = each.value.id
+  storage_account_id = local.nsg_flow_logs_sa_id
+
+  enabled = true
+  version = 2
+
+  retention_policy {
+    enabled = true
+    days    = var.nsg_flow_logs_retention_days
+  }
+
+  traffic_analytics {
+    enabled               = true
+    workspace_id          = local.law_workspace_guid
+    workspace_region      = var.location
+    workspace_resource_id = local.law_id
+    interval_in_minutes   = 10
+  }
+
+  lifecycle {
+    precondition {
+      condition = (
+        local.law_id != null &&
+        local.law_workspace_guid != null &&
+        local.nsg_flow_logs_sa_id != null
+      )
+      error_message = "LAW workspace (ID/GUID) or NSG flow-logs storage account not resolved."
+    }
+  }
+}
+
+resource "azurerm_network_watcher_flow_log" "nsg_prod" {
+  provider = azurerm.prod
+
+  for_each = (local.nsg_flowlogs_enabled && local.env_effective == "prod") ? local.nsg_flowlog_map_prod : {}
+
+  name = "fl-${var.product}-${each.value.env_key}-${var.region}-${basename(each.value.id)}"
+
+  network_watcher_name = local.network_watcher_by_env["prod"].name
+  resource_group_name  = local.network_watcher_by_env["prod"].rg
+
+  target_resource_id = each.value.id
+  storage_account_id = local.nsg_flow_logs_sa_id
+
+  enabled = true
+  version = 2
+
+  retention_policy {
+    enabled = true
+    days    = var.nsg_flow_logs_retention_days
+  }
+
+  traffic_analytics {
+    enabled               = true
+    workspace_id          = local.law_workspace_guid
+    workspace_region      = var.location
+    workspace_resource_id = local.law_id
+    interval_in_minutes   = 10
+  }
+
+  lifecycle {
+    precondition {
+      condition = (
+        local.law_id != null &&
+        local.law_workspace_guid != null &&
+        local.nsg_flow_logs_sa_id != null
+      )
+      error_message = "LAW workspace (ID/GUID) or NSG flow-logs storage account not resolved."
+    }
+  }
+}
+
+resource "azurerm_network_watcher_flow_log" "nsg_uat" {
+  provider = azurerm.uat
+
+  for_each = (local.nsg_flowlogs_enabled && local.env_effective == "prod") ? local.nsg_flowlog_map_uat : {}
+
+  name = "fl-${var.product}-${each.value.env_key}-${var.region}-${basename(each.value.id)}"
+
+  network_watcher_name = local.network_watcher_by_env["uat"].name
+  resource_group_name  = local.network_watcher_by_env["uat"].rg
 
   target_resource_id = each.value.id
   storage_account_id = local.nsg_flow_logs_sa_id
