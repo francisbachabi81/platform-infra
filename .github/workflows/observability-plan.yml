@@ -107,7 +107,7 @@ jobs:
             # plane-based target sub (keep existing logic)
             TARGET_SUB_RAW=$([ "$PLANE" = "prod" ] && echo '${{ secrets.AZ_SUB_HRZ_PROD }}' || echo '${{ secrets.AZ_SUB_HRZ_NONPROD }}')
 
-            # env-sub mapping (NEW: env_subscription_id should follow env)
+            # env-sub mapping (env_subscription_id should follow env)
             case "$ENV_IN" in
               dev)  ENV_SUB_RAW="$DEV_SUB_RAW"  ;;
               qa)   ENV_SUB_RAW="$QA_SUB_RAW"   ;;
@@ -133,7 +133,7 @@ jobs:
             # plane-based target sub (keep existing logic)
             TARGET_SUB_RAW=$([ "$PLANE" = "prod" ] && echo '${{ secrets.AZ_SUB_PUB_PROD }}' || echo '${{ secrets.AZ_SUB_PUB_NONPROD }}')
 
-            # env-sub mapping (NEW)
+            # env-sub mapping (env_subscription_id should follow env)
             case "$ENV_IN" in
               dev)  ENV_SUB_RAW="$DEV_SUB_RAW"  ;;
               qa)   ENV_SUB_RAW="$QA_SUB_RAW"   ;;
@@ -143,12 +143,19 @@ jobs:
             esac
           fi
 
+          # Trim everything to avoid invisible garbage
           TENANT=$(trim "$TENANT_RAW")
           CLIENT_ID=$(trim "$CLIENT_ID_RAW")
           STATE_SUB=$(trim "$STATE_SUB_RAW")
           CORE_SUB=$(trim "$CORE_SUB_RAW")
           TARGET_SUB=$(trim "$TARGET_SUB_RAW")
           ENV_SUB=$(trim "$ENV_SUB_RAW")
+
+          # NEW: trimmed per-env subs like shared-network
+          DEV_SUB=$(trim "$DEV_SUB_RAW")
+          QA_SUB=$(trim "$QA_SUB_RAW")
+          UAT_SUB=$(trim "$UAT_SUB_RAW")
+          PROD_SUB=$(trim "$PROD_SUB_RAW")
 
           # step outputs
           write_output ENV        "$ENV_IN"
@@ -174,12 +181,27 @@ jobs:
           write_env TF_VAR_core_subscription_id  "$CORE_SUB"
           write_env TF_VAR_env_tenant_id         "$TENANT"
 
-          # IMPORTANT: env_subscription_id is *env-based* now
+          # IMPORTANT: env_subscription_id is *env-based* now (keep current logic)
           write_env TF_VAR_env_subscription_id   "$ENV_SUB"
 
           # base provider fallback (if platform meta.subscription is missing)
           write_env TF_VAR_subscription_id       "$TARGET_SUB"
           write_env TF_VAR_tenant_id             "$TENANT"
+
+          # NEW: plane-scoped env subscriptions (mirroring shared-network)
+          if [ "$PLANE" = "nonprod" ]; then
+            # Nonprod plane → dev + qa
+            write_env TF_VAR_dev_subscription_id "$DEV_SUB"
+            write_env TF_VAR_dev_tenant_id       "$TENANT"
+            write_env TF_VAR_qa_subscription_id  "$QA_SUB"
+            write_env TF_VAR_qa_tenant_id        "$TENANT"
+          else
+            # Prod plane → prod + uat
+            write_env TF_VAR_prod_subscription_id "$PROD_SUB"
+            write_env TF_VAR_prod_tenant_id       "$TENANT"
+            write_env TF_VAR_uat_subscription_id  "$UAT_SUB"
+            write_env TF_VAR_uat_tenant_id        "$TENANT"
+          fi
 
           # module/locals convenience
           write_env TF_VAR_product "$PRODUCT"

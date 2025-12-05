@@ -106,6 +106,12 @@ jobs:
           TARGET_SUB=$(trim "$TARGET_SUB_RAW")
           ENV_SUB=$(trim "$ENV_SUB_RAW")
 
+          # NEW: trimmed env subs
+          DEV_SUB=$(trim "$DEV_SUB_RAW")
+          QA_SUB=$(trim "$QA_SUB_RAW")
+          UAT_SUB=$(trim "$UAT_SUB_RAW")
+          PROD_SUB=$(trim "$PROD_SUB_RAW")
+
           echo "ENV=$ENV_IN"            >> $GITHUB_OUTPUT
           echo "PRODUCT=$PRODUCT"       >> $GITHUB_OUTPUT
           echo "PLANE=$PLANE"           >> $GITHUB_OUTPUT
@@ -139,6 +145,21 @@ jobs:
             # optional hub passthroughs if any module still expects them
             echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
             echo "TF_VAR_hub_tenant_id=$TENANT"
+
+            # NEW: plane-scoped env subs like shared-network
+            if [ "$PLANE" = "nonprod" ]; then
+              # Nonprod plane: dev + qa
+              echo "TF_VAR_dev_subscription_id=$DEV_SUB"
+              echo "TF_VAR_dev_tenant_id=$TENANT"
+              echo "TF_VAR_qa_subscription_id=$QA_SUB"
+              echo "TF_VAR_qa_tenant_id=$TENANT"
+            else
+              # Prod plane: prod + uat
+              echo "TF_VAR_prod_subscription_id=$PROD_SUB"
+              echo "TF_VAR_prod_tenant_id=$TENANT"
+              echo "TF_VAR_uat_subscription_id=$UAT_SUB"
+              echo "TF_VAR_uat_tenant_id=$TENANT"
+            fi
 
             # convenience vars used by your modules/locals
             echo "TF_VAR_product=$PRODUCT"
