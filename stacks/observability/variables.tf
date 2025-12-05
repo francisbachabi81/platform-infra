@@ -208,11 +208,6 @@ variable "tags_extra" {
 }
 
 # Policy compliance (Event Grid + Logic App)
-variable "management_group_name" {
-  description = "Management group name used for PolicyInsights PolicyStates system topic."
-  type        = string
-}
-
 variable "enable_policy_compliance_alerts" {
   description = "Enable creation of PolicyStates Event Grid system topic + Logic App alerts."
   type        = bool
