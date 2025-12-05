@@ -589,16 +589,30 @@ resource "azurerm_monitor_diagnostic_setting" "sbns" {
   dynamic "enabled_log" {
     for_each = toset([
       for c in local.sbns_log_categories :
-      c if contains(try(each.value.logs, []), c)
+      c if (
+        contains(try(each.value.log_category_types, []), c) ||
+        contains(try(each.value.logs, []), c)
+      )
     ])
-    content { category = enabled_log.value }
+
+    content {
+      category = enabled_log.value
+    }
   }
 
+  # Metrics: enable all available categories
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
     content {
       category = metric.value
       enabled  = true
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null
+      error_message = "LAW workspace ID could not be resolved for Service Bus diagnostics."
     }
   }
 }
