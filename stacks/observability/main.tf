@@ -1,7 +1,4 @@
-# =================================================================
-# Section: Environment / plane resolution and base naming
-# =================================================================
-
+# Environment / plane resolution and base naming
 locals {
   env_norm   = var.env == null ? null : lower(var.env)
   plane_norm = var.plane == null ? null : lower(var.plane)
@@ -26,10 +23,7 @@ locals {
   ag_name_default = "ag-obs-${var.product}-${local.env_effective}-${var.region}-01"
 }
 
-# =================================================================
-# Section: Base provider and remote state
-# =================================================================
-
+# Base provider and remote state
 provider "azurerm" {
   features {}
 
@@ -79,10 +73,7 @@ data "terraform_remote_state" "platform" {
   }
 }
 
-# =================================================================
-# Section: Subscription / tenant resolution and provider aliases
-# =================================================================
-
+# Subscription / tenant resolution and provider aliases
 locals {
   product_env = var.product == "hrz" ? "usgovernment" : "public"
   core_sub    = trimspace(coalesce(var.core_subscription_id, var.subscription_id))
@@ -153,10 +144,7 @@ provider "azurerm" {
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
-# =================================================================
-# Section: Caller identity and RG discovery
-# =================================================================
-
+# Caller identity and RG discovery
 data "azurerm_client_config" "core" { provider = azurerm.core }
 data "azurerm_client_config" "env"  { provider = azurerm.env  }
 
@@ -183,10 +171,7 @@ locals {
   rg_core_id_resolved       = try(data.azurerm_resource_group.core_rg[0].id, null)
 }
 
-# =================================================================
-# Section: Resource ID collection and maps
-# =================================================================
-
+# Resource ID collection and maps
 locals {
   law_id = coalesce(
     var.law_workspace_id_override,
@@ -296,10 +281,7 @@ locals {
   nsg_flow_logs_sa_id   = try(local.nsg_flow_logs_storage.id, null)
 }
 
-# =================================================================
-# Section: Diagnostic categories (data sources)
-# =================================================================
-
+# Diagnostic categories (data sources)
 data "azurerm_monitor_diagnostic_categories" "kv" {
   for_each    = local.kv_map
   resource_id = each.value
@@ -375,10 +357,7 @@ data "azurerm_monitor_diagnostic_categories" "nsg" {
   resource_id = each.value
 }
 
-# =================================================================
-# Section: Diagnostic settings to Log Analytics
-# =================================================================
-
+# Diagnostic settings to Log Analytics
 locals {
   sub_env_target_id = local.sub_env_resolved != null ? "/subscriptions/${local.sub_env_resolved}" : null
 }
@@ -880,9 +859,9 @@ resource "azurerm_monitor_diagnostic_setting" "cosmos" {
   }
 }
 
-# =================================================================
-# Section: Alerts and Action Groups
-# =================================================================
+
+# Alerts and Action Groups
+
 
 locals {
   action_group_id = try(data.terraform_remote_state.core.outputs.action_group.id, null)
@@ -1004,10 +983,7 @@ resource "azurerm_monitor_activity_log_alert" "rg_changes_core" {
   action   { action_group_id = local.ag_id_core }
 }
 
-# =================================================================
-# Section: AKS diagnostics
-# =================================================================
-
+# AKS diagnostics
 locals {
   aks_ids = toset(compact([
     try(data.terraform_remote_state.platform.outputs.ids.aks,       null),
@@ -1051,10 +1027,7 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
   }
 }
 
-# =================================================================
-# Section: Policy compliance – Event Grid system topic
-# =================================================================
-
+# Policy compliance – Event Grid system topic
 locals {
   policy_system_topic_parent_ids = {
     for label, cfg in var.policy_source_subscriptions :
@@ -1091,10 +1064,7 @@ resource "azapi_resource" "policy_state_changes" {
   }
 }
 
-# =================================================================
-# Section: Policy compliance – Logic App and connection
-# =================================================================
-
+# Policy compliance – Logic App and connection
 locals {
   logicapp_parameters = {
     "$connections" = {
@@ -1394,10 +1364,7 @@ resource "azapi_resource" "policy_to_logicapp" {
   ]
 }
 
-# =================================================================
-# Section: Subscription budgets for policy sources
-# =================================================================
-
+# Subscription budgets for policy sources
 locals {
   budget_emails_effective = length(var.budget_alert_emails) > 0 ? var.budget_alert_emails : local.alert_emails_effective
 
@@ -1429,9 +1396,9 @@ resource "azurerm_consumption_budget_subscription" "policy_source_budgets" {
   }
 }
 
-# =================================================================
-# Section: NSG flow logs
-# =================================================================
+
+# NSG flow logs
+
 
 locals {
   nsg_flowlog_env_sets = {

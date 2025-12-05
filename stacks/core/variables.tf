@@ -1,43 +1,6 @@
-# plane / product / env
-variable "plane" {
-  description = "deployment plane: np/pr or nonprod/prod"
-  type        = string
-  validation {
-    condition     = contains(["np","pr","nonprod","prod"], lower(var.plane))
-    error_message = "plane must be one of: np, pr, nonprod, prod."
-  }
-}
-
-variable "product" {
-  description = "product code: hrz or pub"
-  type        = string
-  validation {
-    condition     = contains(["hrz","pub"], lower(var.product))
-    error_message = "product must be either 'hrz' or 'pub'."
-  }
-}
-
-variable "region" {
-  description = "short region code, e.g. usaz or cus"
-  type        = string
-  validation {
-    condition     = can(regex("^[a-z]{2,8}$", var.region))
-    error_message = "region should be a short lowercase code like 'cus' or 'usaz'."
-  }
-}
-
-variable "location" {
-  description = "azure location display name, e.g. 'usgov arizona' or 'central us'"
-  type        = string
-  validation {
-    condition     = length(trimspace(var.location)) > 0
-    error_message = "location cannot be empty."
-  }
-}
-
-# provider identity
+# Core deployment identity & scope
 variable "subscription_id" {
-  description = "target subscription id"
+  description = "Target subscription id"
   type        = string
   validation {
     condition     = can(regex("^[0-9a-fA-F-]{36}$", var.subscription_id))
@@ -46,7 +9,7 @@ variable "subscription_id" {
 }
 
 variable "tenant_id" {
-  description = "entra tenant id"
+  description = "Entra tenant id"
   type        = string
   validation {
     condition     = can(regex("^[0-9a-fA-F-]{36}$", var.tenant_id))
@@ -54,26 +17,65 @@ variable "tenant_id" {
   }
 }
 
-# tags
+variable "product" {
+  description = "Product code: hrz (US Gov) or pub (Commercial)"
+  type        = string
+  validation {
+    condition     = contains(["hrz", "pub"], lower(var.product))
+    error_message = "product must be either 'hrz' or 'pub'."
+  }
+}
+
+variable "plane" {
+  description = "Deployment plane: np/pr or nonprod/prod"
+  type        = string
+  validation {
+    condition     = contains(["np", "pr", "nonprod", "prod"], lower(var.plane))
+    error_message = "plane must be one of: np, pr, nonprod, prod."
+  }
+}
+
+variable "region" {
+  description = "Short region code, e.g. usaz or cus"
+  type        = string
+  validation {
+    condition     = can(regex("^[a-z]{2,8}$", var.region))
+    error_message = "region should be a short lowercase code like 'cus' or 'usaz'."
+  }
+}
+
+variable "location" {
+  description = "Azure location display name, e.g. 'USGov Arizona' or 'Central US'"
+  type        = string
+  validation {
+    condition     = length(trimspace(var.location)) > 0
+    error_message = "location cannot be empty."
+  }
+}
+
+# Tags
 variable "tags" {
-  description = "base tags applied to all resources"
+  description = "Base tags applied to all resources"
   type        = map(string)
   default     = {}
 }
 
-# observability
+# Observability (LAW + App Insights)
 variable "law_sku" {
-  description = "log analytics sku"
+  description = "Log Analytics SKU"
   type        = string
   default     = "PerGB2018"
   validation {
-    condition = contains(["PerGB2018","CapacityReservation","PerNode","Free","Standalone"], var.law_sku)
+    condition = contains(
+      ["PerGB2018", "CapacityReservation", "PerNode", "Free", "Standalone"],
+      var.law_sku
+    )
     error_message = "law_sku must be one of: PerGB2018, CapacityReservation, PerNode, Free, Standalone."
   }
 }
 
 variable "law_retention_days" {
-  description = "log analytics retention in days"
+  description = "Log Analytics retention in days"
   type        = number
   default     = 30
   validation {
@@ -83,26 +85,26 @@ variable "law_retention_days" {
 }
 
 variable "appi_internet_ingestion_enabled" {
-  description = "app insights ingestion over internet"
+  description = "App Insights ingestion over internet"
   type        = bool
   default     = true
 }
 
 variable "appi_internet_query_enabled" {
-  description = "app insights queries over internet"
+  description = "App Insights queries over internet"
   type        = bool
   default     = true
 }
 
-# remote state (optional)
+# Remote state (shared-network)
 variable "shared_state_enabled" {
-  description = "read remote state for cross-stack wiring"
+  description = "Read remote state for cross-stack wiring"
   type        = bool
   default     = true
 }
 
 variable "state_rg_name" {
-  description = "remote state resource group"
+  description = "Remote state resource group"
   type        = string
   default     = null
   validation {
@@ -112,7 +114,7 @@ variable "state_rg_name" {
 }
 
 variable "state_sa_name" {
-  description = "remote state storage account"
+  description = "Remote state storage account"
   type        = string
   default     = null
   validation {
@@ -122,7 +124,7 @@ variable "state_sa_name" {
 }
 
 variable "state_container_name" {
-  description = "remote state blob container"
+  description = "Remote state blob container"
   type        = string
   default     = null
   validation {
@@ -131,33 +133,40 @@ variable "state_container_name" {
   }
 }
 
-# create toggles
+# Create toggles (core resources)
 variable "create_rg_core_platform" {
-  type    = bool
-  default = true
+  description = "Create the core resource group"
+  type        = bool
+  default     = true
 }
 
 variable "create_log_analytics" {
-  type    = bool
-  default = true
+  description = "Create Log Analytics workspace"
+  type        = bool
+  default     = true
 }
 
 variable "create_application_insights" {
-  type    = bool
-  default = true
+  description = "Create Application Insights linked to LAW"
+  type        = bool
+  default     = true
 }
 
 variable "create_recovery_vault" {
-  type    = bool
-  default = true
+  description = "Create Recovery Services vault"
+  type        = bool
+  default     = true
 }
 
 variable "create_action_group" {
-  type    = bool
-  default = true
+  description = "Create Monitor action group in core RG"
+  type        = bool
+  default     = true
 }
 
+# Monitor Action Group (email receivers)
 variable "action_group_email_receivers" {
+  description = "Email receivers for the core Monitor action group"
   type = list(object({
     name                    = string
     email_address           = string
@@ -166,6 +175,7 @@ variable "action_group_email_receivers" {
   default = []
 }
 
+# Communication Services (ACS + email)
 variable "enable_custom_domain" {
   description = "Whether to create a customer-managed email domain for ACS."
   type        = bool
@@ -184,56 +194,56 @@ variable "associate_custom_domain" {
   default     = false
 }
 
-# core VM (GitHub Actions runner) 
+# Core VM (GitHub Actions runner / jumpbox)
 variable "create_core_vm" {
-  type        = bool
   description = "Whether to create the core Linux VM (for GitHub Actions / jumpbox)."
+  type        = bool
   default     = false
 }
 
 variable "core_vm_private_ip" {
-  type        = string
   description = "Static private IP for the core VM in the hub internal subnet (e.g. 10.10.10.20)."
+  type        = string
 }
 
 variable "core_vm_admin_username" {
-  type        = string
   description = "Admin username for the core Linux VM."
+  type        = string
   default     = "coreadmin"
 }
 
 variable "core_vm_admin_password" {
-  type        = string
   description = "Admin password for the core Linux VM (should come from a secret)."
+  type        = string
   sensitive   = true
 }
 
 variable "core_runner_vm_size" {
-  type        = string
   description = "VM size for the core runner/jumpbox. Example: Standard_D2s_v5 for light CI or Standard_D4s_v5 for heavier workloads."
+  type        = string
   default     = "Standard_D2s_v5"
 }
 
 variable "core_runner_vm_image_publisher" {
-  type        = string
   description = "Image publisher for the core runner VM. Default is Canonical for Ubuntu."
+  type        = string
   default     = "Canonical"
 }
 
 variable "core_runner_vm_image_offer" {
-  type        = string
   description = "Image offer for the core runner VM. Default is Ubuntu 22.04 Jammy offer."
+  type        = string
   default     = "0001-com-ubuntu-server-jammy"
 }
 
 variable "core_runner_vm_image_sku" {
-  type        = string
   description = "Image SKU for the core runner VM. Default is 22_04-lts-gen2 (Ubuntu 22.04 LTS Gen2)."
+  type        = string
   default     = "22_04-lts-gen2"
 }
 
 variable "core_runner_vm_image_version" {
-  type        = string
   description = "Image version for the core runner VM. Use 'latest' for automatic patching or pin to a specific version if needed."
+  type        = string
   default     = "latest"
 }

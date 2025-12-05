@@ -1,4 +1,4 @@
-# core env/provider
+# Core scope & identity
 variable "subscription_id" {
   description = "target subscription id"
   type        = string
@@ -18,7 +18,7 @@ variable "product" {
   description = "product code: hrz or pub"
   type        = string
   validation {
-    condition     = contains(["hrz","pub"], lower(var.product))
+    condition     = contains(["hrz", "pub"], lower(var.product))
     error_message = "product must be hrz or pub."
   }
 }
@@ -32,15 +32,9 @@ variable "env" {
   description = "environment: dev, qa, uat, prod, np, or pr"
   type        = string
   validation {
-    condition     = contains(["dev","qa","uat","prod","np","pr"], lower(var.env))
+    condition     = contains(["dev", "qa", "uat", "prod", "np", "pr"], lower(var.env))
     error_message = "env must be dev, qa, uat, prod, np, or pr."
   }
-}
-
-variable "node_resource_group" {
-  description = "aks managed resource group"
-  type        = string
-  default     = ""
 }
 
 variable "kubernetes_version" {
@@ -49,7 +43,7 @@ variable "kubernetes_version" {
   default     = "1.33.3"
 }
 
-# remote states
+# Remote state (shared-network & core)
 variable "state_rg_name" {
   description = "remote state resource group"
   type        = string
@@ -71,7 +65,6 @@ variable "shared_state_enabled" {
   default     = true
 }
 
-# core state for observability
 variable "core_state_enabled" {
   description = "enable reading core state for observability"
   type        = bool
@@ -84,24 +77,14 @@ variable "core_state_key" {
   default     = null
 }
 
-# tags & naming
+# Tags
 variable "tags" {
   description = "base tags applied to all resources"
   type        = map(string)
   default     = {}
 }
 
-variable "name_suffix" {
-  description = "optional alphanumeric suffix"
-  type        = string
-  default     = ""
-  validation {
-    condition     = var.name_suffix == "" || can(regex("^[A-Za-z0-9]+$", var.name_suffix))
-    error_message = "name_suffix must be empty or alphanumeric."
-  }
-}
-
-# private networking overrides + strictness
+# Private networking & DNS
 variable "pe_subnet_id" {
   description = "private endpoint subnet id"
   type        = string
@@ -126,7 +109,7 @@ variable "require_private_networking" {
   default     = true
 }
 
-# key vault
+# Key Vault
 variable "purge_protection_enabled" {
   description = "enable purge protection"
   type        = bool
@@ -143,18 +126,18 @@ variable "soft_delete_retention_days" {
   }
 }
 
-# storage
+# Storage
 variable "sa_replication_type" {
   description = "storage account replication"
   type        = string
   default     = "LRS"
   validation {
-    condition     = contains(["LRS","ZRS","RAGRS","GZRS","RAGZRS"], var.sa_replication_type)
+    condition     = contains(["LRS", "ZRS", "RAGRS", "GZRS", "RAGZRS"], var.sa_replication_type)
     error_message = "sa_replication_type invalid."
   }
 }
 
-# service bus
+# Service Bus / Event Hubs
 variable "create_servicebus" {
   description = "create service bus resources"
   type        = bool
@@ -166,7 +149,7 @@ variable "servicebus_sku" {
   type        = string
   default     = "Basic"
   validation {
-    condition     = contains(["Basic","Standard","Premium"], var.servicebus_sku)
+    condition     = contains(["Basic", "Standard", "Premium"], var.servicebus_sku)
     error_message = "servicebus_sku invalid."
   }
 }
@@ -207,7 +190,13 @@ variable "servicebus_min_tls_version" {
   default     = "1.2"
 }
 
-# aks sizing & networking
+# AKS: sizing & networking
+variable "rg_plane_name" { 
+  description = "plane-scoped hub resource group name" 
+  type = string 
+  default = null 
+}
+
 variable "aks_node_vm_size" {
   description = "default node vm size"
   type        = string
@@ -219,7 +208,7 @@ variable "aks_sku_tier" {
   type        = string
   default     = "Free"
   validation {
-    condition     = contains(["Free","Standard","Premium"], var.aks_sku_tier)
+    condition     = contains(["Free", "Standard", "Premium"], var.aks_sku_tier)
     error_message = "aks_sku_tier invalid."
   }
 }
@@ -249,18 +238,18 @@ variable "aks_pod_cidr" {
 }
 
 variable "create_aks" {
-  description = "force create aks or skip"
+  description = "force create aks or skip (null = use default per env)"
   type        = bool
   default     = null
 }
 
-# app service plan + dns rg
+# App Service Plan / Function Apps
 variable "asp_os_type" {
   description = "app service plan os"
   type        = string
   default     = "Linux"
   validation {
-    condition     = contains(["Linux","Windows"], var.asp_os_type)
+    condition     = contains(["Linux", "Windows"], var.asp_os_type)
     error_message = "asp_os_type invalid."
   }
 }
@@ -271,14 +260,14 @@ variable "func_linux_plan_sku_name" {
   default     = "S1"
 }
 
-# cosmos (nosql)
+# Cosmos DB (NoSQL)
 variable "cosno_total_throughput_limit" {
   description = "cosmos nosql total throughput limit"
   type        = number
   default     = null
 }
 
-# postgres flex
+# PostgreSQL Flexible Server
 variable "pg_sku_name" {
   description = "postgres flexible server sku"
   type        = string
@@ -377,7 +366,6 @@ variable "pg_enable_postgis" {
 variable "pg_extensions" {
   description = "List of PostgreSQL extensions to set on azure.extensions."
   type        = list(string)
-  # Keep your current default so behavior doesn't change
   default = [
     "POSTGIS",
     "PGCRYPTO",
@@ -386,13 +374,13 @@ variable "pg_extensions" {
   ]
 }
 
-# redis
+# Redis
 variable "redis_sku_name" {
   description = "redis sku name"
   type        = string
   default     = "Basic"
   validation {
-    condition     = contains(["Basic","Standard","Premium"], var.redis_sku_name)
+    condition     = contains(["Basic", "Standard", "Premium"], var.redis_sku_name)
     error_message = "redis_sku_name invalid."
   }
 }
@@ -402,7 +390,7 @@ variable "redis_sku_family" {
   type        = string
   default     = "C"
   validation {
-    condition     = contains(["C","P"], var.redis_sku_family)
+    condition     = contains(["C", "P"], var.redis_sku_family)
     error_message = "redis_sku_family invalid."
   }
 }
@@ -412,19 +400,12 @@ variable "redis_capacity" {
   type        = number
   default     = 1
   validation {
-    condition     = contains([0,1,2,3,4,5,6], var.redis_capacity)
+    condition     = contains([0, 1, 2, 3, 4, 5, 6], var.redis_capacity)
     error_message = "redis_capacity invalid."
   }
 }
 
-# plane-scoped hub rg
-variable "rg_plane_name" {
-  description = "plane-scoped hub resource group name"
-  type        = string
-  default     = null
-}
-
-# optional hub overrides
+# Hub / subscription overrides
 variable "hub_subscription_id" {
   description = "override hub subscription id"
   type        = string
@@ -433,31 +414,6 @@ variable "hub_subscription_id" {
 
 variable "hub_tenant_id" {
   description = "override hub tenant id"
-  type        = string
-  default     = null
-}
-
-# optional per-env overrides
-variable "dev_subscription_id" {
-  description = "dev subscription override"
-  type        = string
-  default     = null
-}
-
-variable "dev_tenant_id" {
-  description = "dev tenant override"
-  type        = string
-  default     = null
-}
-
-variable "qa_subscription_id" {
-  description = "qa subscription override"
-  type        = string
-  default     = null
-}
-
-variable "qa_tenant_id" {
-  description = "qa tenant override"
   type        = string
   default     = null
 }
@@ -498,7 +454,7 @@ variable "uat_tenant_id" {
   default     = null
 }
 
-# overrides to bypass core state for observability
+# Observability overrides (bypass core state)
 variable "law_workspace_id_override" {
   description = "override law workspace id"
   type        = string
@@ -511,7 +467,7 @@ variable "appi_connection_string_override" {
   default     = null
 }
 
-# cosmos db for postgresql (citus)
+# Cosmos DB for PostgreSQL (Citus)
 variable "create_cdbpg" {
   description = "create cosmos db for postgresql"
   type        = bool
@@ -583,16 +539,7 @@ variable "cdbpg_preferred_primary_zone" {
   type        = string
   default     = null
   validation {
-    condition     = var.cdbpg_preferred_primary_zone == null || contains(["1","2","3"], var.cdbpg_preferred_primary_zone)
+    condition     = var.cdbpg_preferred_primary_zone == null || contains(["1", "2", "3"], var.cdbpg_preferred_primary_zone)
     error_message = "cdbpg_preferred_primary_zone must be 1, 2, or 3 (or null)."
-  }
-}
-
-variable "plane_override" {
-  type        = string
-  default     = null
-  validation {
-    condition     = var.plane_override == null || can(index(["np","uat","pr","nonprod","prod"], lower(var.plane_override)))
-    error_message = "plane_override must be one of: np, uat, pr, nonprod, prod (or null)."
   }
 }

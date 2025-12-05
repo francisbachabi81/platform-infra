@@ -1,25 +1,26 @@
-product  = "hrz"
-env      = "dev"
-location    = "USGov Arizona"
-region          = "usaz"
+# Core context
+product = "hrz"
+env     = "dev"
 
+location = "USGov Arizona"
+region   = "usaz"
+
+# Alerting (Action Group recipients)
 action_group_email_receivers = [
   {
-    name                    = "Ops Manager"
-    email_address           = "francis.bachabi@intterragroup.com"
-    use_common_alert_schema = true
+    name          = "Ops Manager"
+    email_address = "francis.bachabi@intterragroup.com"
   },
   {
-    name                    = "Cloud Ops Alerts"
-    email_address           = "cloudops@intterragroup.com"
-    use_common_alert_schema = true
+    name          = "Cloud Ops Alerts"
+    email_address = "cloudops@intterragroup.com"
   }
 ]
 
-# FedRAMP Policy events pipeline
+# FedRAMP policy compliance pipeline
 enable_policy_compliance_alerts = true
-management_group_name = "b332ab98-00a1-42a1-9388-63538bc86612"
-policy_alert_email   = "cloudops@intterragroup.com"
+policy_alert_email              = "cloudops@intterragroup.com"
+
 policy_source_subscriptions = {
   dev-core = {
     subscription_id = "62ae6908-cbcb-40cb-8773-54bd318ff7f9"
@@ -32,18 +33,21 @@ policy_source_subscriptions = {
   }
 }
 
-enable_subscription_budgets = true
-subscription_budget_amount = 500
-subscription_budget_threshold = 80
+# Subscription budgets
+enable_subscription_budgets    = true
+subscription_budget_amount     = 500
+subscription_budget_threshold  = 80
 subscription_budget_start_date = "2025-12-01T00:00:00Z"
 subscription_budget_end_date   = "2035-01-01T00:00:00Z"
+
 budget_alert_emails = [
   "cloudops@intterragroup.com"
 ]
 
+# NSG flow logs
 # enable_nsg_flow_logs = false
 
-# tags
+# Tags
 tags_extra = {
   purpose = "observability"
   layer   = "platform"

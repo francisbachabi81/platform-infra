@@ -104,7 +104,7 @@ output "aks" {
     subscription_id     = local.aks_subscription_id
     tenant_id           = local.aks_tenant_id
     resource_group      = local.aks_rg_name
-    provider_alias      = local.aks_provider_alias
+    # provider_alias      = local.aks_provider_alias
   } : null
 }
 
