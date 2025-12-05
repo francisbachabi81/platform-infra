@@ -243,3 +243,51 @@ variable "law_workspace_guid_override" {
   type        = string
   default     = null
 }
+
+variable "dev_subscription_id" {
+  description = "optional dev subscription override"
+  type        = string
+  default     = null
+}
+
+variable "dev_tenant_id" {
+  description = "optional dev tenant override"
+  type        = string
+  default     = null
+}
+
+variable "qa_subscription_id" {
+  description = "optional qa subscription override"
+  type        = string
+  default     = null
+}
+
+variable "qa_tenant_id" {
+  description = "optional qa tenant override"
+  type        = string
+  default     = null
+}
+
+variable "prod_subscription_id" {
+  description = "optional prod subscription override"
+  type        = string
+  default     = null
+}
+
+variable "prod_tenant_id" {
+  description = "optional prod tenant override"
+  type        = string
+  default     = null
+}
+
+variable "uat_subscription_id" {
+  description = "optional uat subscription override"
+  type        = string
+  default     = null
+}
+
+variable "uat_tenant_id" {
+  description = "optional uat tenant override"
+  type        = string
+  default     = null
+}
