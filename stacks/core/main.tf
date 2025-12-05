@@ -116,6 +116,7 @@ resource "azurerm_log_analytics_workspace" "plane" {
   resource_group_name = local.rg_name_core
   sku                 = var.law_sku
   retention_in_days   = var.law_retention_days
+  daily_quota_gb    = var.law_daily_quota_gb
 
   tags = merge(local.tags_common, {
     service = "log-analytics"

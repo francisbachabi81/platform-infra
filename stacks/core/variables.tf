@@ -74,6 +74,12 @@ variable "law_sku" {
   }
 }
 
+variable "law_daily_quota_gb" {
+  description = "Daily ingestion quota for Log Analytics workspace in GB (e.g. 1 = 1 GB/day)."
+  type        = number
+  default     = 1
+}
+
 variable "law_retention_days" {
   description = "Log Analytics retention in days"
   type        = number
