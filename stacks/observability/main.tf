@@ -1365,23 +1365,6 @@ resource "azurerm_consumption_budget_subscription" "policy_source_budgets" {
 }
 
 locals {
-  # Network watcher per env / plane (shared-network convention)
-  network_watcher_name_env = (
-    local.plane_effective == "nonprod" && local.env_effective == "dev"  ? "nw-${var.product}-dev-${var.region}-01"  :
-    local.plane_effective == "nonprod" && local.env_effective == "qa"   ? "nw-${var.product}-qa-${var.region}-01"   :
-    local.plane_effective == "prod"    && local.env_effective == "prod" ? "nw-${var.product}-prod-${var.region}-01" :
-    local.plane_effective == "prod"    && local.env_effective == "uat"  ? "nw-${var.product}-uat-${var.region}-01"  :
-                                      /* fallback – hub */                "nw-${var.product}-${local.plane_code}-${var.region}-01"
-  )
-
-  network_watcher_rg_env = (
-    local.plane_effective == "nonprod" && local.env_effective == "dev"  ? "rg-${var.product}-dev-${var.region}-net-01"  :
-    local.plane_effective == "nonprod" && local.env_effective == "qa"   ? "rg-${var.product}-qa-${var.region}-net-01"   :
-    local.plane_effective == "prod"    && local.env_effective == "prod" ? "rg-${var.product}-prod-${var.region}-net-01" :
-    local.plane_effective == "prod"    && local.env_effective == "uat"  ? "rg-${var.product}-uat-${var.region}-net-01"  :
-                                      /* fallback – hub */                "rg-${var.product}-${local.plane_code}-${var.region}-net-01"
-  )
-
   # Which environments' NSGs should get flow logs, per effective env
   # - dev  → hub + dev + qa
   # - prod → hub + prod + uat
@@ -1393,18 +1376,53 @@ locals {
   # List of env keys we should target in this run (only when env is dev/prod)
   nsg_flowlog_env_keys = lookup(local.nsg_flowlog_env_sets, local.env_effective, [])
 
-  # Collect NSG IDs from shared-network outputs for those env keys
-  nsg_flowlog_ids = distinct(flatten([
-    for env_key in local.nsg_flowlog_env_keys : values(
-      try(data.terraform_remote_state.network.outputs.nsg_ids_by_env[env_key], {})
-    )
-  ]))
+  # Flatten NSGs into (id, env_key) objects
+  nsg_flowlog_items = flatten([
+    for env_key in local.nsg_flowlog_env_keys : [
+      for _, nsg_id in try(data.terraform_remote_state.network.outputs.nsg_ids_by_env[env_key], {}) : {
+        id      = nsg_id
+        env_key = env_key
+      }
+    ]
+  ])
 
-  # Map for for_each, no extra subscription filtering (we'll use the network provider)
+  # Map keyed by NSG id → { id, env_key }
   nsg_flowlog_map = {
-    for id in local.nsg_flowlog_ids :
-    id => id
+    for item in local.nsg_flowlog_items :
+    item.id => item
   }
+
+  # Network Watcher name + RG per NSG env_key
+  network_watcher_by_env = {
+    hub = {
+      name = "nw-${var.product}-${local.plane_code}-${var.region}-01"      # e.g. nw-hrz-np-usaz-01
+      rg   = "rg-${var.product}-${local.plane_code}-${var.region}-net-01" # e.g. rg-hrz-np-usaz-net-01
+    }
+    dev = {
+      name = "nw-${var.product}-dev-${var.region}-01"
+      rg   = "rg-${var.product}-dev-${var.region}-net-01"
+    }
+    qa = {
+      name = "nw-${var.product}-qa-${var.region}-01"
+      rg   = "rg-${var.product}-qa-${var.region}-net-01"
+    }
+    prod = {
+      name = "nw-${var.product}-prod-${var.region}-01"
+      rg   = "rg-${var.product}-prod-${var.region}-net-01"
+    }
+    uat = {
+      name = "nw-${var.product}-uat-${var.region}-01"
+      rg   = "rg-${var.product}-uat-${var.region}-net-01"
+    }
+  }
+
+  # Gate: only enable flow logs when LAW + SA + GUID are resolved AND we have targets
+  nsg_flowlogs_enabled = (
+    local.law_id != null &&
+    local.law_workspace_guid != null &&
+    local.nsg_flow_logs_sa_id != null &&
+    length(local.nsg_flowlog_map) > 0
+  )
 
   law_workspace_guid = coalesce(
     # (optional) if you want an override var, declare it and put it here:
@@ -1413,14 +1431,6 @@ locals {
     try(data.terraform_remote_state.platform.outputs.observability.law_workspace_guid, null),
     null
   )
-
-  # Gate: only enable flow logs when LAW + SA are resolved AND we have targets
-  nsg_flowlogs_enabled = (
-    local.law_id != null &&
-    local.law_workspace_guid != null &&
-    local.nsg_flow_logs_sa_id != null &&
-    length(local.nsg_flowlog_map) > 0
-  )
 }
 
 resource "azurerm_network_watcher_flow_log" "nsg" {
@@ -1428,12 +1438,16 @@ resource "azurerm_network_watcher_flow_log" "nsg" {
 
   for_each = local.nsg_flowlogs_enabled ? local.nsg_flowlog_map : {}
 
-  name = "fl-${var.product}-${local.env_effective}-${var.region}-${basename(each.key)}"
+  # each.value = { id = <nsg_id>, env_key = "hub" | "dev" | "qa" | ... }
 
-  network_watcher_name = local.network_watcher_name_env
-  resource_group_name  = local.network_watcher_rg_env
-  target_resource_id   = each.key
-  storage_account_id   = local.nsg_flow_logs_sa_id
+  # Name includes the NSG env_key so it's obvious
+  name = "fl-${var.product}-${each.value.env_key}-${var.region}-${basename(each.value.id)}"
+
+  network_watcher_name = local.network_watcher_by_env[each.value.env_key].name
+  resource_group_name  = local.network_watcher_by_env[each.value.env_key].rg
+
+  target_resource_id = each.value.id
+  storage_account_id = local.nsg_flow_logs_sa_id
 
   enabled = true
   version = 2
@@ -1445,9 +1459,9 @@ resource "azurerm_network_watcher_flow_log" "nsg" {
 
   traffic_analytics {
     enabled               = true
-    workspace_id          = local.law_workspace_guid    # now a real GUID ✅
+    workspace_id          = local.law_workspace_guid
     workspace_region      = var.location
-    workspace_resource_id = local.law_id                # full ARM ID
+    workspace_resource_id = local.law_id
     interval_in_minutes   = 10
   }
 
