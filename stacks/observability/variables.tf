@@ -291,3 +291,270 @@ variable "uat_tenant_id" {
   type        = string
   default     = null
 }
+
+# --- Global toggles per resource type ---
+
+variable "enable_subscription_diagnostics" {
+  type        = bool
+  description = "Enable subscription-level activity diagnostics"
+  default     = true
+}
+
+variable "enable_nsg_diagnostics" {
+  type        = bool
+  description = "Enable diagnostic settings on NSGs"
+  default     = true
+}
+
+variable "enable_sa_diagnostics" {
+  type        = bool
+  description = "Enable diagnostic settings for Storage Accounts"
+  default     = true
+}
+
+variable "enable_sbns_diagnostics" {
+  type        = bool
+  description = "Enable diagnostic settings for Service Bus namespaces"
+  default     = true
+}
+
+variable "enable_ehns_diagnostics" {
+  type        = bool
+  description = "Enable diagnostic settings for Event Hubs namespaces"
+  default     = true
+}
+
+variable "enable_pg_diagnostics" {
+  type        = bool
+  description = "Enable diagnostic settings for PostgreSQL Flexible Server"
+  default     = true
+}
+
+variable "enable_redis_diagnostics" {
+  type        = bool
+  description = "Enable diagnostic settings for Azure Cache for Redis"
+  default     = true
+}
+
+variable "enable_rsv_diagnostics" {
+  type        = bool
+  description = "Enable diagnostic settings for Recovery Services Vaults"
+  default     = true
+}
+
+variable "enable_appi_diagnostics" {
+  type        = bool
+  description = "Enable diagnostic settings for Application Insights"
+  default     = true
+}
+
+variable "enable_vpng_diagnostics" {
+  type        = bool
+  description = "Enable diagnostic settings for VPN Gateways"
+  default     = true
+}
+
+variable "enable_fa_diagnostics" {
+  type        = bool
+  description = "Enable diagnostic settings for Function Apps"
+  default     = true
+}
+
+variable "enable_web_diagnostics" {
+  type        = bool
+  description = "Enable diagnostic settings for Web Apps"
+  default     = true
+}
+
+variable "enable_appgw_diagnostics" {
+  type        = bool
+  description = "Enable diagnostic settings for Application Gateways"
+  default     = true
+}
+
+variable "enable_afd_diagnostics" {
+  type        = bool
+  description = "Enable diagnostic settings for Azure Front Door"
+  default     = true
+}
+
+# Cosmos & AKS already have toggles:
+#   enable_cosmos_diagnostics
+#   enable_aks_diagnostics
+
+# --- Per-resource log categories (override-friendly) ---
+
+variable "sa_log_categories" {
+  type        = list(string)
+  description = "Storage Account log categories to enable"
+  default     = ["StorageRead", "StorageWrite", "StorageDelete"]
+}
+
+variable "kv_log_categories" {
+  type        = list(string)
+  description = "Key vault log categories to enable"
+  default = [
+    "AuditEvent",
+    "AzurePolicyEvaluationDetails"
+  ]
+}
+
+variable "sbns_log_categories" {
+  type        = list(string)
+  description = "Service Bus namespace log categories to enable"
+  default = [
+    "ApplicationMetricsLogs",
+    "DataDRLogs",
+    "DiagnosticErrorLogs",
+    "OperationalLogs",
+    "RuntimeAuditLogs",
+    "VNetAndIPFilteringLogs"
+  ]
+}
+
+variable "ehns_log_categories" {
+  type        = list(string)
+  description = "Event Hubs namespace log categories to enable"
+  default = [
+    "ApplicationMetricsLogs",
+    "ArchiveLogs",
+    "AutoScaleLogs",
+    "CustomerManagedKeyUserLogs",
+    "DataDRLogs",
+    "DiagnosticErrorLogs",
+    "EventHubVNetConnectionEvent",
+    "KafkaCoordinatorLogs",
+    "KafkaUserErrorLogs",
+    "OperationalLogs",
+    "RuntimeAuditLogs"
+  ]
+}
+
+variable "pg_log_categories" {
+  type        = list(string)
+  description = "PostgreSQL Flexible Server log categories to enable"
+  default     = [
+    "PostgreSQLLogs",
+    "QueryStoreRuntimeStatistics",
+    "QueryStoreWaitStatistics",
+  ]
+}
+
+variable "redis_log_categories" {
+  type        = list(string)
+  description = "Redis log categories to enable"
+  default     = [
+    "ConnectedClientList",
+    "CacheRead",
+    "CacheWrite",
+    "CacheDelete",
+  ]
+}
+
+variable "appi_log_categories" {
+  type        = list(string)
+  description = "Application Insights log categories to enable"
+  default     = [
+    "AppRequests",
+    "AppSystemEvents",
+    "AppPerformanceCounters",
+    "AppAvailabilityResults",
+    "AppDependencies",
+    "AppExceptions",
+    "AppPageViews",
+    "AppTraces",
+  ]
+}
+
+variable "vpng_log_categories" {
+  type        = list(string)
+  description = "VPN Gateway log categories to enable"
+  default     = [
+    "GatewayDiagnosticLog",
+    "TunnelDiagnosticLog",
+    "RouteDiagnosticLog",
+  ]
+}
+
+variable "fa_log_categories" {
+  type        = list(string)
+  description = "Function App log categories to enable"
+  default     = [
+    "FunctionAppLogs",
+    "AppServicePlatformLogs",
+  ]
+}
+
+variable "web_log_categories" {
+  type        = list(string)
+  description = "Web App log categories to enable"
+  default     = [
+    "AppServiceHTTPLogs",
+    "AppServiceConsoleLogs",
+    "AppServiceAppLogs",
+  ]
+}
+
+variable "appgw_log_categories" {
+  type        = list(string)
+  description = "Application Gateway log categories to enable"
+  default     = [
+    "ApplicationGatewayAccessLog",
+    "ApplicationGatewayPerformanceLog",
+    "ApplicationGatewayFirewallLog",
+  ]
+}
+
+variable "afd_log_categories" {
+  type        = list(string)
+  description = "Azure Front Door log categories to enable"
+  default     = [
+    "FrontdoorAccessLog",
+    "FrontdoorWebApplicationFirewallLog",
+  ]
+}
+
+variable "nsg_log_categories" {
+  type        = list(string)
+  description = "NSG diagnostic log categories to enable"
+  default     = [
+    "NetworkSecurityGroupEvent",
+    "NetworkSecurityGroupRuleCounter",
+  ]
+}
+
+variable "subscription_log_categories" {
+  type        = list(string)
+  description = "Subscription-level Activity Log categories to enable"
+  default = [
+    "Administrative",
+    "Security",
+    "ServiceHealth",
+    "Alert",
+    "Recommendation",
+    "Policy",
+    "Autoscale",
+    "ResourceHealth"
+  ]
+}
+
+variable "rsv_log_categories" {
+  type        = list(string)
+  description = "Recovery Services Vault log categories to enable"
+  default = [
+    "AzureSiteRecoveryJobs",
+    "AzureSiteRecoveryEvents",
+    "CoreAzureBackup",
+  ]
+}
+
+variable "cosmos_log_categories" {
+  type        = list(string)
+  description = "Cosmos DB log categories to enable"
+  default = [
+    "DataPlaneRequests",
+    "QueryRuntimeStatistics",
+    "PartitionKeyRUConsumption",
+    "ControlPlaneRequests",
+  ]
+}

@@ -20,102 +20,6 @@ locals {
   activity_alert_location = "Global"
 
   ag_name_default = "ag-obs-${var.product}-${local.env_effective}-${var.region}-01"
-
-  # Policy / compliance wiring
-  egst_policy_name = "egst-${var.product}-${local.plane_code}-${var.region}-policy-compliance"
-  la_policy_name   = "la-${var.product}-${local.plane_code}-${var.region}-policy-alerts"
-  eges_policy_name = "eges-${var.product}-${local.plane_code}-${var.region}-policy-to-la"
-}
-
-locals {
-  # Storage Accounts
-  sa_log_categories = [
-    "StorageRead",
-    "StorageWrite",
-    "StorageDelete",
-  ]
-
-  # Service Bus Namespace
-  sbns_log_categories = [
-    "ApplicationMetricsLogs",
-    "DataDRLogs",
-    "DiagnosticErrorLogs",
-    "OperationalLogs",
-    "RuntimeAuditLogs",
-    "VNetAndIPFilteringLogs"
-  ]
-
-  # Event Hubs Namespace
-  ehns_log_categories = [
-    "OperationalLogs",
-  ]
-
-  # PostgreSQL Flexible Server
-  pg_log_categories = [
-    "PostgreSQLLogs",
-    "QueryStoreRuntimeStatistics",
-    "QueryStoreWaitStatistics",
-  ]
-
-  # Azure Cache for Redis
-  redis_log_categories = [
-    "ConnectedClientList",
-    "CacheRead",
-    "CacheWrite",
-    "CacheDelete",
-  ]
-
-  # Application Insights component
-  appi_log_categories = [
-    "AppRequests",
-    "AppSystemEvents",
-    "AppPerformanceCounters",
-    "AppAvailabilityResults",
-    "AppDependencies",
-    "AppExceptions",
-    "AppPageViews",
-    "AppTraces",
-  ]
-
-  # VPN Gateway
-  vpng_log_categories = [
-    "GatewayDiagnosticLog",
-    "TunnelDiagnosticLog",
-    "RouteDiagnosticLog",
-  ]
-
-  # Function Apps
-  fa_log_categories = [
-    "FunctionAppLogs",
-    "AppServicePlatformLogs",
-  ]
-
-  # Web Apps
-  web_log_categories = [
-    "AppServiceHTTPLogs",
-    "AppServiceConsoleLogs",
-    "AppServiceAppLogs",
-  ]
-
-  # Application Gateway
-  appgw_log_categories = [
-    "ApplicationGatewayAccessLog",
-    "ApplicationGatewayPerformanceLog",
-    "ApplicationGatewayFirewallLog",
-  ]
-
-  # Azure Front Door / WAF
-  afd_log_categories = [
-    "FrontdoorAccessLog",
-    "FrontdoorWebApplicationFirewallLog",
-  ]
-
-  # Filter RSV targets so we skip ones with no logs/metrics at all
-  rsv_diag_targets = {
-    for id, cats in data.azurerm_monitor_diagnostic_categories.rsv :
-    id => cats
-    if length(try(cats.logs, [])) > 0 || length(try(cats.metrics, [])) > 0
-  }
 }
 
 # Prefer the Platform stack's subscription/tenant if it emitted them; otherwise fall back to workflow-injected vars.
@@ -375,11 +279,6 @@ locals {
     for id in local.ids_nsg :
     id => id
   }
-  nsg_map_env = {
-    for id in local.ids_nsg :
-    id => id
-    if local.sub_env_resolved != null && local.sub_env_resolved == element(split(id, "/"), 2)
-  }
 
   nsg_flow_logs_storage = try(data.terraform_remote_state.platform.outputs.nsg_flow_logs_storage, null)
   nsg_flow_logs_sa_id   = try(local.nsg_flow_logs_storage.id, null)
@@ -467,11 +366,11 @@ locals {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "nsg" {
-  for_each = {
+  for_each = var.enable_nsg_diagnostics ? {
     for id, cats in data.azurerm_monitor_diagnostic_categories.nsg :
     id => cats
     if length(try(cats.log_category_types, [])) > 0 || length(try(cats.metrics, [])) > 0
-  }
+  } : {}
 
   name                       = var.diag_name
   target_resource_id         = each.key
@@ -479,11 +378,11 @@ resource "azurerm_monitor_diagnostic_setting" "nsg" {
 
   dynamic "enabled_log" {
     for_each = toset([
-      for c in [
-        "NetworkSecurityGroupEvent",
-        "NetworkSecurityGroupRuleCounter",
-      ] :
-      c if contains(try(each.value.log_category_types, []), c)
+      for c in var.nsg_log_categories :
+      c if (
+        contains(try(each.value.log_category_types, []), c) ||
+        contains(try(each.value.logs, []), c)
+      )
     ])
     content {
       category = enabled_log.value
@@ -508,19 +407,17 @@ resource "azurerm_monitor_diagnostic_setting" "nsg" {
 
 resource "azurerm_monitor_diagnostic_setting" "sub_env" {
   provider                   = azurerm.env
-  count                      = local.sub_env_target_id == null ? 0 : 1
+  count                      = (local.sub_env_target_id == null || !var.enable_subscription_diagnostics) ? 0 : 1
   name                       = var.diag_name
   target_resource_id         = local.sub_env_target_id
   log_analytics_workspace_id = local.law_id
 
-  enabled_log { category = "Administrative" }
-  enabled_log { category = "Security" }
-  enabled_log { category = "ServiceHealth" }
-  enabled_log { category = "Alert" }
-  enabled_log { category = "Recommendation" }
-  enabled_log { category = "Policy" }
-  enabled_log { category = "Autoscale" }
-  enabled_log { category = "ResourceHealth" }
+  dynamic "enabled_log" {
+    for_each = toset(var.subscription_log_categories)
+    content {
+      category = enabled_log.value
+    }
+  }
 
   lifecycle {
     precondition {
@@ -536,14 +433,24 @@ resource "azurerm_monitor_diagnostic_setting" "kv" {
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
-  enabled_log { category = "AuditEvent" }
-  enabled_log { category = "AzurePolicyEvaluationDetails" }
-  
+  dynamic "enabled_log" {
+    for_each = toset([
+      for c in var.kv_log_categories:
+      c if (
+        contains(try(each.value.log_category_types, []), c) ||
+        contains(try(each.value.logs, []), c)
+      )
+    ])
+    content {
+      category = enabled_log.value
+    }
+  }
+
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
-    content { 
-      category = metric.value 
-      enabled = true 
+    content {
+      category = metric.value
+      enabled  = true
     }
   }
 
@@ -556,21 +463,24 @@ resource "azurerm_monitor_diagnostic_setting" "kv" {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "sa" {
-  for_each                   = data.azurerm_monitor_diagnostic_categories.sa
+  for_each                   = var.enable_sa_diagnostics ? data.azurerm_monitor_diagnostic_categories.sa : {}
   name                       = var.diag_name
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
-  # Logs: only enable StorageRead/Write/Delete if supported
   dynamic "enabled_log" {
     for_each = toset([
-      for c in local.sa_log_categories :
-      c if contains(try(each.value.logs, []), c)
+      for c in var.sa_log_categories :
+      c if (
+        contains(try(each.value.log_category_types, []), c) ||
+        contains(try(each.value.logs, []), c)
+      )
     ])
-    content { category = enabled_log.value }
+    content {
+      category = enabled_log.value
+    }
   }
 
-  # Metrics: enable all available categories
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
     content {
@@ -581,26 +491,24 @@ resource "azurerm_monitor_diagnostic_setting" "sa" {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "sbns" {
-  for_each                   = data.azurerm_monitor_diagnostic_categories.sbns
+  for_each                   = var.enable_sbns_diagnostics ? data.azurerm_monitor_diagnostic_categories.sbns : {}
   name                       = var.diag_name
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
   dynamic "enabled_log" {
     for_each = toset([
-      for c in local.sbns_log_categories :
+      for c in var.sbns_log_categories :
       c if (
         contains(try(each.value.log_category_types, []), c) ||
         contains(try(each.value.logs, []), c)
       )
     ])
-
     content {
       category = enabled_log.value
     }
   }
 
-  # Metrics: enable all available categories
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
     content {
@@ -618,17 +526,22 @@ resource "azurerm_monitor_diagnostic_setting" "sbns" {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "ehns" {
-  for_each                   = data.azurerm_monitor_diagnostic_categories.ehns
+  for_each                   = var.enable_ehns_diagnostics ? data.azurerm_monitor_diagnostic_categories.ehns : {}
   name                       = var.diag_name
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
   dynamic "enabled_log" {
     for_each = toset([
-      for c in local.ehns_log_categories :
-      c if contains(try(each.value.logs, []), c)
+      for c in var.ehns_log_categories :
+      c if (
+        contains(try(each.value.log_category_types, []), c) ||
+        contains(try(each.value.logs, []), c)
+      )
     ])
-    content { category = enabled_log.value }
+    content {
+      category = enabled_log.value
+    }
   }
 
   dynamic "metric" {
@@ -636,22 +549,34 @@ resource "azurerm_monitor_diagnostic_setting" "ehns" {
     content {
       category = metric.value
       enabled  = true
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null
+      error_message = "LAW workspace ID could not be resolved for Event Hubs diagnostics."
     }
   }
 }
 
 resource "azurerm_monitor_diagnostic_setting" "pg" {
-  for_each                   = data.azurerm_monitor_diagnostic_categories.pg
+  for_each                   = var.enable_pg_diagnostics ? data.azurerm_monitor_diagnostic_categories.pg : {}
   name                       = var.diag_name
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
   dynamic "enabled_log" {
     for_each = toset([
-      for c in local.pg_log_categories :
-      c if contains(try(each.value.logs, []), c)
+      for c in var.pg_log_categories :
+      c if (
+        contains(try(each.value.log_category_types, []), c) ||
+        contains(try(each.value.logs, []), c)
+      )
     ])
-    content { category = enabled_log.value }
+    content {
+      category = enabled_log.value
+    }
   }
 
   dynamic "metric" {
@@ -659,22 +584,34 @@ resource "azurerm_monitor_diagnostic_setting" "pg" {
     content {
       category = metric.value
       enabled  = true
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null
+      error_message = "LAW workspace ID could not be resolved for PostgreSQL diagnostics."
     }
   }
 }
 
 resource "azurerm_monitor_diagnostic_setting" "redis" {
-  for_each                   = data.azurerm_monitor_diagnostic_categories.redis
+  for_each                   = var.enable_redis_diagnostics ? data.azurerm_monitor_diagnostic_categories.redis : {}
   name                       = var.diag_name
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
   dynamic "enabled_log" {
     for_each = toset([
-      for c in local.redis_log_categories :
-      c if contains(try(each.value.logs, []), c)
+      for c in var.redis_log_categories :
+      c if (
+        contains(try(each.value.log_category_types, []), c) ||
+        contains(try(each.value.logs, []), c)
+      )
     ])
-    content { category = enabled_log.value }
+    content {
+      category = enabled_log.value
+    }
   }
 
   dynamic "metric" {
@@ -684,17 +621,27 @@ resource "azurerm_monitor_diagnostic_setting" "redis" {
       enabled  = true
     }
   }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null
+      error_message = "LAW workspace ID could not be resolved for Redis diagnostics."
+    }
+  }
 }
 
 resource "azurerm_monitor_diagnostic_setting" "rsv" {
-  for_each                   = local.rsv_map
+  for_each                   = var.enable_rsv_diagnostics ? local.rsv_map : {}
   name                       = var.diag_name
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
-  enabled_log { category = "AzureSiteRecoveryJobs" }
-  enabled_log { category = "AzureSiteRecoveryEvents" }
-  enabled_log { category = "CoreAzureBackup" }
+  dynamic "enabled_log" {
+    for_each = toset(var.rsv_log_categories)
+    content {
+      category = enabled_log.value
+    }
+  }
 
   lifecycle {
     precondition {
@@ -705,17 +652,22 @@ resource "azurerm_monitor_diagnostic_setting" "rsv" {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "appi" {
-  for_each                   = data.azurerm_monitor_diagnostic_categories.appi
+  for_each                   = var.enable_appi_diagnostics ? data.azurerm_monitor_diagnostic_categories.appi : {}
   name                       = var.diag_name
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
   dynamic "enabled_log" {
     for_each = toset([
-      for c in local.appi_log_categories :
-      c if contains(try(each.value.logs, []), c)
+      for c in var.appi_log_categories :
+      c if (
+        contains(try(each.value.log_category_types, []), c) ||
+        contains(try(each.value.logs, []), c)
+      )
     ])
-    content { category = enabled_log.value }
+    content {
+      category = enabled_log.value
+    }
   }
 
   dynamic "metric" {
@@ -723,22 +675,34 @@ resource "azurerm_monitor_diagnostic_setting" "appi" {
     content {
       category = metric.value
       enabled  = true
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null
+      error_message = "LAW workspace ID could not be resolved for Application Insights diagnostics."
     }
   }
 }
 
 resource "azurerm_monitor_diagnostic_setting" "vpng" {
-  for_each                   = data.azurerm_monitor_diagnostic_categories.vpng
+  for_each                   = var.enable_vpng_diagnostics ? data.azurerm_monitor_diagnostic_categories.vpng : {}
   name                       = var.diag_name
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
   dynamic "enabled_log" {
     for_each = toset([
-      for c in local.vpng_log_categories :
-      c if contains(try(each.value.logs, []), c)
+      for c in var.vpng_log_categories :
+      c if (
+        contains(try(each.value.log_category_types, []), c) ||
+        contains(try(each.value.logs, []), c)
+      )
     ])
-    content { category = enabled_log.value }
+    content {
+      category = enabled_log.value
+    }
   }
 
   dynamic "metric" {
@@ -746,22 +710,34 @@ resource "azurerm_monitor_diagnostic_setting" "vpng" {
     content {
       category = metric.value
       enabled  = true
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null
+      error_message = "LAW workspace ID could not be resolved for VPN Gateway diagnostics."
     }
   }
 }
 
 resource "azurerm_monitor_diagnostic_setting" "fa" {
-  for_each                   = data.azurerm_monitor_diagnostic_categories.fa
+  for_each                   = var.enable_fa_diagnostics ? data.azurerm_monitor_diagnostic_categories.fa : {}
   name                       = var.diag_name
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
   dynamic "enabled_log" {
     for_each = toset([
-      for c in local.fa_log_categories :
-      c if contains(try(each.value.logs, []), c)
+      for c in var.fa_log_categories :
+      c if (
+        contains(try(each.value.log_category_types, []), c) ||
+        contains(try(each.value.logs, []), c)
+      )
     ])
-    content { category = enabled_log.value }
+    content {
+      category = enabled_log.value
+    }
   }
 
   dynamic "metric" {
@@ -769,22 +745,34 @@ resource "azurerm_monitor_diagnostic_setting" "fa" {
     content {
       category = metric.value
       enabled  = true
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null
+      error_message = "LAW workspace ID could not be resolved for Function App diagnostics."
     }
   }
 }
 
 resource "azurerm_monitor_diagnostic_setting" "web" {
-  for_each                   = data.azurerm_monitor_diagnostic_categories.web
+  for_each                   = var.enable_web_diagnostics ? data.azurerm_monitor_diagnostic_categories.web : {}
   name                       = var.diag_name
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
   dynamic "enabled_log" {
     for_each = toset([
-      for c in local.web_log_categories :
-      c if contains(try(each.value.logs, []), c)
+      for c in var.web_log_categories :
+      c if (
+        contains(try(each.value.log_category_types, []), c) ||
+        contains(try(each.value.logs, []), c)
+      )
     ])
-    content { category = enabled_log.value }
+    content {
+      category = enabled_log.value
+    }
   }
 
   dynamic "metric" {
@@ -792,22 +780,34 @@ resource "azurerm_monitor_diagnostic_setting" "web" {
     content {
       category = metric.value
       enabled  = true
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null
+      error_message = "LAW workspace ID could not be resolved for Web App diagnostics."
     }
   }
 }
 
 resource "azurerm_monitor_diagnostic_setting" "appgw" {
-  for_each                   = data.azurerm_monitor_diagnostic_categories.appgw
+  for_each                   = var.enable_appgw_diagnostics ? data.azurerm_monitor_diagnostic_categories.appgw : {}
   name                       = var.diag_name
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
   dynamic "enabled_log" {
     for_each = toset([
-      for c in local.appgw_log_categories :
-      c if contains(try(each.value.logs, []), c)
+      for c in var.appgw_log_categories :
+      c if (
+        contains(try(each.value.log_category_types, []), c) ||
+        contains(try(each.value.logs, []), c)
+      )
     ])
-    content { category = enabled_log.value }
+    content {
+      category = enabled_log.value
+    }
   }
 
   dynamic "metric" {
@@ -817,20 +817,32 @@ resource "azurerm_monitor_diagnostic_setting" "appgw" {
       enabled  = true
     }
   }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null
+      error_message = "LAW workspace ID could not be resolved for Application Gateway diagnostics."
+    }
+  }
 }
 
 resource "azurerm_monitor_diagnostic_setting" "afd" {
-  for_each                   = data.azurerm_monitor_diagnostic_categories.afd
+  for_each                   = var.enable_afd_diagnostics ? data.azurerm_monitor_diagnostic_categories.afd : {}
   name                       = var.diag_name
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
   dynamic "enabled_log" {
     for_each = toset([
-      for c in local.afd_log_categories :
-      c if contains(try(each.value.logs, []), c)
+      for c in var.afd_log_categories :
+      c if (
+        contains(try(each.value.log_category_types, []), c) ||
+        contains(try(each.value.logs, []), c)
+      )
     ])
-    content { category = enabled_log.value }
+    content {
+      category = enabled_log.value
+    }
   }
 
   dynamic "metric" {
@@ -838,6 +850,13 @@ resource "azurerm_monitor_diagnostic_setting" "afd" {
     content {
       category = metric.value
       enabled  = true
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null
+      error_message = "LAW workspace ID could not be resolved for Azure Front Door diagnostics."
     }
   }
 }
@@ -848,10 +867,18 @@ resource "azurerm_monitor_diagnostic_setting" "cosmos" {
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
 
-  enabled_log { category = "DataPlaneRequests" }
-  enabled_log { category = "QueryRuntimeStatistics" }
-  enabled_log { category = "PartitionKeyRUConsumption" }
-  enabled_log { category = "ControlPlaneRequests" }
+  dynamic "enabled_log" {
+    for_each = toset([
+      for c in var.cosmos_log_categories :
+      c if (
+        contains(try(each.value.log_category_types, []), c) ||
+        contains(try(each.value.logs, []), c)
+      )
+    ])
+    content {
+      category = enabled_log.value
+    }
+  }
 
   lifecycle {
     precondition {
@@ -1034,19 +1061,6 @@ locals {
         ? local.rg_core_id_resolved
         : try(
             data.terraform_remote_state.network.outputs.resource_groups[replace(label, "-", "_")].id,
-            null
-          )
-    )
-  }
-
-  # Map each policy source key → RG name for the event subscription resource
-  policy_system_topic_rg_name_by_key = {
-    for label, cfg in var.policy_source_subscriptions :
-    label => (
-      label == "core"
-        ? local.rg_core_name_resolved
-        : try(
-            data.terraform_remote_state.network.outputs.resource_groups[replace(label, "-", "_")].name,
             null
           )
     )
