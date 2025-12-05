@@ -345,7 +345,7 @@ variable "enable_rsv_diagnostics" {
 variable "enable_appi_diagnostics" {
   type        = bool
   description = "Enable diagnostic settings for Application Insights"
-  default     = true
+  default     = false
 }
 
 variable "enable_vpng_diagnostics" {
@@ -435,8 +435,8 @@ variable "pg_log_categories" {
   description = "PostgreSQL Flexible Server log categories to enable"
   default     = [
     "PostgreSQLLogs",
-    "QueryStoreRuntimeStatistics",
-    "QueryStoreWaitStatistics",
+    "PostgreSQLFlexTableStats",
+    "PostgreSQLFlexSessions",
   ]
 }
 
@@ -480,8 +480,7 @@ variable "fa_log_categories" {
   type        = list(string)
   description = "Function App log categories to enable"
   default     = [
-    "FunctionAppLogs",
-    "AppServicePlatformLogs",
+    "FunctionAppLogs"
   ]
 }
 
