@@ -1,3 +1,7 @@
+# =================================================================
+# Section: Environment / plane resolution and base naming
+# =================================================================
+
 locals {
   env_norm   = var.env == null ? null : lower(var.env)
   plane_norm = var.plane == null ? null : lower(var.plane)
@@ -11,7 +15,7 @@ locals {
 
   plane_effective = coalesce(
     local.plane_norm,
-    contains(["dev","qa"], local.env_effective) ? "nonprod" : "prod"
+    contains(["dev", "qa"], local.env_effective) ? "nonprod" : "prod"
   )
 
   plane_full = local.plane_effective
@@ -22,7 +26,10 @@ locals {
   ag_name_default = "ag-obs-${var.product}-${local.env_effective}-${var.region}-01"
 }
 
-# Prefer the Platform stack's subscription/tenant if it emitted them; otherwise fall back to workflow-injected vars.
+# =================================================================
+# Section: Base provider and remote state
+# =================================================================
+
 provider "azurerm" {
   features {}
 
@@ -39,7 +46,6 @@ provider "azurerm" {
   environment = var.product == "hrz" ? "usgovernment" : "public"
 }
 
-# Remote state lookups
 data "terraform_remote_state" "network" {
   backend = "azurerm"
   config = {
@@ -73,7 +79,10 @@ data "terraform_remote_state" "platform" {
   }
 }
 
-# Subscriptions resolved once
+# =================================================================
+# Section: Subscription / tenant resolution and provider aliases
+# =================================================================
+
 locals {
   product_env = var.product == "hrz" ? "usgovernment" : "public"
   core_sub    = trimspace(coalesce(var.core_subscription_id, var.subscription_id))
@@ -82,7 +91,6 @@ locals {
   env_tenant  = trimspace(coalesce(var.env_tenant_id, var.tenant_id))
 }
 
-# Per-env subscription/tenant fallbacks (prefer explicit IDs, else hub)
 locals {
   dev_sub  = (var.dev_subscription_id  != null && trimspace(var.dev_subscription_id)  != "") ? var.dev_subscription_id  : var.core_subscription_id
   dev_ten  = (var.dev_tenant_id        != null && trimspace(var.dev_tenant_id)        != "") ? var.dev_tenant_id        : var.core_tenant_id
@@ -97,7 +105,6 @@ locals {
   prod_ten = (var.prod_tenant_id       != null && trimspace(var.prod_tenant_id)       != "") ? var.prod_tenant_id       : var.core_tenant_id
 }
 
-# Explicit ENV alias
 provider "azurerm" {
   alias           = "env"
   features {}
@@ -106,7 +113,6 @@ provider "azurerm" {
   environment     = local.product_env
 }
 
-# Explicit CORE alias
 provider "azurerm" {
   alias           = "core"
   features {}
@@ -115,7 +121,6 @@ provider "azurerm" {
   environment     = local.product_env
 }
 
-# Per-env aliases (each can be pointed to distinct subs/tenants)
 provider "azurerm" {
   alias    = "dev"
   features {}
@@ -123,6 +128,7 @@ provider "azurerm" {
   tenant_id       = local.dev_ten
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
+
 provider "azurerm" {
   alias    = "qa"
   features {}
@@ -130,6 +136,7 @@ provider "azurerm" {
   tenant_id       = local.qa_ten
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
+
 provider "azurerm" {
   alias    = "uat"
   features {}
@@ -137,6 +144,7 @@ provider "azurerm" {
   tenant_id       = local.uat_ten
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
+
 provider "azurerm" {
   alias    = "prod"
   features {}
@@ -145,7 +153,10 @@ provider "azurerm" {
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
-# Who am I
+# =================================================================
+# Section: Caller identity and RG discovery
+# =================================================================
+
 data "azurerm_client_config" "core" { provider = azurerm.core }
 data "azurerm_client_config" "env"  { provider = azurerm.env  }
 
@@ -169,10 +180,13 @@ locals {
   rg_core_name_resolved   = try(data.azurerm_resource_group.core_rg[0].name, null)
 
   rg_core_location_resolved = try(data.azurerm_resource_group.core_rg[0].location, null)
-  rg_core_id_resolved      = try(data.azurerm_resource_group.core_rg[0].id, null)
+  rg_core_id_resolved       = try(data.azurerm_resource_group.core_rg[0].id, null)
 }
 
-# Gather IDs and RGs
+# =================================================================
+# Section: Resource ID collection and maps
+# =================================================================
+
 locals {
   law_id = coalesce(
     var.law_workspace_id_override,
@@ -200,6 +214,7 @@ locals {
     ],
     var.key_vault_ids
   ))
+
   ids_sa    = compact([try(local.platform_ids.sa1, null)])
   ids_sbns  = compact([try(local.platform_ids.sbns1, null)])
   ids_ehns  = compact([try(data.terraform_remote_state.platform.outputs.eventhub.namespace_id, null)])
@@ -208,44 +223,45 @@ locals {
   ids_rsv   = compact([try(local.core_ids.rsv, null)])
   ids_appi  = compact([try(local.core_ids.appi, null)])
   ids_vpng  = compact([local.net_vpng])
+
   ids_cosmos = compact(concat(
     [
-      try(local.platform_ids.cosmos,                       null),
-      try(local.platform_ids.cosmos1,                      null),
-      try(local.platform_ids.cdb1,                         null),
-      try(data.terraform_remote_state.platform.outputs.ids.cosmosdb,          null),
-      try(data.terraform_remote_state.platform.outputs.cosmos.account_id,     null),
-      try(data.terraform_remote_state.platform.outputs.cosmosdb.account_id,   null)
+      try(local.platform_ids.cosmos,                     null),
+      try(local.platform_ids.cosmos1,                    null),
+      try(local.platform_ids.cdb1,                       null),
+      try(data.terraform_remote_state.platform.outputs.ids.cosmosdb,        null),
+      try(data.terraform_remote_state.platform.outputs.cosmos.account_id,   null),
+      try(data.terraform_remote_state.platform.outputs.cosmosdb.account_id, null)
     ],
     var.cosmos_account_ids
   ))
 
   ids_aks = compact([
-    try(data.terraform_remote_state.platform.outputs.aks.id, null),
-    try(data.terraform_remote_state.platform.outputs.aks_id, null),
-    try(data.terraform_remote_state.platform.outputs.ids.aks, null),
-    try(data.terraform_remote_state.platform.outputs.kubernetes.id, null),
+    try(data.terraform_remote_state.platform.outputs.aks.id,       null),
+    try(data.terraform_remote_state.platform.outputs.aks_id,       null),
+    try(data.terraform_remote_state.platform.outputs.ids.aks,      null),
+    try(data.terraform_remote_state.platform.outputs.kubernetes.id,null),
   ])
 
   ids_funcapps = compact([
-    try(local.platform_ids.funcapp1, null),
-    try(local.platform_ids.funcapp2, null),
+    try(local.platform_ids.funcapp1,   null),
+    try(local.platform_ids.funcapp2,   null),
     try(local.platform_ids.plan1_func, null),
   ])
 
   ids_webapps = compact([
-    try(local.platform_ids.webapp, null),
-    try(local.platform_app.web_app_id, null),
-    try(local.platform_ids.app, null),
+    try(local.platform_ids.webapp,       null),
+    try(local.platform_app.web_app_id,   null),
+    try(local.platform_ids.app,          null),
   ])
 
   ids_appgws = compact([
-    try(data.terraform_remote_state.network.outputs.app_gateway.id, null),
+    try(data.terraform_remote_state.network.outputs.app_gateway.id,         null),
     try(data.terraform_remote_state.network.outputs.application_gateway.id, null),
   ])
 
   ids_frontdoor = compact([
-    try(data.terraform_remote_state.network.outputs.frontdoor.profile_id,  null)
+    try(data.terraform_remote_state.network.outputs.frontdoor.profile_id, null)
   ])
 
   nsg_ids_flat = concat(
@@ -258,16 +274,15 @@ locals {
 
   ids_nsg = compact(local.nsg_ids_flat)
 
-
-  kv_map    = { for id in local.ids_kv    : id => id }
-  sa_map    = { for id in local.ids_sa    : id => id }
-  sbns_map  = { for id in local.ids_sbns  : id => id }
-  ehns_map  = { for id in local.ids_ehns  : id => id }
-  pg_map    = { for id in local.ids_pg    : id => id }
-  redis_map = { for id in local.ids_redis : id => id }
-  rsv_map   = { for id in local.ids_rsv   : id => id }
-  appi_map  = { for id in local.ids_appi  : id => id }
-  vpng_map  = { for id in local.ids_vpng  : id => id }
+  kv_map    = { for id in local.ids_kv      : id => id }
+  sa_map    = { for id in local.ids_sa      : id => id }
+  sbns_map  = { for id in local.ids_sbns    : id => id }
+  ehns_map  = { for id in local.ids_ehns    : id => id }
+  pg_map    = { for id in local.ids_pg      : id => id }
+  redis_map = { for id in local.ids_redis   : id => id }
+  rsv_map   = { for id in local.ids_rsv     : id => id }
+  appi_map  = { for id in local.ids_appi    : id => id }
+  vpng_map  = { for id in local.ids_vpng    : id => id }
   cosmos_map = { for id in local.ids_cosmos : id => id }
 
   fa_map     = { for id in local.ids_funcapps  : id => id }
@@ -275,16 +290,16 @@ locals {
   appgw_map  = { for id in local.ids_appgws    : id => id }
   afd_map    = { for id in local.ids_frontdoor : id => id }
 
-  nsg_map = {
-    for id in local.ids_nsg :
-    id => id
-  }
+  nsg_map = { for id in local.ids_nsg : id => id }
 
   nsg_flow_logs_storage = try(data.terraform_remote_state.platform.outputs.nsg_flow_logs_storage, null)
   nsg_flow_logs_sa_id   = try(local.nsg_flow_logs_storage.id, null)
 }
 
-# Diagnostic categories
+# =================================================================
+# Section: Diagnostic categories (data sources)
+# =================================================================
+
 data "azurerm_monitor_diagnostic_categories" "kv" {
   for_each    = local.kv_map
   resource_id = each.value
@@ -360,7 +375,10 @@ data "azurerm_monitor_diagnostic_categories" "nsg" {
   resource_id = each.value
 }
 
-# Diagnostic settings (to LAW)
+# =================================================================
+# Section: Diagnostic settings to Log Analytics
+# =================================================================
+
 locals {
   sub_env_target_id = local.sub_env_resolved != null ? "/subscriptions/${local.sub_env_resolved}" : null
 }
@@ -435,15 +453,13 @@ resource "azurerm_monitor_diagnostic_setting" "kv" {
 
   dynamic "enabled_log" {
     for_each = toset([
-      for c in var.kv_log_categories:
+      for c in var.kv_log_categories :
       c if (
         contains(try(each.value.log_category_types, []), c) ||
         contains(try(each.value.logs, []), c)
       )
     ])
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
 
   dynamic "metric" {
@@ -476,9 +492,7 @@ resource "azurerm_monitor_diagnostic_setting" "sa" {
         contains(try(each.value.logs, []), c)
       )
     ])
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
 
   dynamic "metric" {
@@ -504,9 +518,7 @@ resource "azurerm_monitor_diagnostic_setting" "sbns" {
         contains(try(each.value.logs, []), c)
       )
     ])
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
 
   dynamic "metric" {
@@ -539,9 +551,7 @@ resource "azurerm_monitor_diagnostic_setting" "ehns" {
         contains(try(each.value.logs, []), c)
       )
     ])
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
 
   dynamic "metric" {
@@ -574,9 +584,7 @@ resource "azurerm_monitor_diagnostic_setting" "pg" {
         contains(try(each.value.logs, []), c)
       )
     ])
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
 
   dynamic "metric" {
@@ -609,9 +617,7 @@ resource "azurerm_monitor_diagnostic_setting" "redis" {
         contains(try(each.value.logs, []), c)
       )
     ])
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
 
   dynamic "metric" {
@@ -665,9 +671,7 @@ resource "azurerm_monitor_diagnostic_setting" "appi" {
         contains(try(each.value.logs, []), c)
       )
     ])
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
 
   dynamic "metric" {
@@ -700,9 +704,7 @@ resource "azurerm_monitor_diagnostic_setting" "vpng" {
         contains(try(each.value.logs, []), c)
       )
     ])
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
 
   dynamic "metric" {
@@ -735,9 +737,7 @@ resource "azurerm_monitor_diagnostic_setting" "fa" {
         contains(try(each.value.logs, []), c)
       )
     ])
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
 
   dynamic "metric" {
@@ -770,9 +770,7 @@ resource "azurerm_monitor_diagnostic_setting" "web" {
         contains(try(each.value.logs, []), c)
       )
     ])
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
 
   dynamic "metric" {
@@ -805,9 +803,7 @@ resource "azurerm_monitor_diagnostic_setting" "appgw" {
         contains(try(each.value.logs, []), c)
       )
     ])
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
 
   dynamic "metric" {
@@ -840,9 +836,7 @@ resource "azurerm_monitor_diagnostic_setting" "afd" {
         contains(try(each.value.logs, []), c)
       )
     ])
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
 
   dynamic "metric" {
@@ -875,9 +869,7 @@ resource "azurerm_monitor_diagnostic_setting" "cosmos" {
         contains(try(each.value.logs, []), c)
       )
     ])
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
 
   lifecycle {
@@ -888,7 +880,10 @@ resource "azurerm_monitor_diagnostic_setting" "cosmos" {
   }
 }
 
-# Alerts & workbook
+# =================================================================
+# Section: Alerts and Action Groups
+# =================================================================
+
 locals {
   action_group_id = try(data.terraform_remote_state.core.outputs.action_group.id, null)
 }
@@ -1009,7 +1004,10 @@ resource "azurerm_monitor_activity_log_alert" "rg_changes_core" {
   action   { action_group_id = local.ag_id_core }
 }
 
-# AKS diagnostics (env-gated)
+# =================================================================
+# Section: AKS diagnostics
+# =================================================================
+
 locals {
   aks_ids = toset(compact([
     try(data.terraform_remote_state.platform.outputs.ids.aks,       null),
@@ -1017,8 +1015,8 @@ locals {
     try(data.terraform_remote_state.platform.outputs.kubernetes.id, null),
   ]))
 
-  aks_map          = { for id in local.aks_ids : id => id }
-  aks_env_enabled  = contains(["dev","uat","prod"], local.env_effective)
+  aks_map         = { for id in local.aks_ids : id => id }
+  aks_env_enabled = contains(["dev", "uat", "prod"], local.env_effective)
 }
 
 data "azurerm_monitor_diagnostic_categories" "aks" {
@@ -1053,6 +1051,10 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
   }
 }
 
+# =================================================================
+# Section: Policy compliance – Event Grid system topic
+# =================================================================
+
 locals {
   policy_system_topic_parent_ids = {
     for label, cfg in var.policy_source_subscriptions :
@@ -1083,19 +1085,21 @@ resource "azapi_resource" "policy_state_changes" {
 
   body = {
     properties = {
-      # subscription-scoped source, per entry
       source    = "/subscriptions/${each.value.subscription_id}"
       topicType = "Microsoft.PolicyInsights.PolicyStates"
     }
   }
 }
 
+# =================================================================
+# Section: Policy compliance – Logic App and connection
+# =================================================================
+
 locals {
   logicapp_parameters = {
     "$connections" = {
       "value" = {
         "office365" = {
-          # Connection References used by the Office 365 Outlook action
           "connectionId"   = "/subscriptions/${data.azurerm_client_config.core.subscription_id}/resourceGroups/${data.azurerm_resource_group.core_rg[0].name}/providers/Microsoft.Web/connections/office365"
           "connectionName" = "office365"
           "id"             = "/subscriptions/${data.azurerm_client_config.core.subscription_id}/providers/Microsoft.Web/locations/${data.azurerm_resource_group.core_rg[0].location}/managedApis/office365"
@@ -1115,7 +1119,6 @@ locals {
       }
     }
 
-    # HTTP Request trigger used as Event Grid webhook endpoint
     "triggers" = {
       "manual" = {
         "type" = "Request"
@@ -1129,13 +1132,10 @@ locals {
     }
 
     "actions" = {
-      # 1) Handle Event Grid subscription validation handshake
       "If_SubscriptionValidation" = {
         "type"       = "If"
-        # Safe condition: checks both header and payload; avoids exceptions when header is absent.
         "expression" = "@or(equals(triggerOutputs()?['headers']?['aeg-event-type'],'SubscriptionValidation'), equals(first(triggerBody())?['eventType'],'Microsoft.EventGrid.SubscriptionValidationEvent'))"
 
-        # THEN branch: respond to SubscriptionValidation (synchronous echo)
         "actions" = {
           "Return_SubscriptionValidation_Response" = {
             "type" = "Response"
@@ -1146,7 +1146,6 @@ locals {
               }
             }
           },
-          # Optional fallback: complete manual validation via GET validationUrl if echo fails.
           "Manual_Validation_GET" = {
             "type" = "Http"
             "runAfter" = { "Return_SubscriptionValidation_Response" = ["Failed"] }
@@ -1162,7 +1161,6 @@ locals {
           }
         }
 
-        # ELSE branch: normal flow → handle policy non-compliance events
         "else" = {
           "actions" = {
             "If_NonCompliant" = {
@@ -1170,12 +1168,10 @@ locals {
               "expression" = "@equals(first(triggerBody())?['data']?['complianceState'], 'NonCompliant')"
 
               "actions" = {
-                // Raw subject (ARM resource ID)
                 "Compose_SubjectRaw" = {
                   "type"   = "Compose"
                   "inputs" = "@first(triggerBody())?['subject']"
                 },
-                // Subscription ID from data (already present in payload)
                 "Compose_SubscriptionId" = {
                   "type"   = "Compose"
                   "inputs" = "@first(triggerBody())?['data']?['subscriptionId']"
@@ -1183,7 +1179,6 @@ locals {
                     "Compose_SubjectRaw" = [ "Succeeded" ]
                   }
                 },
-                // Resource group (index 4 after split on '/')
                 "Compose_ResourceGroup" = {
                   "type"   = "Compose"
                   "inputs" = "@split(outputs('Compose_SubjectRaw'), '/')[4]"
@@ -1191,7 +1186,6 @@ locals {
                     "Compose_SubscriptionId" = [ "Succeeded" ]
                   }
                 },
-                // Provider namespace (e.g. 'microsoft.network')
                 "Compose_ProviderNamespace" = {
                   "type"   = "Compose"
                   "inputs" = "@split(outputs('Compose_SubjectRaw'), '/')[6]"
@@ -1199,7 +1193,6 @@ locals {
                     "Compose_ResourceGroup" = [ "Succeeded" ]
                   }
                 },
-                // Resource type (e.g. 'applicationgateways')
                 "Compose_ResourceType" = {
                   "type"   = "Compose"
                   "inputs" = "@split(outputs('Compose_SubjectRaw'), '/')[7]"
@@ -1207,7 +1200,6 @@ locals {
                     "Compose_ProviderNamespace" = [ "Succeeded" ]
                   }
                 },
-                // Resource name (last segment of the ARM ID)
                 "Compose_ResourceName" = {
                   "type"   = "Compose"
                   "inputs" = "@last(split(outputs('Compose_SubjectRaw'), '/'))"
@@ -1230,7 +1222,6 @@ locals {
                     "method" = "post"
                     "path"   = "/v2/Mail"
                     "body" = {
-                      // More actionable subject line
                       "To" = var.policy_alert_email
                       "Subject" = "@{concat('FedRAMP Non-Compliant: ', outputs('Compose_ResourceName'), ' (', outputs('Compose_ResourceType'), ') in RG ', outputs('Compose_ResourceGroup'), ' [', outputs('Compose_SubscriptionId'), ']')}"
                       "Body" = <<-HTML
@@ -1301,19 +1292,16 @@ locals {
 }
 
 resource "azurerm_api_connection" "office365" {
-  provider = azurerm.core
+  provider            = azurerm.core
   name                = "office365"
   resource_group_name = local.rg_core_name_resolved
-  display_name   = "Office 365"
-  managed_api_id = "/subscriptions/${local.sub_core_resolved}/providers/Microsoft.Web/locations/${local.rg_core_location_resolved}/managedApis/office365"
-
-  # You can usually leave parameter_values empty and then
-  # go into the portal once to "Authorize" with an account.
-  parameter_values = {}
+  display_name        = "Office 365"
+  managed_api_id      = "/subscriptions/${local.sub_core_resolved}/providers/Microsoft.Web/locations/${local.rg_core_location_resolved}/managedApis/office365"
+  parameter_values    = {}
 }
 
 resource "azurerm_resource_group_template_deployment" "logicapp" {
-  provider = azurerm.core
+  provider            = azurerm.core
   count               = var.enable_policy_compliance_alerts ? 1 : 0
   name                = "tmpl-la-${var.product}-${local.plane_code}-${var.region}-policy-alerts"
   resource_group_name = local.rg_core_name_resolved
@@ -1350,7 +1338,6 @@ data "azurerm_logic_app_workflow" "policy_alerts" {
 }
 
 resource "azapi_resource_action" "manual_trigger_callback" {
-  # Logic Apps Consumption trigger action endpoint
   type        = "Microsoft.Logic/workflows/triggers@2019-05-01"
   resource_id = "${data.azurerm_logic_app_workflow.policy_alerts.id}/triggers/manual"
   action      = "listCallbackUrl"
@@ -1379,7 +1366,6 @@ resource "azapi_resource" "policy_to_logicapp" {
         endpointType = "WebHook"
         properties = {
           endpointUrl = local.logicapp_manual_trigger_callback_url
-          # ^ instead of data.azurerm_logic_app_workflow.policy_alerts.access_endpoint
         }
       }
       filter = {
@@ -1408,8 +1394,11 @@ resource "azapi_resource" "policy_to_logicapp" {
   ]
 }
 
+# =================================================================
+# Section: Subscription budgets for policy sources
+# =================================================================
+
 locals {
-  # Use explicit budget emails if provided, otherwise reuse your alert_emails_effective
   budget_emails_effective = length(var.budget_alert_emails) > 0 ? var.budget_alert_emails : local.alert_emails_effective
 
   budget_subscriptions = {
@@ -1437,32 +1426,21 @@ resource "azurerm_consumption_budget_subscription" "policy_source_budgets" {
     operator       = "GreaterThan"
     threshold      = var.subscription_budget_threshold
     contact_emails = local.budget_emails_effective
-    # You can also add contact_roles = ["Owner"] if you want owners to be notified
-    # contact_roles  = ["Owner"]
   }
 }
 
+# =================================================================
+# Section: NSG flow logs
+# =================================================================
+
 locals {
-  # Which environments' NSGs should get flow logs, per effective env
-  # - dev  → hub + dev + qa
-  # - prod → hub + prod + uat
   nsg_flowlog_env_sets = {
     dev  = ["hub", "dev", "qa"]
     prod = ["hub", "prod", "uat"]
   }
 
-  # List of env keys we should target in this run (only when env is dev/prod)
   nsg_flowlog_env_keys = lookup(local.nsg_flowlog_env_sets, local.env_effective, [])
 
-  # Flatten NSGs into (id, env_key) objects from shared-network state
-  # Assumes:
-  #   nsg_ids_by_env = {
-  #     hub  = { ... }
-  #     dev  = { ... }
-  #     qa   = { ... }
-  #     prod = { ... }
-  #     uat  = { ... }
-  #   }
   nsg_flowlog_items = flatten([
     for env_key in local.nsg_flowlog_env_keys : [
       for _, nsg_id in try(data.terraform_remote_state.network.outputs.nsg_ids_by_env[env_key], {}) : {
@@ -1472,17 +1450,15 @@ locals {
     ]
   ])
 
-  # Map keyed by NSG id → { id, env_key }
   nsg_flowlog_map = {
     for item in local.nsg_flowlog_items :
     item.id => item
   }
 
-  # Network Watcher name + RG per NSG env_key
   network_watcher_by_env = {
     hub = {
-      name = "nw-${var.product}-${local.plane_code}-${var.region}-01"      # e.g. nw-hrz-np-usaz-01 or nw-hrz-pr-usaz-01
-      rg   = "rg-${var.product}-${local.plane_code}-${var.region}-net-01" # e.g. rg-hrz-np-usaz-net-01 / rg-hrz-pr-usaz-net-01
+      name = "nw-${var.product}-${local.plane_code}-${var.region}-01"
+      rg   = "rg-${var.product}-${local.plane_code}-${var.region}-net-01"
     }
     dev = {
       name = "nw-${var.product}-dev-${var.region}-01"
@@ -1502,15 +1478,12 @@ locals {
     }
   }
 
-  # LAW workspace GUID (for Traffic Analytics)
   law_workspace_guid = coalesce(
-    # optional override: var.law_workspace_guid_override,
     try(data.terraform_remote_state.core.outputs.observability.law_workspace_guid, null),
     try(data.terraform_remote_state.platform.outputs.observability.law_workspace_guid, null),
     null
   )
 
-  # Gate: only enable flow logs when the feature is enabled AND LAW + SA + GUID are resolved AND we have targets
   nsg_flowlogs_enabled = (
     var.enable_nsg_flow_logs &&
     local.law_id != null &&
@@ -1519,7 +1492,6 @@ locals {
     length(local.nsg_flowlog_map) > 0
   )
 
-  # ---- SPLIT MAP BY env_key FOR PROVIDER ROUTING ----
   nsg_flowlog_map_hub = {
     for id, item in local.nsg_flowlog_map :
     id => item
@@ -1554,7 +1526,6 @@ locals {
 resource "azurerm_network_watcher_flow_log" "nsg_core" {
   provider = azurerm.core
 
-  # hub/core NSGs should be enabled when env is dev or prod
   for_each = (local.nsg_flowlogs_enabled && contains(["dev", "prod"], local.env_effective)) ? local.nsg_flowlog_map_hub : {}
 
   name = "fl-${var.product}-${each.value.env_key}-${var.region}-${basename(each.value.id)}"
