@@ -41,6 +41,8 @@ budget_alert_emails = [
   "cloudops@intterragroup.com"
 ]
 
+enable_nsg_flow_logs = false
+
 # tags
 tags_extra = {
   purpose = "observability"

@@ -1477,8 +1477,9 @@ locals {
     null
   )
 
-  # Gate: only enable flow logs when LAW + SA + GUID are resolved AND we have targets
+  # Gate: only enable flow logs when the feature is enabled AND LAW + SA + GUID are resolved AND we have targets
   nsg_flowlogs_enabled = (
+    var.enable_nsg_flow_logs &&
     local.law_id != null &&
     local.law_workspace_guid != null &&
     local.nsg_flow_logs_sa_id != null &&
