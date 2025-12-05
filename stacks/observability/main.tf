@@ -37,7 +37,12 @@ locals {
 
   # Service Bus Namespace
   sbns_log_categories = [
+    "ApplicationMetricsLogs",
+    "DataDRLogs",
+    "DiagnosticErrorLogs",
     "OperationalLogs",
+    "RuntimeAuditLogs",
+    "VNetAndIPFilteringLogs"
   ]
 
   # Event Hubs Namespace
