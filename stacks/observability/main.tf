@@ -1193,6 +1193,7 @@ locals {
                     "path"   = "/v2/Mail"
                     "body" = {
                       "To" = var.policy_alert_email
+                      "From": "noreply-alerts@intterragroup.com"
                       "Subject" = "@{concat('FedRAMP Non-Compliant: ', outputs('Compose_ResourceName'), ' (', outputs('Compose_ResourceType'), ') in RG ', outputs('Compose_ResourceGroup'), ' [', outputs('Compose_SubscriptionId'), ']')}"
                       "Body" = <<-HTML
                         <p><strong>FedRAMP Moderate non-compliant resource detected.</strong></p>

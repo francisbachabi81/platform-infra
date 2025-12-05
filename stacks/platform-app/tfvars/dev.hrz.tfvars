@@ -50,7 +50,7 @@ aks_pod_cidr       = "10.210.0.0/16"
 aks_service_cidr   = "10.110.0.0/16"
 aks_dns_service_ip = "10.110.0.10"
 
-aks_sku_tier = "Free"              # Free | Standard | Premium
+aks_sku_tier = "Standard"              # Free | Standard | Premium
 
 # Service Bus (env)
 create_servicebus   = true
