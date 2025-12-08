@@ -1228,9 +1228,6 @@ locals {
                         <p><strong>Compliance State:</strong><br />
                           @{first(triggerBody())?['data']?['complianceState']}
                         </p>
-                        <p><strong>Reason Code:</strong><br />
-                          @{first(triggerBody())?['data']?['complianceReasonCode']}
-                        </p>
 
                         <h3>Timestamps</h3>
                         <p><strong>Evaluation Time (Policy Scan):</strong><br />
