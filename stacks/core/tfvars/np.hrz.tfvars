@@ -46,7 +46,7 @@ core_vm_admin_username = "coreadmin"
 #   - Standard_B2ms  → 2 vCPU, 8 GiB RAM (good default, burstable)
 #   - Standard_B1ms  → 1 vCPU, 2 GiB RAM (lighter workloads)
 #   - Standard_B1s   → 1 vCPU, 1 GiB RAM (very light / test only)
-core_runner_vm_size = "Standard_B2ms"
+core_runner_vm_size = "Standard_B1ms"
 # Ubuntu image suggestions:
 # Keep defaults for latest Ubuntu 22.04 LTS:
 core_runner_vm_image_publisher = "Canonical"
