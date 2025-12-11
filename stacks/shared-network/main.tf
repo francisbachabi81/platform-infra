@@ -2598,6 +2598,106 @@ resource "azurerm_network_security_rule" "aks_allow_acr_uat" {
   ]
 }
 
+# ServiceBus (Service Tag: ServiceBus)
+resource "azurerm_network_security_rule" "aks_allow_servicebus_hub" {
+  for_each                    = local.aks_targets_hub
+  name                        = "allow-aks-servicebus"
+  priority                    = 355
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5671"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "ServiceBus"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+resource "azurerm_network_security_rule" "aks_allow_servicebus_dev" {
+  provider                    = azurerm.dev
+  for_each                    = local.aks_targets_dev
+  name                        = "allow-aks-servicebus"
+  priority                    = 355
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5671"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "ServiceBus"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+resource "azurerm_network_security_rule" "aks_allow_servicebus_qa" {
+  provider                    = azurerm.qa
+  for_each                    = local.aks_targets_qa
+  name                        = "allow-aks-servicebus"
+  priority                    = 355
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5671"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "ServiceBus"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+resource "azurerm_network_security_rule" "aks_allow_servicebus_prod" {
+  provider                    = azurerm.prod
+  for_each                    = local.aks_targets_prod
+  name                        = "allow-aks-servicebus"
+  priority                    = 355
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5671"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "ServiceBus"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
+resource "azurerm_network_security_rule" "aks_allow_servicebus_uat" {
+  provider                    = azurerm.uat
+  for_each                    = local.aks_targets_uat
+  name                        = "allow-aks-servicebus"
+  priority                    = 355
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "5671"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "ServiceBus"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+
 # AKS ingress (per subscription)
 locals {
   aks_ingress_allowed_cidrs = local.is_nonprod ? var.aks_ingress_allowed_cidrs["nonprod"] : var.aks_ingress_allowed_cidrs["prod"]
