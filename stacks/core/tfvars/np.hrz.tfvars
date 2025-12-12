@@ -53,3 +53,79 @@ core_runner_vm_image_publisher = "Canonical"
 core_runner_vm_image_offer     = "0001-com-ubuntu-server-jammy"
 core_runner_vm_image_sku       = "22_04-lts-gen2"
 core_runner_vm_image_version   = "latest"
+
+create_query_pack = true
+query_pack_queries = {
+  nsg_denies_detail = {
+    display_name = "NSG denies (detailed)"
+    description  = "Detailed denied NSG flow entries with normalized direction/protocol + rule priority"
+    body = <<KQL
+AzureNetworkAnalytics_CL
+| where FlowStatus_s == "D"   // Denied
+// Normalize/derive fields based on your schema
+| extend Time          = TimeGenerated
+| extend Direction     = case(FlowDirection_s == "I", "Inbound", FlowDirection_s == "O", "Outbound", FlowDirection_s)
+| extend Protocol      = case(L4Protocol_s == "T", "TCP", L4Protocol_s == "U", "UDP", L4Protocol_s)
+// Parse NSG rule summary to extract priority (pattern: idx|RuleName|Direction|Status|Priority)
+| extend NSGRulePriority = toint(split(NSGRules_s, "|")[4])
+| project
+    Time,
+    Direction,
+    Protocol,
+    SrcIP_s,
+    DestPublicIPs_s,
+    DestPort_d,
+    L7Protocol_s,
+    NSGList_s,
+    NSGRule_s,
+    NSGRuleType_s,
+    NSGRulePriority,
+    VNet = tostring(Subnet_s),
+    NIC_s,
+    VM_s,
+    Region_s,
+    FlowType_s,
+    DeniedInFlows_d,
+    DeniedOutFlows_d,
+    FlowCount_d
+| order by Time desc
+KQL
+    categories = ["Network", "NSG Flow Logs"]
+    tags = {
+      labels = "nsg,denied,flowlogs"
+    }
+  }
+
+  nsg_denies_timechart_1h = {
+    display_name = "NSG denies (hourly timechart)"
+    description  = "Denied NSG flows aggregated by hour"
+    body = <<KQL
+AzureNetworkAnalytics_CL
+| where FlowStatus_s == "D"
+| summarize DeniedCount = sum(FlowCount_d) by bin(TimeGenerated, 1h)
+| order by TimeGenerated asc
+| render timechart
+KQL
+    categories = ["Network", "NSG Flow Logs"]
+    tags = {
+      labels = "nsg,denied,timechart"
+    }
+  }
+
+  # If you intended a second chart, here’s a useful variant (5m bins).
+  nsg_denies_timechart_5m = {
+    display_name = "NSG denies (5m timechart)"
+    description  = "Denied NSG flows aggregated every 5 minutes"
+    body = <<KQL
+AzureNetworkAnalytics_CL
+| where FlowStatus_s == "D"
+| summarize DeniedCount = sum(FlowCount_d) by bin(TimeGenerated, 5m)
+| order by TimeGenerated asc
+| render timechart
+KQL
+    categories = ["Network", "NSG Flow Logs"]
+    tags = {
+      labels = "nsg,denied,timechart,5m"
+    }
+  }
+}

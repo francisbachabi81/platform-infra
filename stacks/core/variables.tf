@@ -253,3 +253,29 @@ variable "core_runner_vm_image_version" {
   type        = string
   default     = "latest"
 }
+
+variable "create_query_pack" {
+  type        = bool
+  description = "Create a Log Analytics Query Pack in the core RG"
+  default     = true
+}
+
+variable "query_pack_name" {
+  type        = string
+  description = "Optional override for query pack name"
+  default     = null
+}
+
+variable "query_pack_queries" {
+  description = "Optional map of saved queries to create in the query pack"
+  type = map(object({
+    display_name   = string
+    body           = string
+    description    = optional(string)
+    categories     = optional(list(string), [])
+    resource_types = optional(list(string), [])
+    solutions      = optional(list(string), [])
+    tags           = optional(map(string), {})
+  }))
+  default = {}
+}

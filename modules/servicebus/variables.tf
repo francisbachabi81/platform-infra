@@ -110,3 +110,14 @@ variable "tags" {
   default     = {}
   description = "Resource tags."
 }
+
+variable "authorization_rules" {
+  description = "Map of authorization rules to create on the namespace. Key is arbitrary, value.name is the actual rule name."
+  type = map(object({
+    name   = string
+    listen = optional(bool, true)
+    send   = optional(bool, true)
+    manage = optional(bool, true)
+  }))
+  default = {}
+}

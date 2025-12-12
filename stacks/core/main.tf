@@ -388,3 +388,50 @@ module "core_vm" {
 
   depends_on = [module.rg_core_platform]
 }
+
+locals {
+  query_pack_name_effective = coalesce(
+    var.query_pack_name,
+    "qpk-${var.product}-${local.plane_code}-${var.region}-01"
+  )
+
+  create_query_pack_effective = (
+    var.create_query_pack
+    && var.create_log_analytics
+    && local.create_scope_both
+  )
+}
+
+resource "azurerm_log_analytics_query_pack" "core" {
+  count               = local.create_query_pack_effective ? 1 : 0
+  name                = local.query_pack_name_effective
+  location            = var.location
+  resource_group_name = local.rg_name_core
+
+  tags = merge(local.tags_common, {
+    service = "log-analytics-query-pack"
+    plane   = local.plane_code
+  })
+
+  depends_on = [module.rg_core_platform]
+}
+
+resource "azurerm_log_analytics_query_pack_query" "core" {
+  for_each = local.create_query_pack_effective ? var.query_pack_queries : {}
+
+  query_pack_id = azurerm_log_analytics_query_pack.core[0].id
+
+  body         = each.value.body
+  display_name = each.value.display_name
+
+  description    = try(each.value.description, null)
+  categories     = try(each.value.categories, [])
+  resource_types = try(each.value.resource_types, [])
+  solutions      = try(each.value.solutions, [])
+  tags           = try(each.value.tags, {})
+
+  depends_on = [
+    azurerm_log_analytics_workspace.plane,
+    azurerm_log_analytics_query_pack.core
+  ]
+}

@@ -543,3 +543,14 @@ variable "cdbpg_preferred_primary_zone" {
     error_message = "cdbpg_preferred_primary_zone must be 1, 2, or 3 (or null)."
   }
 }
+
+variable "servicebus_authorization_rules_override" {
+  type = map(object({
+    name   = string
+    listen = optional(bool, true)
+    send   = optional(bool, true)
+    manage = optional(bool, true)
+  }))
+  description = "Optional override/additional SB namespace authorization rules."
+  default     = {}
+}

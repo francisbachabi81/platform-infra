@@ -64,7 +64,21 @@ servicebus_queues = [
 
 servicebus_topics             = []
 servicebus_local_auth_enabled = true
-servicebus_manage_policy_name = "sb-dev-manage"
+servicebus_authorization_rules_override = {
+  manage = {
+    name   = "sb-dev-manage"
+    manage = true
+  }
+  cn = {
+    name   = "sb-dev-cn-manage"
+    manage = true
+  }
+  ivl = {
+    name   = "sb-dev-ivl-manage"
+    manage = true
+  }
+}
+# servicebus_manage_policy_name = "sb-dev-manage"
 servicebus_min_tls_version    = "1.2"
 
 # Cosmos DB for PostgreSQL (Citus) (env)

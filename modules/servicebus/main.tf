@@ -73,11 +73,37 @@ resource "azurerm_private_endpoint" "sb" {
   tags = var.tags
 }
 
-resource "azurerm_servicebus_namespace_authorization_rule" "manage" {
-  count        = var.manage_policy_name != null ? 1 : 0
-  name         = var.manage_policy_name
+# resource "azurerm_servicebus_namespace_authorization_rule" "manage" {
+#   count        = var.manage_policy_name != null ? 1 : 0
+#   name         = var.manage_policy_name
+#   namespace_id = azurerm_servicebus_namespace.this.id
+#   listen       = true
+#   send         = true
+#   manage       = true
+# }
+
+locals {
+  # legacy single rule -> map form
+  legacy_rule = var.manage_policy_name != null ? {
+    legacy_manage = {
+      name   = var.manage_policy_name
+      listen = true
+      send   = true
+      manage = true
+    }
+  } : {}
+
+  # merge legacy + new (new wins if key collisions, names can still be different)
+  auth_rules_effective = merge(local.legacy_rule, var.authorization_rules)
+}
+
+resource "azurerm_servicebus_namespace_authorization_rule" "auth" {
+  for_each     = local.auth_rules_effective
+
+  name         = each.value.name
   namespace_id = azurerm_servicebus_namespace.this.id
-  listen       = true
-  send         = true
-  manage       = true
+
+  listen = try(each.value.listen, true)
+  send   = try(each.value.send,   true)
+  manage = try(each.value.manage, true)
 }

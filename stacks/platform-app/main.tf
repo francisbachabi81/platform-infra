@@ -758,7 +758,8 @@ module "sbns1" {
   privatelink_subnet_id = local.sb_is_premium ? local.pe_subnet_id_effective : null
   private_dns_zone_id   = local.sb_is_premium ? try(local.zone_ids_effective[var.product == "pub" ? "privatelink.servicebus.windows.net" : "privatelink.servicebus.usgovcloudapi.net"], null) : null
 
-  manage_policy_name = var.servicebus_manage_policy_name
+  # manage_policy_name = var.servicebus_manage_policy_name
+  authorization_rules = var.servicebus_authorization_rules_override
 
   tags = merge(
     local.tags_common,

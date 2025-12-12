@@ -34,7 +34,7 @@
       </route>
     </excluderoutes>
 </clientconfig>
-  <name>HRZ-NP-VPN-CNUM</name>
+  <name>HRZ-NP-VPN-CN</name>
   <protocolconfig>
     <sslprotocolConfig>
       <transportprotocol>tcp</transportprotocol>
