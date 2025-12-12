@@ -62,11 +62,9 @@ query_pack_queries = {
     body = <<KQL
 AzureNetworkAnalytics_CL
 | where FlowStatus_s == "D"   // Denied
-// Normalize/derive fields based on your schema
 | extend Time          = TimeGenerated
 | extend Direction     = case(FlowDirection_s == "I", "Inbound", FlowDirection_s == "O", "Outbound", FlowDirection_s)
 | extend Protocol      = case(L4Protocol_s == "T", "TCP", L4Protocol_s == "U", "UDP", L4Protocol_s)
-// Parse NSG rule summary to extract priority (pattern: idx|RuleName|Direction|Status|Priority)
 | extend NSGRulePriority = toint(split(NSGRules_s, "|")[4])
 | project
     Time,
@@ -90,9 +88,14 @@ AzureNetworkAnalytics_CL
     FlowCount_d
 | order by Time desc
 KQL
-    categories = ["Network", "NSG Flow Logs"]
+
+    # must be one of the allowed lowercase values
+    categories = ["network"]
+
+    # use tags for sub-category / labeling
     tags = {
-      labels = "nsg,denied,flowlogs"
+      labels = "nsg,flowlogs,denied,detail"
+      group  = "nsg-flow-logs"
     }
   }
 
@@ -106,13 +109,14 @@ AzureNetworkAnalytics_CL
 | order by TimeGenerated asc
 | render timechart
 KQL
-    categories = ["Network", "NSG Flow Logs"]
+
+    categories = ["network"]
     tags = {
-      labels = "nsg,denied,timechart"
+      labels = "nsg,flowlogs,denied,timechart,1h"
+      group  = "nsg-flow-logs"
     }
   }
 
-  # If you intended a second chart, here’s a useful variant (5m bins).
   nsg_denies_timechart_5m = {
     display_name = "NSG denies (5m timechart)"
     description  = "Denied NSG flows aggregated every 5 minutes"
@@ -123,9 +127,11 @@ AzureNetworkAnalytics_CL
 | order by TimeGenerated asc
 | render timechart
 KQL
-    categories = ["Network", "NSG Flow Logs"]
+
+    categories = ["network"]
     tags = {
-      labels = "nsg,denied,timechart,5m"
+      labels = "nsg,flowlogs,denied,timechart,5m"
+      group  = "nsg-flow-logs"
     }
   }
 }
