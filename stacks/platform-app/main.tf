@@ -755,6 +755,8 @@ module "sbns1" {
   queues = var.servicebus_queues
   topics = var.servicebus_topics
 
+  cloud = var.product == "hrz" ? "usgovernment" : "public"
+
   privatelink_subnet_id = local.sb_is_premium ? local.pe_subnet_id_effective : null
   private_dns_zone_id   = local.sb_is_premium ? try(local.zone_ids_effective[var.product == "pub" ? "privatelink.servicebus.windows.net" : "privatelink.servicebus.usgovcloudapi.net"], null) : null
 

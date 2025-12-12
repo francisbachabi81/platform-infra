@@ -121,3 +121,9 @@ variable "authorization_rules" {
   }))
   default = {}
 }
+
+variable "cloud" {
+  description = "Azure cloud for endpoint suffix: 'public' or 'usgovernment'"
+  type        = string
+  default     = "public"
+}
