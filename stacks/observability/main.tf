@@ -2844,6 +2844,7 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
 # ------------------------------------------------------------
 
 locals {
+  # Keep this if you still want it for visibility/debugging (not used for for_each anymore)
   ce_resource_ids = {
     dev_last_month     = try(azapi_resource.cost_export_dev_last_month[0].id, null)
     dev_mtd_daily      = try(azapi_resource.cost_export_dev_mtd_daily[0].id, null)
@@ -2870,12 +2871,7 @@ locals {
     core_pr_manual_custom = try(azapi_resource.cost_export_core_prod_manual_custom[0].id, null)
   }
 
-  ce_resource_ids_effective = {
-    for k, v in local.ce_resource_ids : k => v if v != null && v != ""
-  }
-
-  ce_resource_ids_nonnull = { for k, v in local.ce_resource_ids_effective : k => v if v != null }
-
+  # Static-key map controlling which role assignments exist (safe for for_each at plan time)
   ce_role_targets = merge(
     contains(local.cost_export_targets, "dev")  ? { dev_last_month = true, dev_mtd_daily = true, dev_manual_custom = true } : {},
     contains(local.cost_export_targets, "qa")   ? { qa_last_month  = true, qa_mtd_daily  = true, qa_manual_custom  = true } : {},
@@ -2887,31 +2883,32 @@ locals {
   )
 
   ce_sa_scope = var.enable_cost_exports ? local.existing_exports_sa_id : null
-}
 
-
-data "azapi_resource" "ce" {
-  type        = "Microsoft.CostManagement/exports@2025-03-01"
-  for_each    = local.ce_resource_ids_nonnull
-  resource_id = each.value
-
-  depends_on = [
-    azapi_resource.cost_export_dev_last_month,
-    azapi_resource.cost_export_dev_mtd_daily,
-    azapi_resource.cost_export_dev_manual_custom,
-    azapi_resource.cost_export_qa_last_month,
-    azapi_resource.cost_export_qa_mtd_daily,
-    azapi_resource.cost_export_qa_manual_custom,
-    azapi_resource.cost_export_core_nonprod_last_month,
-    azapi_resource.cost_export_core_nonprod_mtd_daily,
-    azapi_resource.cost_export_core_nonprod_manual_custom,
-  ]
-}
-
-locals {
+  # Static keys, apply-time values -> OK.
   ce_principal_ids = {
-    for k, v in data.azapi_resource.ce :
-    k => try(v.output.identity.principalId, null)
+    dev_last_month     = try(azapi_resource.cost_export_dev_last_month[0].output.identity.principalId, null)
+    dev_mtd_daily      = try(azapi_resource.cost_export_dev_mtd_daily[0].output.identity.principalId, null)
+    dev_manual_custom  = try(azapi_resource.cost_export_dev_manual_custom[0].output.identity.principalId, null)
+
+    qa_last_month      = try(azapi_resource.cost_export_qa_last_month[0].output.identity.principalId, null)
+    qa_mtd_daily       = try(azapi_resource.cost_export_qa_mtd_daily[0].output.identity.principalId, null)
+    qa_manual_custom   = try(azapi_resource.cost_export_qa_manual_custom[0].output.identity.principalId, null)
+
+    prod_last_month    = try(azapi_resource.cost_export_prod_last_month[0].output.identity.principalId, null)
+    prod_mtd_daily     = try(azapi_resource.cost_export_prod_mtd_daily[0].output.identity.principalId, null)
+    prod_manual_custom = try(azapi_resource.cost_export_prod_manual_custom[0].output.identity.principalId, null)
+
+    uat_last_month     = try(azapi_resource.cost_export_uat_last_month[0].output.identity.principalId, null)
+    uat_mtd_daily      = try(azapi_resource.cost_export_uat_mtd_daily[0].output.identity.principalId, null)
+    uat_manual_custom  = try(azapi_resource.cost_export_uat_manual_custom[0].output.identity.principalId, null)
+
+    core_np_last_month    = try(azapi_resource.cost_export_core_nonprod_last_month[0].output.identity.principalId, null)
+    core_np_mtd_daily     = try(azapi_resource.cost_export_core_nonprod_mtd_daily[0].output.identity.principalId, null)
+    core_np_manual_custom = try(azapi_resource.cost_export_core_nonprod_manual_custom[0].output.identity.principalId, null)
+
+    core_pr_last_month    = try(azapi_resource.cost_export_core_prod_last_month[0].output.identity.principalId, null)
+    core_pr_mtd_daily     = try(azapi_resource.cost_export_core_prod_mtd_daily[0].output.identity.principalId, null)
+    core_pr_manual_custom = try(azapi_resource.cost_export_core_prod_manual_custom[0].output.identity.principalId, null)
   }
 }
 
@@ -2924,19 +2921,39 @@ resource "azurerm_role_assignment" "cost_exports_blob_contrib" {
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = local.ce_principal_ids[each.key]
 
-  # Important: gate on destination-subscription registration becoming consistent
+  # Make sure exports exist before we attempt role assignment (so principalId is available at apply)
   depends_on = [
-    time_sleep.wait_cost_exports_rp_core
+    time_sleep.wait_cost_exports_rp_core,
+
+    azapi_resource.cost_export_dev_last_month,
+    azapi_resource.cost_export_dev_mtd_daily,
+    azapi_resource.cost_export_dev_manual_custom,
+
+    azapi_resource.cost_export_qa_last_month,
+    azapi_resource.cost_export_qa_mtd_daily,
+    azapi_resource.cost_export_qa_manual_custom,
+
+    azapi_resource.cost_export_prod_last_month,
+    azapi_resource.cost_export_prod_mtd_daily,
+    azapi_resource.cost_export_prod_manual_custom,
+
+    azapi_resource.cost_export_uat_last_month,
+    azapi_resource.cost_export_uat_mtd_daily,
+    azapi_resource.cost_export_uat_manual_custom,
+
+    azapi_resource.cost_export_core_nonprod_last_month,
+    azapi_resource.cost_export_core_nonprod_mtd_daily,
+    azapi_resource.cost_export_core_nonprod_manual_custom,
+
+    azapi_resource.cost_export_core_prod_last_month,
+    azapi_resource.cost_export_core_prod_mtd_daily,
+    azapi_resource.cost_export_core_prod_manual_custom,
   ]
 
   lifecycle {
     precondition {
       condition     = local.ce_sa_scope != null
       error_message = "Cost exports storage account scope not resolved."
-    }
-    precondition {
-      condition     = local.ce_principal_ids[each.key] != null
-      error_message = "PrincipalId not resolved for ${each.key}. Ensure the corresponding export exists and has SystemAssigned identity."
     }
   }
 }
