@@ -1136,7 +1136,7 @@ module "sa_nsg_flowlogs" {
   location            = var.location
   resource_group_name = local.shared_np_core_rg_name
   replication_type    = var.sa_replication_type
-  container_names     = ["nsg-flow-logs"]
+  container_names     = ["nsg-flow-logs","cost-exports"]
 
   pe_subnet_id         = local.hub_privatelink_subnet_id
   private_dns_zone_ids = local.hub_private_dns_zone_ids

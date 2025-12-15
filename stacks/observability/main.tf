@@ -1824,11 +1824,11 @@ resource "azurerm_storage_container" "cost_exports" {
   provider              = azurerm.core
   count                 = local.cost_exports_enabled ? 1 : 0
   name                  = var.cost_exports_container_name
-  storage_account_name  = azurerm_storage_account.cost_exports[0].name
+  # storage_account_name  = azurerm_storage_account.cost_exports[0].name
   container_access_type = "private"
 
   depends_on = [
-    azurerm_storage_account.cost_exports,
+    azurerm_storage_account.cost_exports
   ]
 }
 
