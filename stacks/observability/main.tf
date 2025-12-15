@@ -1720,7 +1720,43 @@ provider "azapi" {
 
 # =============================================================================
 # Cost exports destination (core subscription storage)
+# + Ensure Microsoft.CostManagementExports is registered in ALL involved subscriptions
+# + Ensure exports wait on RP registration + storage/container
 # =============================================================================
+
+# --- Register required Resource Providers (core + env subscriptions) ---
+# NOTE: RP registration can take time; exports must depend on these.
+resource "azurerm_resource_provider_registration" "cost_exports_rp_core" {
+  provider = azurerm.core
+  name     = "Microsoft.CostManagementExports"
+}
+
+resource "azurerm_resource_provider_registration" "cost_exports_rp_dev" {
+  provider = azurerm.dev
+  name     = "Microsoft.CostManagementExports"
+}
+
+resource "azurerm_resource_provider_registration" "cost_exports_rp_qa" {
+  provider = azurerm.qa
+  name     = "Microsoft.CostManagementExports"
+}
+
+resource "azurerm_resource_provider_registration" "cost_exports_rp_uat" {
+  provider = azurerm.uat
+  name     = "Microsoft.CostManagementExports"
+}
+
+resource "azurerm_resource_provider_registration" "cost_exports_rp_prod" {
+  provider = azurerm.prod
+  name     = "Microsoft.CostManagementExports"
+}
+
+# Optional (usually already registered, but harmless)
+resource "azurerm_resource_provider_registration" "cost_rp_core" {
+  provider = azurerm.core
+  name     = "Microsoft.CostManagement"
+}
+
 resource "random_string" "cost_sa_sfx" {
   length  = 5
   special = false
@@ -1728,6 +1764,9 @@ resource "random_string" "cost_sa_sfx" {
 }
 
 locals {
+  # Decide based on inputs / resolved RG, NOT on resources created in this plan
+  cost_exports_enabled = var.enable_cost_exports
+
   # storage account name rules: lowercase, 3-24 chars, unique
   cost_exports_sa_name = substr(
     lower("saobs${var.product}${local.plane_code}${var.region}ce${random_string.cost_sa_sfx.result}"),
@@ -1754,6 +1793,18 @@ resource "azurerm_storage_account" "cost_exports" {
   public_network_access_enabled   = true
 
   tags = var.tags_extra
+
+  depends_on = [
+    azurerm_resource_provider_registration.cost_exports_rp_core,
+    azurerm_resource_provider_registration.cost_rp_core,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = local.rg_core_name_resolved != null && local.rg_core_location_resolved != null
+      error_message = "Core RG name/location not resolved; cannot create cost exports storage account."
+    }
+  }
 }
 
 resource "azurerm_storage_container" "cost_exports" {
@@ -1762,15 +1813,16 @@ resource "azurerm_storage_container" "cost_exports" {
   name                  = var.cost_exports_container_name
   storage_account_name  = azurerm_storage_account.cost_exports[0].name
   container_access_type = "private"
+
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+  ]
 }
 
 # =============================================================================
 # Cost Management exports (env subscriptions) -> core storage
 # =============================================================================
 locals {
-  # Decide based on inputs / resolved RG, NOT on resources created in this plan
-  cost_exports_enabled = var.enable_cost_exports
-
   # Match your "dev => dev+qa" and "prod => prod+uat" pattern
   cost_export_env_sets = {
     dev  = ["dev", "qa"]
@@ -1788,14 +1840,31 @@ locals {
   } : null
 }
 
+# Shared dependency bundle for ALL export resources
+locals {
+  cost_exports_depends_on = [
+    # Destination subscription RP registration + destination storage readiness
+    azurerm_resource_provider_registration.cost_exports_rp_core,
+    azurerm_resource_provider_registration.cost_rp_core,
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+
+    # Ensure RP is registered in source subscriptions too
+    azurerm_resource_provider_registration.cost_exports_rp_dev,
+    azurerm_resource_provider_registration.cost_exports_rp_qa,
+    azurerm_resource_provider_registration.cost_exports_rp_uat,
+    azurerm_resource_provider_registration.cost_exports_rp_prod,
+  ]
+}
+
 # ---------- DEV subscription exports ----------
 resource "azapi_resource" "cost_export_dev_last_month" {
-  provider  = azapi.dev
-  count     = contains(local.cost_export_targets, "dev") ? 1 : 0
-  type      = "Microsoft.CostManagement/exports@2024-08-01"
-  name      = "ce-${var.product}-dev-${var.region}-last-month-monthly"
-  parent_id = "/subscriptions/${local.dev_sub}"
-  location  = var.location
+  provider                  = azapi.dev
+  count                     = contains(local.cost_export_targets, "dev") ? 1 : 0
+  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  name                      = "ce-${var.product}-dev-${var.region}-last-month-monthly"
+  parent_id                 = "/subscriptions/${local.dev_sub}"
+  location                  = var.location
   schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
@@ -1807,15 +1876,14 @@ resource "azapi_resource" "cost_export_dev_last_month" {
         timeframe = "TheLastMonth"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { 
-        destination = local.cost_exports_destination 
+      deliveryInfo = {
+        destination = local.cost_exports_destination
       }
-      format       = "Csv"
+      format = "Csv"
       schedule = {
         recurrence = "Monthly"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
-          to   = var.cost_exports_schedule_end_date
         }
         status = "Active"
       }
@@ -1823,10 +1891,8 @@ resource "azapi_resource" "cost_export_dev_last_month" {
   }
 
   response_export_values = ["identity.principalId"]
-  depends_on = [
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-  ]
+
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -1837,12 +1903,12 @@ resource "azapi_resource" "cost_export_dev_last_month" {
 }
 
 resource "azapi_resource" "cost_export_dev_mtd_daily" {
-  provider  = azapi.dev
-  count     = contains(local.cost_export_targets, "dev") ? 1 : 0
-  type      = "Microsoft.CostManagement/exports@2024-08-01"
-  name      = "ce-${var.product}-dev-${var.region}-mtd-daily"
-  parent_id = "/subscriptions/${local.dev_sub}"
-  location  = var.location
+  provider                  = azapi.dev
+  count                     = contains(local.cost_export_targets, "dev") ? 1 : 0
+  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  name                      = "ce-${var.product}-dev-${var.region}-mtd-daily"
+  parent_id                 = "/subscriptions/${local.dev_sub}"
+  location                  = var.location
   schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
@@ -1854,15 +1920,14 @@ resource "azapi_resource" "cost_export_dev_mtd_daily" {
         timeframe = "MonthToDate"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { 
-        destination = local.cost_exports_destination 
+      deliveryInfo = {
+        destination = local.cost_exports_destination
       }
-      format       = "Csv"
+      format = "Csv"
       schedule = {
         recurrence = "Daily"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
-          to   = var.cost_exports_schedule_end_date
         }
         status = "Active"
       }
@@ -1870,10 +1935,8 @@ resource "azapi_resource" "cost_export_dev_mtd_daily" {
   }
 
   response_export_values = ["identity.principalId"]
-  depends_on = [
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-  ]
+
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -1884,12 +1947,12 @@ resource "azapi_resource" "cost_export_dev_mtd_daily" {
 }
 
 resource "azapi_resource" "cost_export_dev_manual_custom" {
-  provider  = azapi.dev
-  count     = contains(local.cost_export_targets, "dev") ? 1 : 0
-  type      = "Microsoft.CostManagement/exports@2024-08-01"
-  name      = "ce-${var.product}-dev-${var.region}-manual-custom"
-  parent_id = "/subscriptions/${local.dev_sub}"
-  location  = var.location
+  provider                  = azapi.dev
+  count                     = contains(local.cost_export_targets, "dev") ? 1 : 0
+  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  name                      = "ce-${var.product}-dev-${var.region}-manual-custom"
+  parent_id                 = "/subscriptions/${local.dev_sub}"
+  location                  = var.location
   schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
@@ -1899,17 +1962,16 @@ resource "azapi_resource" "cost_export_dev_manual_custom" {
       definition = {
         type      = "Usage"
         timeframe = "Custom"
-        # Placeholder (Execute can provide a timePeriod payload)
         timePeriod = {
           from = "2025-01-01T00:00:00Z"
           to   = "2025-01-31T23:59:59Z"
         }
         dataSet = { granularity = "Daily" }
       }
-      deliveryInfo = { 
-        destination = local.cost_exports_destination 
+      deliveryInfo = {
+        destination = local.cost_exports_destination
       }
-      format       = "Csv"
+      format = "Csv"
       schedule = {
         recurrence = "Monthly"
         recurrencePeriod = {
@@ -1921,10 +1983,8 @@ resource "azapi_resource" "cost_export_dev_manual_custom" {
   }
 
   response_export_values = ["identity.principalId"]
-  depends_on = [
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-  ]
+
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -1936,12 +1996,12 @@ resource "azapi_resource" "cost_export_dev_manual_custom" {
 
 # ---------- QA subscription exports ----------
 resource "azapi_resource" "cost_export_qa_last_month" {
-  provider  = azapi.qa
-  count     = contains(local.cost_export_targets, "qa") ? 1 : 0
-  type      = "Microsoft.CostManagement/exports@2024-08-01"
-  name      = "ce-${var.product}-qa-${var.region}-last-month-monthly"
-  parent_id = "/subscriptions/${local.qa_sub}"
-  location  = var.location
+  provider                  = azapi.qa
+  count                     = contains(local.cost_export_targets, "qa") ? 1 : 0
+  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  name                      = "ce-${var.product}-qa-${var.region}-last-month-monthly"
+  parent_id                 = "/subscriptions/${local.qa_sub}"
+  location                  = var.location
   schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
@@ -1953,23 +2013,23 @@ resource "azapi_resource" "cost_export_qa_last_month" {
         timeframe = "TheLastMonth"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { 
-        destination = local.cost_exports_destination 
+      deliveryInfo = {
+        destination = local.cost_exports_destination
       }
-      format       = "Csv"
+      format = "Csv"
       schedule = {
         recurrence = "Monthly"
-        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        recurrencePeriod = {
+          from = local.cost_exports_schedule_from
+        }
         status = "Active"
       }
     }
   }
 
   response_export_values = ["identity.principalId"]
-  depends_on = [
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-  ]
+
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -1980,12 +2040,12 @@ resource "azapi_resource" "cost_export_qa_last_month" {
 }
 
 resource "azapi_resource" "cost_export_qa_mtd_daily" {
-  provider  = azapi.qa
-  count     = contains(local.cost_export_targets, "qa") ? 1 : 0
-  type      = "Microsoft.CostManagement/exports@2024-08-01"
-  name      = "ce-${var.product}-qa-${var.region}-mtd-daily"
-  parent_id = "/subscriptions/${local.qa_sub}"
-  location  = var.location
+  provider                  = azapi.qa
+  count                     = contains(local.cost_export_targets, "qa") ? 1 : 0
+  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  name                      = "ce-${var.product}-qa-${var.region}-mtd-daily"
+  parent_id                 = "/subscriptions/${local.qa_sub}"
+  location                  = var.location
   schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
@@ -1997,23 +2057,23 @@ resource "azapi_resource" "cost_export_qa_mtd_daily" {
         timeframe = "MonthToDate"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { 
-        destination = local.cost_exports_destination 
+      deliveryInfo = {
+        destination = local.cost_exports_destination
       }
-      format       = "Csv"
+      format = "Csv"
       schedule = {
         recurrence = "Daily"
-        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        recurrencePeriod = {
+          from = local.cost_exports_schedule_from
+        }
         status = "Active"
       }
     }
   }
 
   response_export_values = ["identity.principalId"]
-  depends_on = [
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-  ]
+
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2024,12 +2084,12 @@ resource "azapi_resource" "cost_export_qa_mtd_daily" {
 }
 
 resource "azapi_resource" "cost_export_qa_manual_custom" {
-  provider  = azapi.qa
-  count     = contains(local.cost_export_targets, "qa") ? 1 : 0
-  type      = "Microsoft.CostManagement/exports@2024-08-01"
-  name      = "ce-${var.product}-qa-${var.region}-manual-custom"
-  parent_id = "/subscriptions/${local.qa_sub}"
-  location  = var.location
+  provider                  = azapi.qa
+  count                     = contains(local.cost_export_targets, "qa") ? 1 : 0
+  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  name                      = "ce-${var.product}-qa-${var.region}-manual-custom"
+  parent_id                 = "/subscriptions/${local.qa_sub}"
+  location                  = var.location
   schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
@@ -2045,23 +2105,23 @@ resource "azapi_resource" "cost_export_qa_manual_custom" {
         }
         dataSet = { granularity = "Daily" }
       }
-      deliveryInfo = { 
-        destination = local.cost_exports_destination 
+      deliveryInfo = {
+        destination = local.cost_exports_destination
       }
-      format       = "Csv"
+      format = "Csv"
       schedule = {
         recurrence = "Monthly"
-        recurrencePeriod = { from = local.cost_exports_schedule_from }
+        recurrencePeriod = {
+          from = local.cost_exports_schedule_from
+        }
         status = "Inactive"
       }
     }
   }
 
   response_export_values = ["identity.principalId"]
-  depends_on = [
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-  ]
+
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2073,12 +2133,12 @@ resource "azapi_resource" "cost_export_qa_manual_custom" {
 
 # ---------- PROD subscription exports ----------
 resource "azapi_resource" "cost_export_prod_last_month" {
-  provider  = azapi.prod
-  count     = contains(local.cost_export_targets, "prod") ? 1 : 0
-  type      = "Microsoft.CostManagement/exports@2024-08-01"
-  name      = "ce-${var.product}-prod-${var.region}-last-month-monthly"
-  parent_id = "/subscriptions/${local.prod_sub}"
-  location  = var.location
+  provider                  = azapi.prod
+  count                     = contains(local.cost_export_targets, "prod") ? 1 : 0
+  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  name                      = "ce-${var.product}-prod-${var.region}-last-month-monthly"
+  parent_id                 = "/subscriptions/${local.prod_sub}"
+  location                  = var.location
   schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
@@ -2090,23 +2150,23 @@ resource "azapi_resource" "cost_export_prod_last_month" {
         timeframe = "TheLastMonth"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { 
-        destination = local.cost_exports_destination 
+      deliveryInfo = {
+        destination = local.cost_exports_destination
       }
-      format       = "Csv"
+      format = "Csv"
       schedule = {
         recurrence = "Monthly"
-        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        recurrencePeriod = {
+          from = local.cost_exports_schedule_from
+        }
         status = "Active"
       }
     }
   }
 
   response_export_values = ["identity.principalId"]
-  depends_on = [
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-  ]
+
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2117,12 +2177,12 @@ resource "azapi_resource" "cost_export_prod_last_month" {
 }
 
 resource "azapi_resource" "cost_export_prod_mtd_daily" {
-  provider  = azapi.prod
-  count     = contains(local.cost_export_targets, "prod") ? 1 : 0
-  type      = "Microsoft.CostManagement/exports@2024-08-01"
-  name      = "ce-${var.product}-prod-${var.region}-mtd-daily"
-  parent_id = "/subscriptions/${local.prod_sub}"
-  location  = var.location
+  provider                  = azapi.prod
+  count                     = contains(local.cost_export_targets, "prod") ? 1 : 0
+  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  name                      = "ce-${var.product}-prod-${var.region}-mtd-daily"
+  parent_id                 = "/subscriptions/${local.prod_sub}"
+  location                  = var.location
   schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
@@ -2134,23 +2194,23 @@ resource "azapi_resource" "cost_export_prod_mtd_daily" {
         timeframe = "MonthToDate"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { 
-        destination = local.cost_exports_destination 
+      deliveryInfo = {
+        destination = local.cost_exports_destination
       }
-      format       = "Csv"
+      format = "Csv"
       schedule = {
         recurrence = "Daily"
-        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        recurrencePeriod = {
+          from = local.cost_exports_schedule_from
+        }
         status = "Active"
       }
     }
   }
 
   response_export_values = ["identity.principalId"]
-  depends_on = [
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-  ]
+
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2161,12 +2221,12 @@ resource "azapi_resource" "cost_export_prod_mtd_daily" {
 }
 
 resource "azapi_resource" "cost_export_prod_manual_custom" {
-  provider  = azapi.prod
-  count     = contains(local.cost_export_targets, "prod") ? 1 : 0
-  type      = "Microsoft.CostManagement/exports@2024-08-01"
-  name      = "ce-${var.product}-prod-${var.region}-manual-custom"
-  parent_id = "/subscriptions/${local.prod_sub}"
-  location  = var.location
+  provider                  = azapi.prod
+  count                     = contains(local.cost_export_targets, "prod") ? 1 : 0
+  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  name                      = "ce-${var.product}-prod-${var.region}-manual-custom"
+  parent_id                 = "/subscriptions/${local.prod_sub}"
+  location                  = var.location
   schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
@@ -2182,23 +2242,23 @@ resource "azapi_resource" "cost_export_prod_manual_custom" {
         }
         dataSet = { granularity = "Daily" }
       }
-      deliveryInfo = { 
-        destination = local.cost_exports_destination 
+      deliveryInfo = {
+        destination = local.cost_exports_destination
       }
-      format       = "Csv"
+      format = "Csv"
       schedule = {
         recurrence = "Monthly"
-        recurrencePeriod = { from = local.cost_exports_schedule_from }
+        recurrencePeriod = {
+          from = local.cost_exports_schedule_from
+        }
         status = "Inactive"
       }
     }
   }
 
   response_export_values = ["identity.principalId"]
-  depends_on = [
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-  ]
+
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2210,12 +2270,12 @@ resource "azapi_resource" "cost_export_prod_manual_custom" {
 
 # ---------- UAT subscription exports ----------
 resource "azapi_resource" "cost_export_uat_last_month" {
-  provider  = azapi.uat
-  count     = contains(local.cost_export_targets, "uat") ? 1 : 0
-  type      = "Microsoft.CostManagement/exports@2024-08-01"
-  name      = "ce-${var.product}-uat-${var.region}-last-month-monthly"
-  parent_id = "/subscriptions/${local.uat_sub}"
-  location  = var.location
+  provider                  = azapi.uat
+  count                     = contains(local.cost_export_targets, "uat") ? 1 : 0
+  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  name                      = "ce-${var.product}-uat-${var.region}-last-month-monthly"
+  parent_id                 = "/subscriptions/${local.uat_sub}"
+  location                  = var.location
   schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
@@ -2227,23 +2287,23 @@ resource "azapi_resource" "cost_export_uat_last_month" {
         timeframe = "TheLastMonth"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { 
-        destination = local.cost_exports_destination 
+      deliveryInfo = {
+        destination = local.cost_exports_destination
       }
-      format       = "Csv"
+      format = "Csv"
       schedule = {
         recurrence = "Monthly"
-        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        recurrencePeriod = {
+          from = local.cost_exports_schedule_from
+        }
         status = "Active"
       }
     }
   }
 
   response_export_values = ["identity.principalId"]
-  depends_on = [
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-  ]
+
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2254,12 +2314,12 @@ resource "azapi_resource" "cost_export_uat_last_month" {
 }
 
 resource "azapi_resource" "cost_export_uat_mtd_daily" {
-  provider  = azapi.uat
-  count     = contains(local.cost_export_targets, "uat") ? 1 : 0
-  type      = "Microsoft.CostManagement/exports@2024-08-01"
-  name      = "ce-${var.product}-uat-${var.region}-mtd-daily"
-  parent_id = "/subscriptions/${local.uat_sub}"
-  location  = var.location
+  provider                  = azapi.uat
+  count                     = contains(local.cost_export_targets, "uat") ? 1 : 0
+  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  name                      = "ce-${var.product}-uat-${var.region}-mtd-daily"
+  parent_id                 = "/subscriptions/${local.uat_sub}"
+  location                  = var.location
   schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
@@ -2271,23 +2331,23 @@ resource "azapi_resource" "cost_export_uat_mtd_daily" {
         timeframe = "MonthToDate"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { 
-        destination = local.cost_exports_destination 
+      deliveryInfo = {
+        destination = local.cost_exports_destination
       }
-      format       = "Csv"
+      format = "Csv"
       schedule = {
         recurrence = "Daily"
-        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        recurrencePeriod = {
+          from = local.cost_exports_schedule_from
+        }
         status = "Active"
       }
     }
   }
 
   response_export_values = ["identity.principalId"]
-  depends_on = [
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-  ]
+
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2298,12 +2358,12 @@ resource "azapi_resource" "cost_export_uat_mtd_daily" {
 }
 
 resource "azapi_resource" "cost_export_uat_manual_custom" {
-  provider  = azapi.uat
-  count     = contains(local.cost_export_targets, "uat") ? 1 : 0
-  type      = "Microsoft.CostManagement/exports@2024-08-01"
-  name      = "ce-${var.product}-uat-${var.region}-manual-custom"
-  parent_id = "/subscriptions/${local.uat_sub}"
-  location  = var.location
+  provider                  = azapi.uat
+  count                     = contains(local.cost_export_targets, "uat") ? 1 : 0
+  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  name                      = "ce-${var.product}-uat-${var.region}-manual-custom"
+  parent_id                 = "/subscriptions/${local.uat_sub}"
+  location                  = var.location
   schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
@@ -2319,23 +2379,23 @@ resource "azapi_resource" "cost_export_uat_manual_custom" {
         }
         dataSet = { granularity = "Daily" }
       }
-      deliveryInfo = { 
-        destination = local.cost_exports_destination 
+      deliveryInfo = {
+        destination = local.cost_exports_destination
       }
-      format       = "Csv"
+      format = "Csv"
       schedule = {
         recurrence = "Monthly"
-        recurrencePeriod = { from = local.cost_exports_schedule_from }
+        recurrencePeriod = {
+          from = local.cost_exports_schedule_from
+        }
         status = "Inactive"
       }
     }
   }
 
   response_export_values = ["identity.principalId"]
-  depends_on = [
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-  ]
+
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2346,14 +2406,13 @@ resource "azapi_resource" "cost_export_uat_manual_custom" {
 }
 
 # ---------- CORE subscription exports ----------
-# nonprod-core runs with env_effective == "dev"
 resource "azapi_resource" "cost_export_core_nonprod_last_month" {
-  provider  = azapi.core
-  count     = (local.cost_exports_enabled && local.env_effective == "dev") ? 1 : 0
-  type      = "Microsoft.CostManagement/exports@2024-08-01"
-  name      = "ce-${var.product}-np-core-${var.region}-last-month-monthly"
-  parent_id = "/subscriptions/${local.core_sub}"
-  location  = var.location
+  provider                  = azapi.core
+  count                     = (local.cost_exports_enabled && local.env_effective == "dev") ? 1 : 0
+  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  name                      = "ce-${var.product}-np-core-${var.region}-last-month-monthly"
+  parent_id                 = "/subscriptions/${local.core_sub}"
+  location                  = var.location
   schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
@@ -2365,23 +2424,23 @@ resource "azapi_resource" "cost_export_core_nonprod_last_month" {
         timeframe = "TheLastMonth"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { 
-        destination = local.cost_exports_destination 
+      deliveryInfo = {
+        destination = local.cost_exports_destination
       }
-      format       = "Csv"
+      format = "Csv"
       schedule = {
         recurrence = "Monthly"
-        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        recurrencePeriod = {
+          from = local.cost_exports_schedule_from
+        }
         status = "Active"
       }
     }
   }
 
   response_export_values = ["identity.principalId"]
-  depends_on = [
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-  ]
+
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2392,12 +2451,12 @@ resource "azapi_resource" "cost_export_core_nonprod_last_month" {
 }
 
 resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
-  provider  = azapi.core
-  count     = (local.cost_exports_enabled && local.env_effective == "dev") ? 1 : 0
-  type      = "Microsoft.CostManagement/exports@2024-08-01"
-  name      = "ce-${var.product}-np-core-${var.region}-mtd-daily"
-  parent_id = "/subscriptions/${local.core_sub}"
-  location  = var.location
+  provider                  = azapi.core
+  count                     = (local.cost_exports_enabled && local.env_effective == "dev") ? 1 : 0
+  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  name                      = "ce-${var.product}-np-core-${var.region}-mtd-daily"
+  parent_id                 = "/subscriptions/${local.core_sub}"
+  location                  = var.location
   schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
@@ -2409,23 +2468,23 @@ resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
         timeframe = "MonthToDate"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { 
-        destination = local.cost_exports_destination 
+      deliveryInfo = {
+        destination = local.cost_exports_destination
       }
-      format       = "Csv"
+      format = "Csv"
       schedule = {
         recurrence = "Daily"
-        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        recurrencePeriod = {
+          from = local.cost_exports_schedule_from
+        }
         status = "Active"
       }
     }
   }
 
   response_export_values = ["identity.principalId"]
-  depends_on = [
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-  ]
+
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2436,12 +2495,12 @@ resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
 }
 
 resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
-  provider  = azapi.core
-  count     = (local.cost_exports_enabled && local.env_effective == "dev") ? 1 : 0
-  type      = "Microsoft.CostManagement/exports@2024-08-01"
-  name      = "ce-${var.product}-np-core-${var.region}-manual-custom"
-  parent_id = "/subscriptions/${local.core_sub}"
-  location  = var.location
+  provider                  = azapi.core
+  count                     = (local.cost_exports_enabled && local.env_effective == "dev") ? 1 : 0
+  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  name                      = "ce-${var.product}-np-core-${var.region}-manual-custom"
+  parent_id                 = "/subscriptions/${local.core_sub}"
+  location                  = var.location
   schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
@@ -2457,23 +2516,23 @@ resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
         }
         dataSet = { granularity = "Daily" }
       }
-      deliveryInfo = { 
-        destination = local.cost_exports_destination 
+      deliveryInfo = {
+        destination = local.cost_exports_destination
       }
-      format       = "Csv"
+      format = "Csv"
       schedule = {
         recurrence = "Monthly"
-        recurrencePeriod = { from = local.cost_exports_schedule_from }
+        recurrencePeriod = {
+          from = local.cost_exports_schedule_from
+        }
         status = "Inactive"
       }
     }
   }
 
   response_export_values = ["identity.principalId"]
-  depends_on = [
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-  ]
+
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2483,14 +2542,13 @@ resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
   }
 }
 
-# prod-core runs with env_effective == "prod"
 resource "azapi_resource" "cost_export_core_prod_last_month" {
-  provider  = azapi.core
-  count     = (local.cost_exports_enabled && local.env_effective == "prod") ? 1 : 0
-  type      = "Microsoft.CostManagement/exports@2024-08-01"
-  name      = "ce-${var.product}-pr-core-${var.region}-last-month-monthly"
-  parent_id = "/subscriptions/${local.core_sub}"
-  location  = var.location
+  provider                  = azapi.core
+  count                     = (local.cost_exports_enabled && local.env_effective == "prod") ? 1 : 0
+  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  name                      = "ce-${var.product}-pr-core-${var.region}-last-month-monthly"
+  parent_id                 = "/subscriptions/${local.core_sub}"
+  location                  = var.location
   schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
@@ -2502,23 +2560,23 @@ resource "azapi_resource" "cost_export_core_prod_last_month" {
         timeframe = "TheLastMonth"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { 
-        destination = local.cost_exports_destination 
+      deliveryInfo = {
+        destination = local.cost_exports_destination
       }
-      format       = "Csv"
+      format = "Csv"
       schedule = {
         recurrence = "Monthly"
-        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        recurrencePeriod = {
+          from = local.cost_exports_schedule_from
+        }
         status = "Active"
       }
     }
   }
 
   response_export_values = ["identity.principalId"]
-  depends_on = [
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-  ]
+
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2529,12 +2587,12 @@ resource "azapi_resource" "cost_export_core_prod_last_month" {
 }
 
 resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
-  provider  = azapi.core
-  count     = (local.cost_exports_enabled && local.env_effective == "prod") ? 1 : 0
-  type      = "Microsoft.CostManagement/exports@2024-08-01"
-  name      = "ce-${var.product}-pr-core-${var.region}-mtd-daily"
-  parent_id = "/subscriptions/${local.core_sub}"
-  location  = var.location
+  provider                  = azapi.core
+  count                     = (local.cost_exports_enabled && local.env_effective == "prod") ? 1 : 0
+  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  name                      = "ce-${var.product}-pr-core-${var.region}-mtd-daily"
+  parent_id                 = "/subscriptions/${local.core_sub}"
+  location                  = var.location
   schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
@@ -2546,23 +2604,23 @@ resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
         timeframe = "MonthToDate"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { 
-        destination = local.cost_exports_destination 
+      deliveryInfo = {
+        destination = local.cost_exports_destination
       }
-      format       = "Csv"
+      format = "Csv"
       schedule = {
         recurrence = "Daily"
-        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        recurrencePeriod = {
+          from = local.cost_exports_schedule_from
+        }
         status = "Active"
       }
     }
   }
 
   response_export_values = ["identity.principalId"]
-  depends_on = [
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-  ]
+
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2573,12 +2631,12 @@ resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
 }
 
 resource "azapi_resource" "cost_export_core_prod_manual_custom" {
-  provider  = azapi.core
-  count     = (local.cost_exports_enabled && local.env_effective == "prod") ? 1 : 0
-  type      = "Microsoft.CostManagement/exports@2024-08-01"
-  name      = "ce-${var.product}-pr-core-${var.region}-manual-custom"
-  parent_id = "/subscriptions/${local.core_sub}"
-  location  = var.location
+  provider                  = azapi.core
+  count                     = (local.cost_exports_enabled && local.env_effective == "prod") ? 1 : 0
+  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  name                      = "ce-${var.product}-pr-core-${var.region}-manual-custom"
+  parent_id                 = "/subscriptions/${local.core_sub}"
+  location                  = var.location
   schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
@@ -2594,23 +2652,23 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
         }
         dataSet = { granularity = "Daily" }
       }
-      deliveryInfo = { 
-        destination = local.cost_exports_destination 
+      deliveryInfo = {
+        destination = local.cost_exports_destination
       }
-      format       = "Csv"
+      format = "Csv"
       schedule = {
         recurrence = "Monthly"
-        recurrencePeriod = { from = local.cost_exports_schedule_from }
+        recurrencePeriod = {
+          from = local.cost_exports_schedule_from
+        }
         status = "Inactive"
       }
     }
   }
 
   response_export_values = ["identity.principalId"]
-  depends_on = [
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-  ]
+
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2620,6 +2678,8 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
   }
 }
 
+# ------------------------------------------------------------
+# Role assignments (static keys; principal IDs are values)
 # ------------------------------------------------------------
 
 locals {
@@ -2670,6 +2730,8 @@ resource "azurerm_role_assignment" "cost_exports_blob_contrib" {
   scope                = local.ce_sa_scope
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = local.ce_principal_ids[each.key]
+
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
