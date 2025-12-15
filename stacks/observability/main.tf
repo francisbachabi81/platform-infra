@@ -88,8 +88,8 @@ locals {
   core_sub    = trimspace(coalesce(var.core_subscription_id, var.subscription_id))
   core_tenant = trimspace(coalesce(var.core_tenant_id,     var.tenant_id))
 
-  env_sub     = trimspace(var.env_subscription_id)
-  env_tenant  = trimspace(coalesce(var.env_tenant_id, var.tenant_id))
+  env_sub    = trimspace(coalesce(var.env_subscription_id, var.subscription_id))
+  env_tenant = trimspace(coalesce(var.env_tenant_id, var.tenant_id))
 }
 
 locals {
@@ -1836,7 +1836,7 @@ resource "azapi_resource" "cost_export_dev_last_month" {
     }
   }
 
-  response_export_values = ["identity.principalId"]
+#  response_export_values = ["identity.principalId"]
 
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
@@ -1892,7 +1892,7 @@ resource "azapi_resource" "cost_export_dev_mtd_daily" {
     }
   }
 
-  response_export_values = ["identity.principalId"]
+#  response_export_values = ["identity.principalId"]
 
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
@@ -1952,7 +1952,7 @@ resource "azapi_resource" "cost_export_dev_manual_custom" {
     }
   }
 
-  response_export_values = ["identity.principalId"]
+#  response_export_values = ["identity.principalId"]
 
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
@@ -2009,7 +2009,7 @@ resource "azapi_resource" "cost_export_qa_last_month" {
     }
   }
 
-  response_export_values = ["identity.principalId"]
+#  response_export_values = ["identity.principalId"]
 
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
@@ -2065,7 +2065,7 @@ resource "azapi_resource" "cost_export_qa_mtd_daily" {
     }
   }
 
-  response_export_values = ["identity.principalId"]
+#  response_export_values = ["identity.principalId"]
 
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
@@ -2125,7 +2125,7 @@ resource "azapi_resource" "cost_export_qa_manual_custom" {
     }
   }
 
-  response_export_values = ["identity.principalId"]
+#  response_export_values = ["identity.principalId"]
 
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
@@ -2182,7 +2182,7 @@ resource "azapi_resource" "cost_export_prod_last_month" {
     }
   }
 
-  response_export_values = ["identity.principalId"]
+#  response_export_values = ["identity.principalId"]
 
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
@@ -2238,7 +2238,7 @@ resource "azapi_resource" "cost_export_prod_mtd_daily" {
     }
   }
 
-  response_export_values = ["identity.principalId"]
+#  response_export_values = ["identity.principalId"]
 
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
@@ -2298,7 +2298,7 @@ resource "azapi_resource" "cost_export_prod_manual_custom" {
     }
   }
 
-  response_export_values = ["identity.principalId"]
+#  response_export_values = ["identity.principalId"]
 
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
@@ -2355,7 +2355,7 @@ resource "azapi_resource" "cost_export_uat_last_month" {
     }
   }
 
-  response_export_values = ["identity.principalId"]
+#  response_export_values = ["identity.principalId"]
 
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
@@ -2411,7 +2411,7 @@ resource "azapi_resource" "cost_export_uat_mtd_daily" {
     }
   }
 
-  response_export_values = ["identity.principalId"]
+#  response_export_values = ["identity.principalId"]
 
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
@@ -2471,7 +2471,7 @@ resource "azapi_resource" "cost_export_uat_manual_custom" {
     }
   }
 
-  response_export_values = ["identity.principalId"]
+#  response_export_values = ["identity.principalId"]
 
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
@@ -2528,7 +2528,7 @@ resource "azapi_resource" "cost_export_core_nonprod_last_month" {
     }
   }
 
-  response_export_values = ["identity.principalId"]
+#  response_export_values = ["identity.principalId"]
 
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
@@ -2584,7 +2584,7 @@ resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
     }
   }
 
-  response_export_values = ["identity.principalId"]
+#  response_export_values = ["identity.principalId"]
 
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
@@ -2644,7 +2644,7 @@ resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
     }
   }
 
-  response_export_values = ["identity.principalId"]
+#  response_export_values = ["identity.principalId"]
 
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
@@ -2700,7 +2700,7 @@ resource "azapi_resource" "cost_export_core_prod_last_month" {
     }
   }
 
-  response_export_values = ["identity.principalId"]
+#  response_export_values = ["identity.principalId"]
 
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
@@ -2756,7 +2756,7 @@ resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
     }
   }
 
-  response_export_values = ["identity.principalId"]
+#  response_export_values = ["identity.principalId"]
 
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
@@ -2816,7 +2816,7 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
     }
   }
 
-  response_export_values = ["identity.principalId"]
+#  response_export_values = ["identity.principalId"]
 
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
@@ -2874,6 +2874,8 @@ locals {
     for k, v in local.ce_resource_ids : k => v if v != null && v != ""
   }
 
+  ce_resource_ids_nonnull = { for k, v in local.ce_resource_ids_effective : k => v if v != null }
+
   ce_role_targets = merge(
     contains(local.cost_export_targets, "dev")  ? { dev_last_month = true, dev_mtd_daily = true, dev_manual_custom = true } : {},
     contains(local.cost_export_targets, "qa")   ? { qa_last_month  = true, qa_mtd_daily  = true, qa_manual_custom  = true } : {},
@@ -2887,14 +2889,26 @@ locals {
   ce_sa_scope = var.enable_cost_exports ? local.existing_exports_sa_id : null
 }
 
+
 data "azapi_resource" "ce" {
   type        = "Microsoft.CostManagement/exports@2025-03-01"
-  for_each    = local.ce_resource_ids_effective
+  for_each    = local.ce_resource_ids_nonnull
   resource_id = each.value
+
+  depends_on = [
+    azapi_resource.cost_export_dev_last_month,
+    azapi_resource.cost_export_dev_mtd_daily,
+    azapi_resource.cost_export_dev_manual_custom,
+    azapi_resource.cost_export_qa_last_month,
+    azapi_resource.cost_export_qa_mtd_daily,
+    azapi_resource.cost_export_qa_manual_custom,
+    azapi_resource.cost_export_core_nonprod_last_month,
+    azapi_resource.cost_export_core_nonprod_mtd_daily,
+    azapi_resource.cost_export_core_nonprod_manual_custom,
+  ]
 }
 
 locals {
-  # Stable principal IDs from read-back data source
   ce_principal_ids = {
     for k, v in data.azapi_resource.ce :
     k => try(v.output.identity.principalId, null)
