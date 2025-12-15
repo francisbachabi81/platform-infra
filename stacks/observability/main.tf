@@ -297,6 +297,9 @@ locals {
 
   nsg_flow_logs_storage = try(data.terraform_remote_state.platform.outputs.nsg_flow_logs_storage, null)
   nsg_flow_logs_sa_id   = try(local.nsg_flow_logs_storage.id, null)
+
+  existing_exports_sa_id   = coalesce(var.nsg_flow_logs_storage_account_id_override, try(local.nsg_flow_logs_storage.id, null))
+  existing_exports_sa_name = try(local.nsg_flow_logs_storage.name, null)
 }
 
 # =============================================================================
@@ -1770,66 +1773,21 @@ resource "time_sleep" "wait_cost_exports_rp_prod" {
   create_duration = "8m"
 }
 
-resource "random_string" "cost_sa_sfx" {
-  length  = 5
-  special = false
-  upper   = false
+data "azurerm_storage_container" "cost_exports" {
+  provider             = azurerm.core
+  count                = var.enable_cost_exports ? 1 : 0
+  name                 = var.cost_exports_container_name
+  storage_account_name = local.existing_exports_sa_name
 }
 
 locals {
   # Decide based on inputs / resolved RG, NOT on resources created in this plan
   cost_exports_enabled = var.enable_cost_exports
 
-  # storage account name rules: lowercase, 3-24 chars, unique
-  cost_exports_sa_name = substr(
-    lower("saobs${var.product}${local.plane_code}${var.region}ce${random_string.cost_sa_sfx.result}"),
-    0,
-    24
-  )
-
   cost_exports_schedule_from = "${formatdate("YYYY-MM-DD", timeadd(timestamp(), var.cost_exports_schedule_start_offset))}T00:00:00Z"
-  cost_exports_schedule_to   = "2035-01-01T00:00:00Z"
-}
+  cost_exports_schedule_to   = coalesce(var.cost_exports_schedule_end_date, "2035-01-01T00:00:00Z")
 
-resource "azurerm_storage_account" "cost_exports" {
-  provider            = azurerm.core
-  count               = local.cost_exports_enabled ? 1 : 0
-  name                = local.cost_exports_sa_name
-  resource_group_name = local.rg_core_name_resolved
-  location            = local.rg_core_location_resolved
-
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
-  account_kind             = "StorageV2"
-
-  min_tls_version                 = "TLS1_2"
-  allow_nested_items_to_be_public = false
-  public_network_access_enabled   = true
-
-  tags = var.tags_extra
-
-  depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core
-  ]
-
-  lifecycle {
-    precondition {
-      condition     = local.rg_core_name_resolved != null && local.rg_core_location_resolved != null
-      error_message = "Core RG name/location not resolved; cannot create cost exports storage account."
-    }
-  }
-}
-
-resource "azurerm_storage_container" "cost_exports" {
-  provider              = azurerm.core
-  count                 = local.cost_exports_enabled ? 1 : 0
-  name                  = var.cost_exports_container_name
-  # storage_account_name  = azurerm_storage_account.cost_exports[0].name
-  container_access_type = "private"
-
-  depends_on = [
-    azurerm_storage_account.cost_exports
-  ]
+  cost_exports_container_exists = var.enable_cost_exports ? (try(data.azurerm_storage_container.cost_exports[0].id, null) != null) : true
 }
 
 # =============================================================================
@@ -1846,9 +1804,9 @@ locals {
 }
 
 locals {
-  cost_exports_destination = local.cost_exports_enabled ? {
-    resourceId     = azurerm_storage_account.cost_exports[0].id
-    container      = var.cost_exports_container_name
+  cost_exports_destination = (var.enable_cost_exports && local.existing_exports_sa_id != null) ? {
+    resourceId     = local.existing_exports_sa_id
+    container      = var.cost_exports_container_name        # "cost-exports"
     rootFolderPath = "${var.cost_exports_root_folder}/${var.product}/${local.env_effective}/${var.region}"
   } : null
 }
@@ -1892,27 +1850,21 @@ resource "azapi_resource" "cost_export_dev_last_month" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-
+    data.azurerm_storage_container.cost_exports,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
-
     azurerm_resource_provider_registration.cost_exports_rp_qa,
     time_sleep.wait_cost_exports_rp_qa,
-
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
-
     azurerm_resource_provider_registration.cost_exports_rp_prod,
     time_sleep.wait_cost_exports_rp_prod,
   ]
 
   lifecycle {
     precondition {
-      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
-      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+      condition     = local.cost_exports_destination != null && local.cost_exports_container_exists
+      error_message = "Cost exports enabled but destination storage account/container could not be resolved. Ensure platform-app created container '${var.cost_exports_container_name}' in the NSG flow logs storage account."
     }
   }
 }
@@ -1955,27 +1907,21 @@ resource "azapi_resource" "cost_export_dev_mtd_daily" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-
+    data.azurerm_storage_container.cost_exports,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
-
     azurerm_resource_provider_registration.cost_exports_rp_qa,
     time_sleep.wait_cost_exports_rp_qa,
-
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
-
     azurerm_resource_provider_registration.cost_exports_rp_prod,
     time_sleep.wait_cost_exports_rp_prod,
   ]
 
   lifecycle {
     precondition {
-      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
-      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+      condition     = local.cost_exports_destination != null && local.cost_exports_container_exists
+      error_message = "Cost exports enabled but destination storage account/container could not be resolved. Ensure platform-app created container '${var.cost_exports_container_name}' in the NSG flow logs storage account."
     }
   }
 }
@@ -2022,27 +1968,21 @@ resource "azapi_resource" "cost_export_dev_manual_custom" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-
+    data.azurerm_storage_container.cost_exports,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
-
     azurerm_resource_provider_registration.cost_exports_rp_qa,
     time_sleep.wait_cost_exports_rp_qa,
-
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
-
     azurerm_resource_provider_registration.cost_exports_rp_prod,
     time_sleep.wait_cost_exports_rp_prod,
   ]
 
   lifecycle {
     precondition {
-      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
-      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+      condition     = local.cost_exports_destination != null && local.cost_exports_container_exists
+      error_message = "Cost exports enabled but destination storage account/container could not be resolved. Ensure platform-app created container '${var.cost_exports_container_name}' in the NSG flow logs storage account."
     }
   }
 }
@@ -2086,27 +2026,21 @@ resource "azapi_resource" "cost_export_qa_last_month" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-
+    data.azurerm_storage_container.cost_exports,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
-
     azurerm_resource_provider_registration.cost_exports_rp_qa,
     time_sleep.wait_cost_exports_rp_qa,
-
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
-
     azurerm_resource_provider_registration.cost_exports_rp_prod,
     time_sleep.wait_cost_exports_rp_prod,
   ]
 
   lifecycle {
     precondition {
-      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
-      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+      condition     = local.cost_exports_destination != null && local.cost_exports_container_exists
+      error_message = "Cost exports enabled but destination storage account/container could not be resolved. Ensure platform-app created container '${var.cost_exports_container_name}' in the NSG flow logs storage account."
     }
   }
 }
@@ -2149,27 +2083,21 @@ resource "azapi_resource" "cost_export_qa_mtd_daily" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-
+    data.azurerm_storage_container.cost_exports,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
-
     azurerm_resource_provider_registration.cost_exports_rp_qa,
     time_sleep.wait_cost_exports_rp_qa,
-
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
-
     azurerm_resource_provider_registration.cost_exports_rp_prod,
     time_sleep.wait_cost_exports_rp_prod,
   ]
 
   lifecycle {
     precondition {
-      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
-      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+      condition     = local.cost_exports_destination != null && local.cost_exports_container_exists
+      error_message = "Cost exports enabled but destination storage account/container could not be resolved. Ensure platform-app created container '${var.cost_exports_container_name}' in the NSG flow logs storage account."
     }
   }
 }
@@ -2216,27 +2144,21 @@ resource "azapi_resource" "cost_export_qa_manual_custom" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-
+    data.azurerm_storage_container.cost_exports,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
-
     azurerm_resource_provider_registration.cost_exports_rp_qa,
     time_sleep.wait_cost_exports_rp_qa,
-
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
-
     azurerm_resource_provider_registration.cost_exports_rp_prod,
     time_sleep.wait_cost_exports_rp_prod,
   ]
 
   lifecycle {
     precondition {
-      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
-      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+      condition     = local.cost_exports_destination != null && local.cost_exports_container_exists
+      error_message = "Cost exports enabled but destination storage account/container could not be resolved. Ensure platform-app created container '${var.cost_exports_container_name}' in the NSG flow logs storage account."
     }
   }
 }
@@ -2280,27 +2202,21 @@ resource "azapi_resource" "cost_export_prod_last_month" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-
+    data.azurerm_storage_container.cost_exports,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
-
     azurerm_resource_provider_registration.cost_exports_rp_qa,
     time_sleep.wait_cost_exports_rp_qa,
-
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
-
     azurerm_resource_provider_registration.cost_exports_rp_prod,
     time_sleep.wait_cost_exports_rp_prod,
   ]
 
   lifecycle {
     precondition {
-      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
-      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+      condition     = local.cost_exports_destination != null && local.cost_exports_container_exists
+      error_message = "Cost exports enabled but destination storage account/container could not be resolved. Ensure platform-app created container '${var.cost_exports_container_name}' in the NSG flow logs storage account."
     }
   }
 }
@@ -2343,27 +2259,21 @@ resource "azapi_resource" "cost_export_prod_mtd_daily" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-
+    data.azurerm_storage_container.cost_exports,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
-
     azurerm_resource_provider_registration.cost_exports_rp_qa,
     time_sleep.wait_cost_exports_rp_qa,
-
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
-
     azurerm_resource_provider_registration.cost_exports_rp_prod,
     time_sleep.wait_cost_exports_rp_prod,
   ]
 
   lifecycle {
     precondition {
-      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
-      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+      condition     = local.cost_exports_destination != null && local.cost_exports_container_exists
+      error_message = "Cost exports enabled but destination storage account/container could not be resolved. Ensure platform-app created container '${var.cost_exports_container_name}' in the NSG flow logs storage account."
     }
   }
 }
@@ -2410,27 +2320,21 @@ resource "azapi_resource" "cost_export_prod_manual_custom" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-
+    data.azurerm_storage_container.cost_exports,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
-
     azurerm_resource_provider_registration.cost_exports_rp_qa,
     time_sleep.wait_cost_exports_rp_qa,
-
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
-
     azurerm_resource_provider_registration.cost_exports_rp_prod,
     time_sleep.wait_cost_exports_rp_prod,
   ]
 
   lifecycle {
     precondition {
-      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
-      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+      condition     = local.cost_exports_destination != null && local.cost_exports_container_exists
+      error_message = "Cost exports enabled but destination storage account/container could not be resolved. Ensure platform-app created container '${var.cost_exports_container_name}' in the NSG flow logs storage account."
     }
   }
 }
@@ -2474,27 +2378,21 @@ resource "azapi_resource" "cost_export_uat_last_month" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-
+    data.azurerm_storage_container.cost_exports,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
-
     azurerm_resource_provider_registration.cost_exports_rp_qa,
     time_sleep.wait_cost_exports_rp_qa,
-
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
-
     azurerm_resource_provider_registration.cost_exports_rp_prod,
     time_sleep.wait_cost_exports_rp_prod,
   ]
 
   lifecycle {
     precondition {
-      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
-      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+      condition     = local.cost_exports_destination != null && local.cost_exports_container_exists
+      error_message = "Cost exports enabled but destination storage account/container could not be resolved. Ensure platform-app created container '${var.cost_exports_container_name}' in the NSG flow logs storage account."
     }
   }
 }
@@ -2537,27 +2435,21 @@ resource "azapi_resource" "cost_export_uat_mtd_daily" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-
+    data.azurerm_storage_container.cost_exports,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
-
     azurerm_resource_provider_registration.cost_exports_rp_qa,
     time_sleep.wait_cost_exports_rp_qa,
-
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
-
     azurerm_resource_provider_registration.cost_exports_rp_prod,
     time_sleep.wait_cost_exports_rp_prod,
   ]
 
   lifecycle {
     precondition {
-      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
-      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+      condition     = local.cost_exports_destination != null && local.cost_exports_container_exists
+      error_message = "Cost exports enabled but destination storage account/container could not be resolved. Ensure platform-app created container '${var.cost_exports_container_name}' in the NSG flow logs storage account."
     }
   }
 }
@@ -2604,27 +2496,21 @@ resource "azapi_resource" "cost_export_uat_manual_custom" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-
+    data.azurerm_storage_container.cost_exports,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
-
     azurerm_resource_provider_registration.cost_exports_rp_qa,
     time_sleep.wait_cost_exports_rp_qa,
-
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
-
     azurerm_resource_provider_registration.cost_exports_rp_prod,
     time_sleep.wait_cost_exports_rp_prod,
   ]
 
   lifecycle {
     precondition {
-      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
-      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+      condition     = local.cost_exports_destination != null && local.cost_exports_container_exists
+      error_message = "Cost exports enabled but destination storage account/container could not be resolved. Ensure platform-app created container '${var.cost_exports_container_name}' in the NSG flow logs storage account."
     }
   }
 }
@@ -2668,27 +2554,21 @@ resource "azapi_resource" "cost_export_core_nonprod_last_month" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-
+    data.azurerm_storage_container.cost_exports,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
-
     azurerm_resource_provider_registration.cost_exports_rp_qa,
     time_sleep.wait_cost_exports_rp_qa,
-
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
-
     azurerm_resource_provider_registration.cost_exports_rp_prod,
     time_sleep.wait_cost_exports_rp_prod,
   ]
 
   lifecycle {
     precondition {
-      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
-      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+      condition     = local.cost_exports_destination != null && local.cost_exports_container_exists
+      error_message = "Cost exports enabled but destination storage account/container could not be resolved. Ensure platform-app created container '${var.cost_exports_container_name}' in the NSG flow logs storage account."
     }
   }
 }
@@ -2731,27 +2611,21 @@ resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-
+    data.azurerm_storage_container.cost_exports,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
-
     azurerm_resource_provider_registration.cost_exports_rp_qa,
     time_sleep.wait_cost_exports_rp_qa,
-
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
-
     azurerm_resource_provider_registration.cost_exports_rp_prod,
     time_sleep.wait_cost_exports_rp_prod,
   ]
 
   lifecycle {
     precondition {
-      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
-      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+      condition     = local.cost_exports_destination != null && local.cost_exports_container_exists
+      error_message = "Cost exports enabled but destination storage account/container could not be resolved. Ensure platform-app created container '${var.cost_exports_container_name}' in the NSG flow logs storage account."
     }
   }
 }
@@ -2798,27 +2672,21 @@ resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-
+    data.azurerm_storage_container.cost_exports,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
-
     azurerm_resource_provider_registration.cost_exports_rp_qa,
     time_sleep.wait_cost_exports_rp_qa,
-
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
-
     azurerm_resource_provider_registration.cost_exports_rp_prod,
     time_sleep.wait_cost_exports_rp_prod,
   ]
 
   lifecycle {
     precondition {
-      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
-      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+      condition     = local.cost_exports_destination != null && local.cost_exports_container_exists
+      error_message = "Cost exports enabled but destination storage account/container could not be resolved. Ensure platform-app created container '${var.cost_exports_container_name}' in the NSG flow logs storage account."
     }
   }
 }
@@ -2861,27 +2729,21 @@ resource "azapi_resource" "cost_export_core_prod_last_month" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-
+    data.azurerm_storage_container.cost_exports,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
-
     azurerm_resource_provider_registration.cost_exports_rp_qa,
     time_sleep.wait_cost_exports_rp_qa,
-
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
-
     azurerm_resource_provider_registration.cost_exports_rp_prod,
     time_sleep.wait_cost_exports_rp_prod,
   ]
 
   lifecycle {
     precondition {
-      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
-      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+      condition     = local.cost_exports_destination != null && local.cost_exports_container_exists
+      error_message = "Cost exports enabled but destination storage account/container could not be resolved. Ensure platform-app created container '${var.cost_exports_container_name}' in the NSG flow logs storage account."
     }
   }
 }
@@ -2924,27 +2786,21 @@ resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-
+    data.azurerm_storage_container.cost_exports,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
-
     azurerm_resource_provider_registration.cost_exports_rp_qa,
     time_sleep.wait_cost_exports_rp_qa,
-
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
-
     azurerm_resource_provider_registration.cost_exports_rp_prod,
     time_sleep.wait_cost_exports_rp_prod,
   ]
 
   lifecycle {
     precondition {
-      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
-      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+      condition     = local.cost_exports_destination != null && local.cost_exports_container_exists
+      error_message = "Cost exports enabled but destination storage account/container could not be resolved. Ensure platform-app created container '${var.cost_exports_container_name}' in the NSG flow logs storage account."
     }
   }
 }
@@ -2991,27 +2847,21 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-
+    data.azurerm_storage_container.cost_exports,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
-
     azurerm_resource_provider_registration.cost_exports_rp_qa,
     time_sleep.wait_cost_exports_rp_qa,
-
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
-
     azurerm_resource_provider_registration.cost_exports_rp_prod,
     time_sleep.wait_cost_exports_rp_prod,
   ]
 
   lifecycle {
     precondition {
-      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
-      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+      condition     = local.cost_exports_destination != null && local.cost_exports_container_exists
+      error_message = "Cost exports enabled but destination storage account/container could not be resolved. Ensure platform-app created container '${var.cost_exports_container_name}' in the NSG flow logs storage account."
     }
   }
 }
@@ -3057,7 +2907,7 @@ locals {
     (local.cost_exports_enabled && local.env_effective == "prod") ? { core_pr_last_month = true, core_pr_mtd_daily = true, core_pr_manual_custom = true } : {}
   )
 
-  ce_sa_scope = local.cost_exports_enabled ? azurerm_storage_account.cost_exports[0].id : null
+  ce_sa_scope = var.enable_cost_exports ? local.existing_exports_sa_id : null
 }
 
 resource "azurerm_role_assignment" "cost_exports_blob_contrib" {
@@ -3072,8 +2922,7 @@ resource "azurerm_role_assignment" "cost_exports_blob_contrib" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
+    data.azurerm_storage_container.cost_exports,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
