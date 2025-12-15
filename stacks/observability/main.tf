@@ -1777,7 +1777,7 @@ locals {
   # Decide based on inputs / resolved RG, NOT on resources created in this plan
   cost_exports_enabled = var.enable_cost_exports
 
-  cost_exports_schedule_from = "${formatdate("YYYY-MM-DD", timeadd(timestamp(), var.cost_exports_schedule_start_offset))}T00:00:00Z"
+  cost_exports_schedule_from = var.cost_exports_schedule_from
   cost_exports_schedule_to   = coalesce(var.cost_exports_schedule_end_date, "2035-01-01T00:00:00Z")
 }
 
@@ -1848,7 +1848,7 @@ resource "azapi_resource" "cost_export_dev_last_month" {
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
     azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_prod
   ]
 
   lifecycle {
@@ -1904,7 +1904,7 @@ resource "azapi_resource" "cost_export_dev_mtd_daily" {
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
     azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_prod
   ]
 
   lifecycle {
@@ -1964,7 +1964,7 @@ resource "azapi_resource" "cost_export_dev_manual_custom" {
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
     azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_prod
   ]
 
   lifecycle {
@@ -2021,7 +2021,7 @@ resource "azapi_resource" "cost_export_qa_last_month" {
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
     azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_prod
   ]
 
   lifecycle {
@@ -2077,7 +2077,7 @@ resource "azapi_resource" "cost_export_qa_mtd_daily" {
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
     azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_prod
   ]
 
   lifecycle {
@@ -2137,7 +2137,7 @@ resource "azapi_resource" "cost_export_qa_manual_custom" {
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
     azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_prod
   ]
 
   lifecycle {
@@ -2194,7 +2194,7 @@ resource "azapi_resource" "cost_export_prod_last_month" {
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
     azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_prod
   ]
 
   lifecycle {
@@ -2250,7 +2250,7 @@ resource "azapi_resource" "cost_export_prod_mtd_daily" {
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
     azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_prod
   ]
 
   lifecycle {
@@ -2310,7 +2310,7 @@ resource "azapi_resource" "cost_export_prod_manual_custom" {
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
     azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_prod
   ]
 
   lifecycle {
@@ -2367,7 +2367,7 @@ resource "azapi_resource" "cost_export_uat_last_month" {
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
     azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_prod
   ]
 
   lifecycle {
@@ -2423,7 +2423,7 @@ resource "azapi_resource" "cost_export_uat_mtd_daily" {
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
     azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_prod
   ]
 
   lifecycle {
@@ -2483,7 +2483,7 @@ resource "azapi_resource" "cost_export_uat_manual_custom" {
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
     azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_prod
   ]
 
   lifecycle {
@@ -2540,7 +2540,7 @@ resource "azapi_resource" "cost_export_core_nonprod_last_month" {
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
     azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_prod
   ]
 
   lifecycle {
@@ -2596,7 +2596,7 @@ resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
     azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_prod
   ]
 
   lifecycle {
@@ -2656,7 +2656,7 @@ resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
     azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_prod
   ]
 
   lifecycle {
@@ -2712,7 +2712,7 @@ resource "azapi_resource" "cost_export_core_prod_last_month" {
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
     azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_prod
   ]
 
   lifecycle {
@@ -2768,7 +2768,7 @@ resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
     azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_prod
   ]
 
   lifecycle {
@@ -2828,7 +2828,7 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     time_sleep.wait_cost_exports_rp_uat,
     azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_prod
   ]
 
   lifecycle {
@@ -2844,30 +2844,34 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
 # ------------------------------------------------------------
 
 locals {
-  ce_principal_ids = {
-    dev_last_month     = try(jsondecode(azapi_resource.cost_export_dev_last_month[0].output).identity.principalId, null)
-    dev_mtd_daily      = try(jsondecode(azapi_resource.cost_export_dev_mtd_daily[0].output).identity.principalId, null)
-    dev_manual_custom  = try(jsondecode(azapi_resource.cost_export_dev_manual_custom[0].output).identity.principalId, null)
+  ce_resource_ids = {
+    dev_last_month     = try(azapi_resource.cost_export_dev_last_month[0].id, null)
+    dev_mtd_daily      = try(azapi_resource.cost_export_dev_mtd_daily[0].id, null)
+    dev_manual_custom  = try(azapi_resource.cost_export_dev_manual_custom[0].id, null)
 
-    qa_last_month      = try(jsondecode(azapi_resource.cost_export_qa_last_month[0].output).identity.principalId, null)
-    qa_mtd_daily       = try(jsondecode(azapi_resource.cost_export_qa_mtd_daily[0].output).identity.principalId, null)
-    qa_manual_custom   = try(jsondecode(azapi_resource.cost_export_qa_manual_custom[0].output).identity.principalId, null)
+    qa_last_month      = try(azapi_resource.cost_export_qa_last_month[0].id, null)
+    qa_mtd_daily       = try(azapi_resource.cost_export_qa_mtd_daily[0].id, null)
+    qa_manual_custom   = try(azapi_resource.cost_export_qa_manual_custom[0].id, null)
 
-    prod_last_month    = try(jsondecode(azapi_resource.cost_export_prod_last_month[0].output).identity.principalId, null)
-    prod_mtd_daily     = try(jsondecode(azapi_resource.cost_export_prod_mtd_daily[0].output).identity.principalId, null)
-    prod_manual_custom = try(jsondecode(azapi_resource.cost_export_prod_manual_custom[0].output).identity.principalId, null)
+    prod_last_month    = try(azapi_resource.cost_export_prod_last_month[0].id, null)
+    prod_mtd_daily     = try(azapi_resource.cost_export_prod_mtd_daily[0].id, null)
+    prod_manual_custom = try(azapi_resource.cost_export_prod_manual_custom[0].id, null)
 
-    uat_last_month     = try(jsondecode(azapi_resource.cost_export_uat_last_month[0].output).identity.principalId, null)
-    uat_mtd_daily      = try(jsondecode(azapi_resource.cost_export_uat_mtd_daily[0].output).identity.principalId, null)
-    uat_manual_custom  = try(jsondecode(azapi_resource.cost_export_uat_manual_custom[0].output).identity.principalId, null)
+    uat_last_month     = try(azapi_resource.cost_export_uat_last_month[0].id, null)
+    uat_mtd_daily      = try(azapi_resource.cost_export_uat_mtd_daily[0].id, null)
+    uat_manual_custom  = try(azapi_resource.cost_export_uat_manual_custom[0].id, null)
 
-    core_np_last_month    = try(jsondecode(azapi_resource.cost_export_core_nonprod_last_month[0].output).identity.principalId, null)
-    core_np_mtd_daily     = try(jsondecode(azapi_resource.cost_export_core_nonprod_mtd_daily[0].output).identity.principalId, null)
-    core_np_manual_custom = try(jsondecode(azapi_resource.cost_export_core_nonprod_manual_custom[0].output).identity.principalId, null)
+    core_np_last_month    = try(azapi_resource.cost_export_core_nonprod_last_month[0].id, null)
+    core_np_mtd_daily     = try(azapi_resource.cost_export_core_nonprod_mtd_daily[0].id, null)
+    core_np_manual_custom = try(azapi_resource.cost_export_core_nonprod_manual_custom[0].id, null)
 
-    core_pr_last_month    = try(jsondecode(azapi_resource.cost_export_core_prod_last_month[0].output).identity.principalId, null)
-    core_pr_mtd_daily     = try(jsondecode(azapi_resource.cost_export_core_prod_mtd_daily[0].output).identity.principalId, null)
-    core_pr_manual_custom = try(jsondecode(azapi_resource.cost_export_core_prod_manual_custom[0].output).identity.principalId, null)
+    core_pr_last_month    = try(azapi_resource.cost_export_core_prod_last_month[0].id, null)
+    core_pr_mtd_daily     = try(azapi_resource.cost_export_core_prod_mtd_daily[0].id, null)
+    core_pr_manual_custom = try(azapi_resource.cost_export_core_prod_manual_custom[0].id, null)
+  }
+
+  ce_resource_ids_effective = {
+    for k, v in local.ce_resource_ids : k => v if v != null && v != ""
   }
 
   ce_role_targets = merge(
@@ -2883,6 +2887,20 @@ locals {
   ce_sa_scope = var.enable_cost_exports ? local.existing_exports_sa_id : null
 }
 
+data "azapi_resource" "ce" {
+  type        = "Microsoft.CostManagement/exports@2025-03-01"
+  for_each    = local.ce_resource_ids_effective
+  resource_id = each.value
+}
+
+locals {
+  # Stable principal IDs from read-back data source
+  ce_principal_ids = {
+    for k, v in data.azapi_resource.ce :
+    k => try(v.output.identity.principalId, null)
+  }
+}
+
 resource "azurerm_role_assignment" "cost_exports_blob_contrib" {
   provider = azurerm.core
 
@@ -2892,17 +2910,9 @@ resource "azurerm_role_assignment" "cost_exports_blob_contrib" {
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = local.ce_principal_ids[each.key]
 
+  # Important: gate on destination-subscription registration becoming consistent
   depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    time_sleep.wait_cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_exports_rp_dev,
-    time_sleep.wait_cost_exports_rp_dev,
-    azurerm_resource_provider_registration.cost_exports_rp_qa,
-    time_sleep.wait_cost_exports_rp_qa,
-    azurerm_resource_provider_registration.cost_exports_rp_uat,
-    time_sleep.wait_cost_exports_rp_uat,
-    azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_core
   ]
 
   lifecycle {
@@ -2912,7 +2922,7 @@ resource "azurerm_role_assignment" "cost_exports_blob_contrib" {
     }
     precondition {
       condition     = local.ce_principal_ids[each.key] != null
-      error_message = "PrincipalId not resolved for ${each.key}. Ensure the corresponding export resource is being created."
+      error_message = "PrincipalId not resolved for ${each.key}. Ensure the corresponding export exists and has SystemAssigned identity."
     }
   }
 }

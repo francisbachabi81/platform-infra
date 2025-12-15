@@ -556,6 +556,12 @@ variable "enable_cost_exports" {
   default     = false
 }
 
+variable "cost_exports_schedule_from" {
+  type        = string
+  description = "ISO8601 schedule start for cost exports (stable). Example: 2025-01-01T00:00:00Z"
+  default     = "2025-01-01T00:00:00Z"
+}
+
 variable "cost_exports_container_name" {
   description = "Blob container name for cost exports."
   type        = string
