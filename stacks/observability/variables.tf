@@ -463,6 +463,7 @@ variable "vpng_log_categories" {
     "GatewayDiagnosticLog",
     "TunnelDiagnosticLog",
     "RouteDiagnosticLog",
+    "P2SDiagnosticLog"
   ]
 }
 

@@ -52,3 +52,5 @@ tags_extra = {
   purpose = "observability"
   layer   = "platform"
 }
+
+enable_cost_exports = true
