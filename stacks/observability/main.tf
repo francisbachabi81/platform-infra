@@ -1892,7 +1892,7 @@ resource "azapi_resource" "cost_export_dev_last_month" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = local.cost_exports_depends_on
+  depends_on = [ local.cost_exports_depends_on ]
 
   lifecycle {
     precondition {
@@ -1936,7 +1936,7 @@ resource "azapi_resource" "cost_export_dev_mtd_daily" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = local.cost_exports_depends_on
+  depends_on = [ local.cost_exports_depends_on ]
 
   lifecycle {
     precondition {
@@ -1984,7 +1984,7 @@ resource "azapi_resource" "cost_export_dev_manual_custom" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = local.cost_exports_depends_on
+  depends_on = [ local.cost_exports_depends_on ]
 
   lifecycle {
     precondition {
@@ -2029,7 +2029,7 @@ resource "azapi_resource" "cost_export_qa_last_month" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = local.cost_exports_depends_on
+  depends_on = [ local.cost_exports_depends_on ]
 
   lifecycle {
     precondition {
@@ -2073,7 +2073,7 @@ resource "azapi_resource" "cost_export_qa_mtd_daily" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = local.cost_exports_depends_on
+  depends_on = [ local.cost_exports_depends_on ]
 
   lifecycle {
     precondition {
@@ -2121,7 +2121,7 @@ resource "azapi_resource" "cost_export_qa_manual_custom" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = local.cost_exports_depends_on
+  depends_on = [ local.cost_exports_depends_on ]
 
   lifecycle {
     precondition {
@@ -2166,7 +2166,7 @@ resource "azapi_resource" "cost_export_prod_last_month" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = local.cost_exports_depends_on
+  depends_on = [ local.cost_exports_depends_on ]
 
   lifecycle {
     precondition {
@@ -2210,7 +2210,7 @@ resource "azapi_resource" "cost_export_prod_mtd_daily" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = local.cost_exports_depends_on
+  depends_on = [ local.cost_exports_depends_on ]
 
   lifecycle {
     precondition {
@@ -2258,7 +2258,7 @@ resource "azapi_resource" "cost_export_prod_manual_custom" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = local.cost_exports_depends_on
+  depends_on = [ local.cost_exports_depends_on ]
 
   lifecycle {
     precondition {
@@ -2303,7 +2303,7 @@ resource "azapi_resource" "cost_export_uat_last_month" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = local.cost_exports_depends_on
+  depends_on = [ local.cost_exports_depends_on ]
 
   lifecycle {
     precondition {
@@ -2347,7 +2347,7 @@ resource "azapi_resource" "cost_export_uat_mtd_daily" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = local.cost_exports_depends_on
+  depends_on = [ local.cost_exports_depends_on ]
 
   lifecycle {
     precondition {
@@ -2395,7 +2395,7 @@ resource "azapi_resource" "cost_export_uat_manual_custom" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = local.cost_exports_depends_on
+  depends_on = [ local.cost_exports_depends_on ]
 
   lifecycle {
     precondition {
@@ -2440,7 +2440,7 @@ resource "azapi_resource" "cost_export_core_nonprod_last_month" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = local.cost_exports_depends_on
+  depends_on = [ local.cost_exports_depends_on ]
 
   lifecycle {
     precondition {
@@ -2484,7 +2484,7 @@ resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = local.cost_exports_depends_on
+  depends_on = [ local.cost_exports_depends_on ]
 
   lifecycle {
     precondition {
@@ -2532,7 +2532,7 @@ resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = local.cost_exports_depends_on
+  depends_on = [ local.cost_exports_depends_on ]
 
   lifecycle {
     precondition {
@@ -2576,7 +2576,7 @@ resource "azapi_resource" "cost_export_core_prod_last_month" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = local.cost_exports_depends_on
+  depends_on = [ local.cost_exports_depends_on ]
 
   lifecycle {
     precondition {
@@ -2620,7 +2620,7 @@ resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = local.cost_exports_depends_on
+  depends_on = [ local.cost_exports_depends_on ]
 
   lifecycle {
     precondition {
@@ -2668,7 +2668,7 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = local.cost_exports_depends_on
+  depends_on = [ local.cost_exports_depends_on ]
 
   lifecycle {
     precondition {
@@ -2731,7 +2731,7 @@ resource "azurerm_role_assignment" "cost_exports_blob_contrib" {
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = local.ce_principal_ids[each.key]
 
-  depends_on = local.cost_exports_depends_on
+  depends_on = [ local.cost_exports_depends_on ]
 
   lifecycle {
     precondition {
