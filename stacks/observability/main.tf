@@ -1740,7 +1740,7 @@ locals {
 
 resource "azurerm_storage_account" "cost_exports" {
   provider            = azurerm.core
-  count               = (var.enable_cost_exports && local.rg_core_name_resolved != null) ? 1 : 0
+  count               = local.cost_exports_enabled ? 1 : 0
   name                = local.cost_exports_sa_name
   resource_group_name = local.rg_core_name_resolved
   location            = local.rg_core_location_resolved
@@ -1758,7 +1758,7 @@ resource "azurerm_storage_account" "cost_exports" {
 
 resource "azurerm_storage_container" "cost_exports" {
   provider              = azurerm.core
-  count                 = var.enable_cost_exports ? 1 : 0
+  count                 = local.cost_exports_enabled ? 1 : 0
   name                  = var.cost_exports_container_name
   storage_account_name  = azurerm_storage_account.cost_exports[0].name
   container_access_type = "private"
@@ -1768,9 +1768,11 @@ resource "azurerm_storage_container" "cost_exports" {
 # Cost Management exports (env subscriptions) -> core storage
 # =============================================================================
 locals {
+  # Decide based on inputs / resolved RG, NOT on resources created in this plan
   cost_exports_enabled = (
     var.enable_cost_exports &&
-    length(try(azurerm_storage_account.cost_exports, [])) > 0
+    local.rg_core_name_resolved != null &&
+    local.rg_core_location_resolved != null
   )
 
   # Match your "dev => dev+qa" and "prod => prod+uat" pattern
