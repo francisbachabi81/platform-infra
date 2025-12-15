@@ -2623,45 +2623,60 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
 # ------------------------------------------------------------
 
 locals {
+  # Stable keys (always known at plan time)
+  ce_principals_by_name = {
+    dev_last_month     = try(jsondecode(azapi_resource.cost_export_dev_last_month[0].output).identity.principalId, null)
+    dev_mtd_daily      = try(jsondecode(azapi_resource.cost_export_dev_mtd_daily[0].output).identity.principalId, null)
+    dev_manual_custom  = try(jsondecode(azapi_resource.cost_export_dev_manual_custom[0].output).identity.principalId, null)
+
+    qa_last_month      = try(jsondecode(azapi_resource.cost_export_qa_last_month[0].output).identity.principalId, null)
+    qa_mtd_daily       = try(jsondecode(azapi_resource.cost_export_qa_mtd_daily[0].output).identity.principalId, null)
+    qa_manual_custom   = try(jsondecode(azapi_resource.cost_export_qa_manual_custom[0].output).identity.principalId, null)
+
+    prod_last_month    = try(jsondecode(azapi_resource.cost_export_prod_last_month[0].output).identity.principalId, null)
+    prod_mtd_daily     = try(jsondecode(azapi_resource.cost_export_prod_mtd_daily[0].output).identity.principalId, null)
+    prod_manual_custom = try(jsondecode(azapi_resource.cost_export_prod_manual_custom[0].output).identity.principalId, null)
+
+    uat_last_month     = try(jsondecode(azapi_resource.cost_export_uat_last_month[0].output).identity.principalId, null)
+    uat_mtd_daily      = try(jsondecode(azapi_resource.cost_export_uat_mtd_daily[0].output).identity.principalId, null)
+    uat_manual_custom  = try(jsondecode(azapi_resource.cost_export_uat_manual_custom[0].output).identity.principalId, null)
+
+    core_np_last_month    = try(jsondecode(azapi_resource.cost_export_core_nonprod_last_month[0].output).identity.principalId, null)
+    core_np_mtd_daily     = try(jsondecode(azapi_resource.cost_export_core_nonprod_mtd_daily[0].output).identity.principalId, null)
+    core_np_manual_custom = try(jsondecode(azapi_resource.cost_export_core_nonprod_manual_custom[0].output).identity.principalId, null)
+
+    core_pr_last_month    = try(jsondecode(azapi_resource.cost_export_core_prod_last_month[0].output).identity.principalId, null)
+    core_pr_mtd_daily     = try(jsondecode(azapi_resource.cost_export_core_prod_mtd_daily[0].output).identity.principalId, null)
+    core_pr_manual_custom = try(jsondecode(azapi_resource.cost_export_core_prod_manual_custom[0].output).identity.principalId, null)
+  }
+
+  # Filter out nulls (values can be unknown until apply, that's fine)
+  ce_principals_by_name_effective = {
+    for k, v in local.ce_principals_by_name : k => v
+    if v != null
+  }
+
   ce_sa_scope = local.cost_exports_enabled ? azurerm_storage_account.cost_exports[0].id : null
-
-  ce_principals = compact([
-    try(jsondecode(azapi_resource.cost_export_dev_last_month[0].output).identity.principalId, null),
-    try(jsondecode(azapi_resource.cost_export_dev_mtd_daily[0].output).identity.principalId, null),
-    try(jsondecode(azapi_resource.cost_export_dev_manual_custom[0].output).identity.principalId, null),
-
-    try(jsondecode(azapi_resource.cost_export_qa_last_month[0].output).identity.principalId, null),
-    try(jsondecode(azapi_resource.cost_export_qa_mtd_daily[0].output).identity.principalId, null),
-    try(jsondecode(azapi_resource.cost_export_qa_manual_custom[0].output).identity.principalId, null),
-
-    try(jsondecode(azapi_resource.cost_export_prod_last_month[0].output).identity.principalId, null),
-    try(jsondecode(azapi_resource.cost_export_prod_mtd_daily[0].output).identity.principalId, null),
-    try(jsondecode(azapi_resource.cost_export_prod_manual_custom[0].output).identity.principalId, null),
-
-    try(jsondecode(azapi_resource.cost_export_uat_last_month[0].output).identity.principalId, null),
-    try(jsondecode(azapi_resource.cost_export_uat_mtd_daily[0].output).identity.principalId, null),
-    try(jsondecode(azapi_resource.cost_export_uat_manual_custom[0].output).identity.principalId, null),
-
-    try(jsondecode(azapi_resource.cost_export_core_nonprod_last_month[0].output).identity.principalId, null),
-    try(jsondecode(azapi_resource.cost_export_core_nonprod_mtd_daily[0].output).identity.principalId, null),
-    try(jsondecode(azapi_resource.cost_export_core_nonprod_manual_custom[0].output).identity.principalId, null),
-
-    try(jsondecode(azapi_resource.cost_export_core_prod_last_month[0].output).identity.principalId, null),
-    try(jsondecode(azapi_resource.cost_export_core_prod_mtd_daily[0].output).identity.principalId, null),
-    try(jsondecode(azapi_resource.cost_export_core_prod_manual_custom[0].output).identity.principalId, null),
-  ])
 }
 
 resource "azurerm_role_assignment" "cost_exports_blob_contrib" {
   provider = azurerm.core
-  for_each = local.cost_exports_enabled ? { for pid in local.ce_principals : pid => pid } : {}
+
+  for_each = local.cost_exports_enabled ? local.ce_principals_by_name_effective : {}
 
   scope                = local.ce_sa_scope
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = each.value
-}
 
-resource "azurerm_resource_provider_registration" "cost_exports_rp" {
-  provider = azurerm.core
-  name     = "Microsoft.CostManagementExports"
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = local.ce_sa_scope != null
+      error_message = "Cost exports storage account scope not resolved."
+    }
+  }
 }
