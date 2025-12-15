@@ -1769,11 +1769,7 @@ resource "azurerm_storage_container" "cost_exports" {
 # =============================================================================
 locals {
   # Decide based on inputs / resolved RG, NOT on resources created in this plan
-  cost_exports_enabled = (
-    var.enable_cost_exports &&
-    local.rg_core_name_resolved != null &&
-    local.rg_core_location_resolved != null
-  )
+  cost_exports_enabled = var.enable_cost_exports
 
   # Match your "dev => dev+qa" and "prod => prod+uat" pattern
   cost_export_env_sets = {
@@ -1789,7 +1785,6 @@ locals {
     resourceId     = azurerm_storage_account.cost_exports[0].id
     container      = var.cost_exports_container_name
     rootFolderPath = "${var.cost_exports_root_folder}/${var.product}/${local.env_effective}/${var.region}"
-    type           = "AzureBlob"
   } : null
 }
 
@@ -1801,6 +1796,7 @@ resource "azapi_resource" "cost_export_dev_last_month" {
   name      = "ce-${var.product}-dev-${var.region}-last-month-monthly"
   parent_id = "/subscriptions/${local.dev_sub}"
   location  = var.location
+  schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
 
@@ -1811,7 +1807,9 @@ resource "azapi_resource" "cost_export_dev_last_month" {
         timeframe = "TheLastMonth"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { destination = local.cost_exports_destination }
+      deliveryInfo = { 
+        destination = local.cost_exports_destination 
+      }
       format       = "Csv"
       schedule = {
         recurrence = "Monthly"
@@ -1825,6 +1823,17 @@ resource "azapi_resource" "cost_export_dev_last_month" {
   }
 
   response_export_values = ["identity.principalId"]
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
+      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+    }
+  }
 }
 
 resource "azapi_resource" "cost_export_dev_mtd_daily" {
@@ -1834,6 +1843,7 @@ resource "azapi_resource" "cost_export_dev_mtd_daily" {
   name      = "ce-${var.product}-dev-${var.region}-mtd-daily"
   parent_id = "/subscriptions/${local.dev_sub}"
   location  = var.location
+  schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
 
@@ -1844,7 +1854,9 @@ resource "azapi_resource" "cost_export_dev_mtd_daily" {
         timeframe = "MonthToDate"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { destination = local.cost_exports_destination }
+      deliveryInfo = { 
+        destination = local.cost_exports_destination 
+      }
       format       = "Csv"
       schedule = {
         recurrence = "Daily"
@@ -1858,6 +1870,17 @@ resource "azapi_resource" "cost_export_dev_mtd_daily" {
   }
 
   response_export_values = ["identity.principalId"]
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
+      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+    }
+  }
 }
 
 resource "azapi_resource" "cost_export_dev_manual_custom" {
@@ -1867,6 +1890,7 @@ resource "azapi_resource" "cost_export_dev_manual_custom" {
   name      = "ce-${var.product}-dev-${var.region}-manual-custom"
   parent_id = "/subscriptions/${local.dev_sub}"
   location  = var.location
+  schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
 
@@ -1882,7 +1906,9 @@ resource "azapi_resource" "cost_export_dev_manual_custom" {
         }
         dataSet = { granularity = "Daily" }
       }
-      deliveryInfo = { destination = local.cost_exports_destination }
+      deliveryInfo = { 
+        destination = local.cost_exports_destination 
+      }
       format       = "Csv"
       schedule = {
         recurrence = "Monthly"
@@ -1895,6 +1921,17 @@ resource "azapi_resource" "cost_export_dev_manual_custom" {
   }
 
   response_export_values = ["identity.principalId"]
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
+      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+    }
+  }
 }
 
 # ---------- QA subscription exports ----------
@@ -1905,6 +1942,7 @@ resource "azapi_resource" "cost_export_qa_last_month" {
   name      = "ce-${var.product}-qa-${var.region}-last-month-monthly"
   parent_id = "/subscriptions/${local.qa_sub}"
   location  = var.location
+  schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
 
@@ -1915,7 +1953,9 @@ resource "azapi_resource" "cost_export_qa_last_month" {
         timeframe = "TheLastMonth"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { destination = local.cost_exports_destination }
+      deliveryInfo = { 
+        destination = local.cost_exports_destination 
+      }
       format       = "Csv"
       schedule = {
         recurrence = "Monthly"
@@ -1926,6 +1966,17 @@ resource "azapi_resource" "cost_export_qa_last_month" {
   }
 
   response_export_values = ["identity.principalId"]
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
+      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+    }
+  }
 }
 
 resource "azapi_resource" "cost_export_qa_mtd_daily" {
@@ -1935,6 +1986,7 @@ resource "azapi_resource" "cost_export_qa_mtd_daily" {
   name      = "ce-${var.product}-qa-${var.region}-mtd-daily"
   parent_id = "/subscriptions/${local.qa_sub}"
   location  = var.location
+  schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
 
@@ -1945,7 +1997,9 @@ resource "azapi_resource" "cost_export_qa_mtd_daily" {
         timeframe = "MonthToDate"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { destination = local.cost_exports_destination }
+      deliveryInfo = { 
+        destination = local.cost_exports_destination 
+      }
       format       = "Csv"
       schedule = {
         recurrence = "Daily"
@@ -1956,6 +2010,17 @@ resource "azapi_resource" "cost_export_qa_mtd_daily" {
   }
 
   response_export_values = ["identity.principalId"]
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
+      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+    }
+  }
 }
 
 resource "azapi_resource" "cost_export_qa_manual_custom" {
@@ -1965,6 +2030,7 @@ resource "azapi_resource" "cost_export_qa_manual_custom" {
   name      = "ce-${var.product}-qa-${var.region}-manual-custom"
   parent_id = "/subscriptions/${local.qa_sub}"
   location  = var.location
+  schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
 
@@ -1979,7 +2045,9 @@ resource "azapi_resource" "cost_export_qa_manual_custom" {
         }
         dataSet = { granularity = "Daily" }
       }
-      deliveryInfo = { destination = local.cost_exports_destination }
+      deliveryInfo = { 
+        destination = local.cost_exports_destination 
+      }
       format       = "Csv"
       schedule = {
         recurrence = "Monthly"
@@ -1990,6 +2058,17 @@ resource "azapi_resource" "cost_export_qa_manual_custom" {
   }
 
   response_export_values = ["identity.principalId"]
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
+      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+    }
+  }
 }
 
 # ---------- PROD subscription exports ----------
@@ -2000,6 +2079,7 @@ resource "azapi_resource" "cost_export_prod_last_month" {
   name      = "ce-${var.product}-prod-${var.region}-last-month-monthly"
   parent_id = "/subscriptions/${local.prod_sub}"
   location  = var.location
+  schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
 
@@ -2010,7 +2090,9 @@ resource "azapi_resource" "cost_export_prod_last_month" {
         timeframe = "TheLastMonth"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { destination = local.cost_exports_destination }
+      deliveryInfo = { 
+        destination = local.cost_exports_destination 
+      }
       format       = "Csv"
       schedule = {
         recurrence = "Monthly"
@@ -2021,6 +2103,17 @@ resource "azapi_resource" "cost_export_prod_last_month" {
   }
 
   response_export_values = ["identity.principalId"]
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
+      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+    }
+  }
 }
 
 resource "azapi_resource" "cost_export_prod_mtd_daily" {
@@ -2030,6 +2123,7 @@ resource "azapi_resource" "cost_export_prod_mtd_daily" {
   name      = "ce-${var.product}-prod-${var.region}-mtd-daily"
   parent_id = "/subscriptions/${local.prod_sub}"
   location  = var.location
+  schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
 
@@ -2040,7 +2134,9 @@ resource "azapi_resource" "cost_export_prod_mtd_daily" {
         timeframe = "MonthToDate"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { destination = local.cost_exports_destination }
+      deliveryInfo = { 
+        destination = local.cost_exports_destination 
+      }
       format       = "Csv"
       schedule = {
         recurrence = "Daily"
@@ -2051,6 +2147,17 @@ resource "azapi_resource" "cost_export_prod_mtd_daily" {
   }
 
   response_export_values = ["identity.principalId"]
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
+      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+    }
+  }
 }
 
 resource "azapi_resource" "cost_export_prod_manual_custom" {
@@ -2060,6 +2167,7 @@ resource "azapi_resource" "cost_export_prod_manual_custom" {
   name      = "ce-${var.product}-prod-${var.region}-manual-custom"
   parent_id = "/subscriptions/${local.prod_sub}"
   location  = var.location
+  schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
 
@@ -2074,7 +2182,9 @@ resource "azapi_resource" "cost_export_prod_manual_custom" {
         }
         dataSet = { granularity = "Daily" }
       }
-      deliveryInfo = { destination = local.cost_exports_destination }
+      deliveryInfo = { 
+        destination = local.cost_exports_destination 
+      }
       format       = "Csv"
       schedule = {
         recurrence = "Monthly"
@@ -2085,6 +2195,17 @@ resource "azapi_resource" "cost_export_prod_manual_custom" {
   }
 
   response_export_values = ["identity.principalId"]
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
+      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+    }
+  }
 }
 
 # ---------- UAT subscription exports ----------
@@ -2095,6 +2216,7 @@ resource "azapi_resource" "cost_export_uat_last_month" {
   name      = "ce-${var.product}-uat-${var.region}-last-month-monthly"
   parent_id = "/subscriptions/${local.uat_sub}"
   location  = var.location
+  schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
 
@@ -2105,7 +2227,9 @@ resource "azapi_resource" "cost_export_uat_last_month" {
         timeframe = "TheLastMonth"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { destination = local.cost_exports_destination }
+      deliveryInfo = { 
+        destination = local.cost_exports_destination 
+      }
       format       = "Csv"
       schedule = {
         recurrence = "Monthly"
@@ -2116,6 +2240,17 @@ resource "azapi_resource" "cost_export_uat_last_month" {
   }
 
   response_export_values = ["identity.principalId"]
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
+      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+    }
+  }
 }
 
 resource "azapi_resource" "cost_export_uat_mtd_daily" {
@@ -2125,6 +2260,7 @@ resource "azapi_resource" "cost_export_uat_mtd_daily" {
   name      = "ce-${var.product}-uat-${var.region}-mtd-daily"
   parent_id = "/subscriptions/${local.uat_sub}"
   location  = var.location
+  schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
 
@@ -2135,7 +2271,9 @@ resource "azapi_resource" "cost_export_uat_mtd_daily" {
         timeframe = "MonthToDate"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { destination = local.cost_exports_destination }
+      deliveryInfo = { 
+        destination = local.cost_exports_destination 
+      }
       format       = "Csv"
       schedule = {
         recurrence = "Daily"
@@ -2146,6 +2284,17 @@ resource "azapi_resource" "cost_export_uat_mtd_daily" {
   }
 
   response_export_values = ["identity.principalId"]
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
+      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+    }
+  }
 }
 
 resource "azapi_resource" "cost_export_uat_manual_custom" {
@@ -2155,6 +2304,7 @@ resource "azapi_resource" "cost_export_uat_manual_custom" {
   name      = "ce-${var.product}-uat-${var.region}-manual-custom"
   parent_id = "/subscriptions/${local.uat_sub}"
   location  = var.location
+  schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
 
@@ -2169,7 +2319,9 @@ resource "azapi_resource" "cost_export_uat_manual_custom" {
         }
         dataSet = { granularity = "Daily" }
       }
-      deliveryInfo = { destination = local.cost_exports_destination }
+      deliveryInfo = { 
+        destination = local.cost_exports_destination 
+      }
       format       = "Csv"
       schedule = {
         recurrence = "Monthly"
@@ -2180,6 +2332,17 @@ resource "azapi_resource" "cost_export_uat_manual_custom" {
   }
 
   response_export_values = ["identity.principalId"]
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
+      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+    }
+  }
 }
 
 # ---------- CORE subscription exports ----------
@@ -2191,6 +2354,7 @@ resource "azapi_resource" "cost_export_core_nonprod_last_month" {
   name      = "ce-${var.product}-np-core-${var.region}-last-month-monthly"
   parent_id = "/subscriptions/${local.core_sub}"
   location  = var.location
+  schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
 
@@ -2201,7 +2365,9 @@ resource "azapi_resource" "cost_export_core_nonprod_last_month" {
         timeframe = "TheLastMonth"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { destination = local.cost_exports_destination }
+      deliveryInfo = { 
+        destination = local.cost_exports_destination 
+      }
       format       = "Csv"
       schedule = {
         recurrence = "Monthly"
@@ -2212,6 +2378,17 @@ resource "azapi_resource" "cost_export_core_nonprod_last_month" {
   }
 
   response_export_values = ["identity.principalId"]
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
+      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+    }
+  }
 }
 
 resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
@@ -2221,6 +2398,7 @@ resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
   name      = "ce-${var.product}-np-core-${var.region}-mtd-daily"
   parent_id = "/subscriptions/${local.core_sub}"
   location  = var.location
+  schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
 
@@ -2231,7 +2409,9 @@ resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
         timeframe = "MonthToDate"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { destination = local.cost_exports_destination }
+      deliveryInfo = { 
+        destination = local.cost_exports_destination 
+      }
       format       = "Csv"
       schedule = {
         recurrence = "Daily"
@@ -2242,6 +2422,17 @@ resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
   }
 
   response_export_values = ["identity.principalId"]
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
+      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+    }
+  }
 }
 
 resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
@@ -2251,6 +2442,7 @@ resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
   name      = "ce-${var.product}-np-core-${var.region}-manual-custom"
   parent_id = "/subscriptions/${local.core_sub}"
   location  = var.location
+  schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
 
@@ -2265,7 +2457,9 @@ resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
         }
         dataSet = { granularity = "Daily" }
       }
-      deliveryInfo = { destination = local.cost_exports_destination }
+      deliveryInfo = { 
+        destination = local.cost_exports_destination 
+      }
       format       = "Csv"
       schedule = {
         recurrence = "Monthly"
@@ -2276,6 +2470,17 @@ resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
   }
 
   response_export_values = ["identity.principalId"]
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
+      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+    }
+  }
 }
 
 # prod-core runs with env_effective == "prod"
@@ -2286,6 +2491,7 @@ resource "azapi_resource" "cost_export_core_prod_last_month" {
   name      = "ce-${var.product}-pr-core-${var.region}-last-month-monthly"
   parent_id = "/subscriptions/${local.core_sub}"
   location  = var.location
+  schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
 
@@ -2296,7 +2502,9 @@ resource "azapi_resource" "cost_export_core_prod_last_month" {
         timeframe = "TheLastMonth"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { destination = local.cost_exports_destination }
+      deliveryInfo = { 
+        destination = local.cost_exports_destination 
+      }
       format       = "Csv"
       schedule = {
         recurrence = "Monthly"
@@ -2307,6 +2515,17 @@ resource "azapi_resource" "cost_export_core_prod_last_month" {
   }
 
   response_export_values = ["identity.principalId"]
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
+      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+    }
+  }
 }
 
 resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
@@ -2316,6 +2535,7 @@ resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
   name      = "ce-${var.product}-pr-core-${var.region}-mtd-daily"
   parent_id = "/subscriptions/${local.core_sub}"
   location  = var.location
+  schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
 
@@ -2326,7 +2546,9 @@ resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
         timeframe = "MonthToDate"
         dataSet   = { granularity = "Daily" }
       }
-      deliveryInfo = { destination = local.cost_exports_destination }
+      deliveryInfo = { 
+        destination = local.cost_exports_destination 
+      }
       format       = "Csv"
       schedule = {
         recurrence = "Daily"
@@ -2337,6 +2559,17 @@ resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
   }
 
   response_export_values = ["identity.principalId"]
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
+      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+    }
+  }
 }
 
 resource "azapi_resource" "cost_export_core_prod_manual_custom" {
@@ -2346,6 +2579,7 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
   name      = "ce-${var.product}-pr-core-${var.region}-manual-custom"
   parent_id = "/subscriptions/${local.core_sub}"
   location  = var.location
+  schema_validation_enabled = false
 
   identity { type = "SystemAssigned" }
 
@@ -2360,7 +2594,9 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
         }
         dataSet = { granularity = "Daily" }
       }
-      deliveryInfo = { destination = local.cost_exports_destination }
+      deliveryInfo = { 
+        destination = local.cost_exports_destination 
+      }
       format       = "Csv"
       schedule = {
         recurrence = "Monthly"
@@ -2371,6 +2607,17 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
   }
 
   response_export_values = ["identity.principalId"]
+  depends_on = [
+    azurerm_storage_account.cost_exports,
+    azurerm_storage_container.cost_exports,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = try(azurerm_storage_account.cost_exports[0].id, null) != null
+      error_message = "Cost exports storage account was not created/resolved, but exports were enabled."
+    }
+  }
 }
 
 # ------------------------------------------------------------
