@@ -1814,7 +1814,7 @@ locals {
 resource "azapi_resource" "cost_export_dev_last_month" {
   provider                  = azapi.dev
   count                     = contains(local.cost_export_targets, "dev") ? 1 : 0
-  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  type                      = "Microsoft.CostManagement/exports@2025-03-01"
   name                      = "ce-${var.product}-dev-${var.region}-last-month-monthly"
   parent_id                 = "/subscriptions/${local.dev_sub}"
   location                  = var.location
@@ -1871,7 +1871,7 @@ resource "azapi_resource" "cost_export_dev_last_month" {
 resource "azapi_resource" "cost_export_dev_mtd_daily" {
   provider                  = azapi.dev
   count                     = contains(local.cost_export_targets, "dev") ? 1 : 0
-  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  type                      = "Microsoft.CostManagement/exports@2025-03-01"
   name                      = "ce-${var.product}-dev-${var.region}-mtd-daily"
   parent_id                 = "/subscriptions/${local.dev_sub}"
   location                  = var.location
@@ -1928,7 +1928,7 @@ resource "azapi_resource" "cost_export_dev_mtd_daily" {
 resource "azapi_resource" "cost_export_dev_manual_custom" {
   provider                  = azapi.dev
   count                     = contains(local.cost_export_targets, "dev") ? 1 : 0
-  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  type                      = "Microsoft.CostManagement/exports@2025-03-01"
   name                      = "ce-${var.product}-dev-${var.region}-manual-custom"
   parent_id                 = "/subscriptions/${local.dev_sub}"
   location                  = var.location
@@ -1990,7 +1990,7 @@ resource "azapi_resource" "cost_export_dev_manual_custom" {
 resource "azapi_resource" "cost_export_qa_last_month" {
   provider                  = azapi.qa
   count                     = contains(local.cost_export_targets, "qa") ? 1 : 0
-  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  type                      = "Microsoft.CostManagement/exports@2025-03-01"
   name                      = "ce-${var.product}-qa-${var.region}-last-month-monthly"
   parent_id                 = "/subscriptions/${local.qa_sub}"
   location                  = var.location
@@ -2047,7 +2047,7 @@ resource "azapi_resource" "cost_export_qa_last_month" {
 resource "azapi_resource" "cost_export_qa_mtd_daily" {
   provider                  = azapi.qa
   count                     = contains(local.cost_export_targets, "qa") ? 1 : 0
-  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  type                      = "Microsoft.CostManagement/exports@2025-03-01"
   name                      = "ce-${var.product}-qa-${var.region}-mtd-daily"
   parent_id                 = "/subscriptions/${local.qa_sub}"
   location                  = var.location
@@ -2104,7 +2104,7 @@ resource "azapi_resource" "cost_export_qa_mtd_daily" {
 resource "azapi_resource" "cost_export_qa_manual_custom" {
   provider                  = azapi.qa
   count                     = contains(local.cost_export_targets, "qa") ? 1 : 0
-  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  type                      = "Microsoft.CostManagement/exports@2025-03-01"
   name                      = "ce-${var.product}-qa-${var.region}-manual-custom"
   parent_id                 = "/subscriptions/${local.qa_sub}"
   location                  = var.location
@@ -2166,7 +2166,7 @@ resource "azapi_resource" "cost_export_qa_manual_custom" {
 resource "azapi_resource" "cost_export_prod_last_month" {
   provider                  = azapi.prod
   count                     = contains(local.cost_export_targets, "prod") ? 1 : 0
-  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  type                      = "Microsoft.CostManagement/exports@2025-03-01"
   name                      = "ce-${var.product}-prod-${var.region}-last-month-monthly"
   parent_id                 = "/subscriptions/${local.prod_sub}"
   location                  = var.location
@@ -2223,7 +2223,7 @@ resource "azapi_resource" "cost_export_prod_last_month" {
 resource "azapi_resource" "cost_export_prod_mtd_daily" {
   provider                  = azapi.prod
   count                     = contains(local.cost_export_targets, "prod") ? 1 : 0
-  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  type                      = "Microsoft.CostManagement/exports@2025-03-01"
   name                      = "ce-${var.product}-prod-${var.region}-mtd-daily"
   parent_id                 = "/subscriptions/${local.prod_sub}"
   location                  = var.location
@@ -2280,7 +2280,7 @@ resource "azapi_resource" "cost_export_prod_mtd_daily" {
 resource "azapi_resource" "cost_export_prod_manual_custom" {
   provider                  = azapi.prod
   count                     = contains(local.cost_export_targets, "prod") ? 1 : 0
-  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  type                      = "Microsoft.CostManagement/exports@2025-03-01"
   name                      = "ce-${var.product}-prod-${var.region}-manual-custom"
   parent_id                 = "/subscriptions/${local.prod_sub}"
   location                  = var.location
@@ -2342,7 +2342,7 @@ resource "azapi_resource" "cost_export_prod_manual_custom" {
 resource "azapi_resource" "cost_export_uat_last_month" {
   provider                  = azapi.uat
   count                     = contains(local.cost_export_targets, "uat") ? 1 : 0
-  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  type                      = "Microsoft.CostManagement/exports@2025-03-01"
   name                      = "ce-${var.product}-uat-${var.region}-last-month-monthly"
   parent_id                 = "/subscriptions/${local.uat_sub}"
   location                  = var.location
@@ -2399,7 +2399,7 @@ resource "azapi_resource" "cost_export_uat_last_month" {
 resource "azapi_resource" "cost_export_uat_mtd_daily" {
   provider                  = azapi.uat
   count                     = contains(local.cost_export_targets, "uat") ? 1 : 0
-  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  type                      = "Microsoft.CostManagement/exports@2025-03-01"
   name                      = "ce-${var.product}-uat-${var.region}-mtd-daily"
   parent_id                 = "/subscriptions/${local.uat_sub}"
   location                  = var.location
@@ -2456,7 +2456,7 @@ resource "azapi_resource" "cost_export_uat_mtd_daily" {
 resource "azapi_resource" "cost_export_uat_manual_custom" {
   provider                  = azapi.uat
   count                     = contains(local.cost_export_targets, "uat") ? 1 : 0
-  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  type                      = "Microsoft.CostManagement/exports@2025-03-01"
   name                      = "ce-${var.product}-uat-${var.region}-manual-custom"
   parent_id                 = "/subscriptions/${local.uat_sub}"
   location                  = var.location
@@ -2518,7 +2518,7 @@ resource "azapi_resource" "cost_export_uat_manual_custom" {
 resource "azapi_resource" "cost_export_core_nonprod_last_month" {
   provider                  = azapi.core
   count                     = (local.cost_exports_enabled && local.env_effective == "dev") ? 1 : 0
-  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  type                      = "Microsoft.CostManagement/exports@2025-03-01"
   name                      = "ce-${var.product}-np-core-${var.region}-last-month-monthly"
   parent_id                 = "/subscriptions/${local.core_sub}"
   location                  = var.location
@@ -2575,7 +2575,7 @@ resource "azapi_resource" "cost_export_core_nonprod_last_month" {
 resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
   provider                  = azapi.core
   count                     = (local.cost_exports_enabled && local.env_effective == "dev") ? 1 : 0
-  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  type                      = "Microsoft.CostManagement/exports@2025-03-01"
   name                      = "ce-${var.product}-np-core-${var.region}-mtd-daily"
   parent_id                 = "/subscriptions/${local.core_sub}"
   location                  = var.location
@@ -2632,7 +2632,7 @@ resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
 resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
   provider                  = azapi.core
   count                     = (local.cost_exports_enabled && local.env_effective == "dev") ? 1 : 0
-  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  type                      = "Microsoft.CostManagement/exports@2025-03-01"
   name                      = "ce-${var.product}-np-core-${var.region}-manual-custom"
   parent_id                 = "/subscriptions/${local.core_sub}"
   location                  = var.location
@@ -2693,7 +2693,7 @@ resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
 resource "azapi_resource" "cost_export_core_prod_last_month" {
   provider                  = azapi.core
   count                     = (local.cost_exports_enabled && local.env_effective == "prod") ? 1 : 0
-  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  type                      = "Microsoft.CostManagement/exports@2025-03-01"
   name                      = "ce-${var.product}-pr-core-${var.region}-last-month-monthly"
   parent_id                 = "/subscriptions/${local.core_sub}"
   location                  = var.location
@@ -2750,7 +2750,7 @@ resource "azapi_resource" "cost_export_core_prod_last_month" {
 resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
   provider                  = azapi.core
   count                     = (local.cost_exports_enabled && local.env_effective == "prod") ? 1 : 0
-  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  type                      = "Microsoft.CostManagement/exports@2025-03-01"
   name                      = "ce-${var.product}-pr-core-${var.region}-mtd-daily"
   parent_id                 = "/subscriptions/${local.core_sub}"
   location                  = var.location
@@ -2807,7 +2807,7 @@ resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
 resource "azapi_resource" "cost_export_core_prod_manual_custom" {
   provider                  = azapi.core
   count                     = (local.cost_exports_enabled && local.env_effective == "prod") ? 1 : 0
-  type                      = "Microsoft.CostManagement/exports@2024-08-01"
+  type                      = "Microsoft.CostManagement/exports@2025-03-01"
   name                      = "ce-${var.product}-pr-core-${var.region}-manual-custom"
   parent_id                 = "/subscriptions/${local.core_sub}"
   location                  = var.location
