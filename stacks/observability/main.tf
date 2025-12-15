@@ -1747,27 +1747,27 @@ resource "azurerm_resource_provider_registration" "cost_exports_rp_prod" {
 # --- RP Registration barriers (helps with eventual consistency in ARM) ---
 resource "time_sleep" "wait_cost_exports_rp_core" {
   depends_on      = [azurerm_resource_provider_registration.cost_exports_rp_core]
-  create_duration = "90s"
+  create_duration = "8m"
 }
 
 resource "time_sleep" "wait_cost_exports_rp_dev" {
   depends_on      = [azurerm_resource_provider_registration.cost_exports_rp_dev]
-  create_duration = "90s"
+  create_duration = "8m"
 }
 
 resource "time_sleep" "wait_cost_exports_rp_qa" {
   depends_on      = [azurerm_resource_provider_registration.cost_exports_rp_qa]
-  create_duration = "90s"
+  create_duration = "8m"
 }
 
 resource "time_sleep" "wait_cost_exports_rp_uat" {
   depends_on      = [azurerm_resource_provider_registration.cost_exports_rp_uat]
-  create_duration = "90s"
+  create_duration = "8m"
 }
 
 resource "time_sleep" "wait_cost_exports_rp_prod" {
   depends_on      = [azurerm_resource_provider_registration.cost_exports_rp_prod]
-  create_duration = "90s"
+  create_duration = "8m"
 }
 
 resource "random_string" "cost_sa_sfx" {
@@ -1788,6 +1788,7 @@ locals {
   )
 
   cost_exports_schedule_from = "${formatdate("YYYY-MM-DD", timeadd(timestamp(), var.cost_exports_schedule_start_offset))}T00:00:00Z"
+  cost_exports_schedule_to   = "2035-01-01T00:00:00Z"
 }
 
 resource "azurerm_storage_account" "cost_exports" {
@@ -1879,6 +1880,7 @@ resource "azapi_resource" "cost_export_dev_last_month" {
         recurrence = "Monthly"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
+          to   = local.cost_exports_schedule_to
         }
         status = "Active"
       }
@@ -1941,6 +1943,7 @@ resource "azapi_resource" "cost_export_dev_mtd_daily" {
         recurrence = "Daily"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
+          to   = local.cost_exports_schedule_to
         }
         status = "Active"
       }
@@ -2007,6 +2010,7 @@ resource "azapi_resource" "cost_export_dev_manual_custom" {
         recurrence = "Monthly"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
+          to   = local.cost_exports_schedule_to
         }
         status = "Inactive"
       }
@@ -2070,6 +2074,7 @@ resource "azapi_resource" "cost_export_qa_last_month" {
         recurrence = "Monthly"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
+          to   = local.cost_exports_schedule_to
         }
         status = "Active"
       }
@@ -2132,6 +2137,7 @@ resource "azapi_resource" "cost_export_qa_mtd_daily" {
         recurrence = "Daily"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
+          to   = local.cost_exports_schedule_to
         }
         status = "Active"
       }
@@ -2198,6 +2204,7 @@ resource "azapi_resource" "cost_export_qa_manual_custom" {
         recurrence = "Monthly"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
+          to   = local.cost_exports_schedule_to
         }
         status = "Inactive"
       }
@@ -2261,6 +2268,7 @@ resource "azapi_resource" "cost_export_prod_last_month" {
         recurrence = "Monthly"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
+          to   = local.cost_exports_schedule_to
         }
         status = "Active"
       }
@@ -2323,6 +2331,7 @@ resource "azapi_resource" "cost_export_prod_mtd_daily" {
         recurrence = "Daily"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
+          to   = local.cost_exports_schedule_to
         }
         status = "Active"
       }
@@ -2389,6 +2398,7 @@ resource "azapi_resource" "cost_export_prod_manual_custom" {
         recurrence = "Monthly"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
+          to   = local.cost_exports_schedule_to
         }
         status = "Inactive"
       }
@@ -2452,6 +2462,7 @@ resource "azapi_resource" "cost_export_uat_last_month" {
         recurrence = "Monthly"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
+          to   = local.cost_exports_schedule_to
         }
         status = "Active"
       }
@@ -2514,6 +2525,7 @@ resource "azapi_resource" "cost_export_uat_mtd_daily" {
         recurrence = "Daily"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
+          to   = local.cost_exports_schedule_to
         }
         status = "Active"
       }
@@ -2580,6 +2592,7 @@ resource "azapi_resource" "cost_export_uat_manual_custom" {
         recurrence = "Monthly"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
+          to   = local.cost_exports_schedule_to
         }
         status = "Inactive"
       }
@@ -2643,6 +2656,7 @@ resource "azapi_resource" "cost_export_core_nonprod_last_month" {
         recurrence = "Monthly"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
+          to   = local.cost_exports_schedule_to
         }
         status = "Active"
       }
@@ -2705,6 +2719,7 @@ resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
         recurrence = "Daily"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
+          to   = local.cost_exports_schedule_to
         }
         status = "Active"
       }
@@ -2771,6 +2786,7 @@ resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
         recurrence = "Monthly"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
+          to   = local.cost_exports_schedule_to
         }
         status = "Inactive"
       }
@@ -2833,6 +2849,7 @@ resource "azapi_resource" "cost_export_core_prod_last_month" {
         recurrence = "Monthly"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
+          to   = local.cost_exports_schedule_to
         }
         status = "Active"
       }
@@ -2895,6 +2912,7 @@ resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
         recurrence = "Daily"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
+          to   = local.cost_exports_schedule_to
         }
         status = "Active"
       }
@@ -2961,6 +2979,7 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
         recurrence = "Monthly"
         recurrencePeriod = {
           from = local.cost_exports_schedule_from
+          to   = local.cost_exports_schedule_to
         }
         status = "Inactive"
       }
