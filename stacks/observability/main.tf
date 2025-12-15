@@ -1695,12 +1695,6 @@ resource "azurerm_network_watcher_flow_log" "nsg_uat" {
 # AzAPI providers for Cost Management Exports (subscription-scoped resources)
 # =============================================================================
 provider "azapi" {
-  alias           = "core"
-  subscription_id = local.core_sub
-  tenant_id       = local.core_tenant
-}
-
-provider "azapi" {
   alias           = "dev"
   subscription_id = local.dev_sub
   tenant_id       = local.dev_ten
