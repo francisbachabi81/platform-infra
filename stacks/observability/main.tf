@@ -1782,8 +1782,7 @@ resource "azurerm_storage_account" "cost_exports" {
   tags = var.tags_extra
 
   depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_rp_core,
+    azurerm_resource_provider_registration.cost_exports_rp_core
   ]
 
   lifecycle {
@@ -1832,7 +1831,6 @@ locals {
   cost_exports_depends_on = [
     # Destination subscription RP registration + destination storage readiness
     azurerm_resource_provider_registration.cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_rp_core,
     azurerm_storage_account.cost_exports,
     azurerm_storage_container.cost_exports,
 
