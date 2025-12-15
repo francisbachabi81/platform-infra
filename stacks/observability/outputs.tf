@@ -61,3 +61,19 @@ output "nsg_diag_categories_debug" {
     }
   }
 }
+
+output "cost_exports_storage" {
+  value = var.enable_cost_exports ? {
+    id        = try(azurerm_storage_account.cost_exports[0].id, null)
+    name      = try(azurerm_storage_account.cost_exports[0].name, null)
+    container = var.cost_exports_container_name
+    root      = var.cost_exports_root_folder
+  } : null
+}
+
+output "cost_exports_execute_examples" {
+  value = var.enable_cost_exports ? {
+    # Example: execute the DEV manual export for a given custom month
+    dev_manual_execute = "az rest --method post --url \"https://management.azure.com/subscriptions/${local.dev_sub}/providers/Microsoft.CostManagement/exports/ce-${var.product}-dev-${var.region}-manual-custom/execute?api-version=2025-03-01\" --body '{\"timePeriod\":{\"from\":\"2025-11-01T00:00:00Z\",\"to\":\"2025-11-30T23:59:59Z\"}}'"
+  } : null
+}

@@ -547,3 +547,34 @@ variable "cosmos_log_categories" {
     "ControlPlaneRequests",
   ]
 }
+
+# Cost exports (Cost Management)
+variable "enable_cost_exports" {
+  description = "Enable Cost Management exports (scheduled + manual) to a core storage account."
+  type        = bool
+  default     = false
+}
+
+variable "cost_exports_container_name" {
+  description = "Blob container name for cost exports."
+  type        = string
+  default     = "cost-exports"
+}
+
+variable "cost_exports_root_folder" {
+  description = "Root folder path inside the container."
+  type        = string
+  default     = "cost-management"
+}
+
+variable "cost_exports_schedule_start_offset" {
+  description = "How far in the future to set the schedule start date (must be in the future). Examples: \"24h\", \"48h\"."
+  type        = string
+  default     = "24h"
+}
+
+variable "cost_exports_schedule_end_date" {
+  description = "Optional schedule end date (ISO8601). Leave null for no end date."
+  type        = string
+  default     = null
+}

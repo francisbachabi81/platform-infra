@@ -1,4 +1,6 @@
+# =============================================================================
 # Environment / plane resolution and base naming
+# =============================================================================
 locals {
   env_norm   = var.env == null ? null : lower(var.env)
   plane_norm = var.plane == null ? null : lower(var.plane)
@@ -19,27 +21,14 @@ locals {
   plane_code = local.plane_effective == "nonprod" ? "np" : "pr"
 
   activity_alert_location = "Global"
-
-  ag_name_default = "ag-obs-${var.product}-${local.env_effective}-${var.region}-01"
+  ag_name_default         = "ag-obs-${var.product}-${local.env_effective}-${var.region}-01"
 }
 
+# =============================================================================
 # Base provider and remote state
-provider "azurerm" {
-  features {}
+# =============================================================================
 
-  subscription_id = coalesce(
-    try(data.terraform_remote_state.platform.outputs.meta.subscription, null),
-    var.subscription_id
-  )
-
-  tenant_id = coalesce(
-    try(data.terraform_remote_state.platform.outputs.meta.tenant, null),
-    var.tenant_id
-  )
-
-  environment = var.product == "hrz" ? "usgovernment" : "public"
-}
-
+# Remote state
 data "terraform_remote_state" "network" {
   backend = "azurerm"
   config = {
@@ -73,11 +62,32 @@ data "terraform_remote_state" "platform" {
   }
 }
 
+# Base provider (default)
+provider "azurerm" {
+  features {}
+
+  subscription_id = coalesce(
+    try(data.terraform_remote_state.platform.outputs.meta.subscription, null),
+    var.subscription_id
+  )
+
+  tenant_id = coalesce(
+    try(data.terraform_remote_state.platform.outputs.meta.tenant, null),
+    var.tenant_id
+  )
+
+  environment = var.product == "hrz" ? "usgovernment" : "public"
+}
+
+# =============================================================================
 # Subscription / tenant resolution and provider aliases
+# =============================================================================
 locals {
   product_env = var.product == "hrz" ? "usgovernment" : "public"
+
   core_sub    = trimspace(coalesce(var.core_subscription_id, var.subscription_id))
   core_tenant = trimspace(coalesce(var.core_tenant_id,     var.tenant_id))
+
   env_sub     = trimspace(var.env_subscription_id)
   env_tenant  = trimspace(coalesce(var.env_tenant_id, var.tenant_id))
 }
@@ -96,6 +106,7 @@ locals {
   prod_ten = (var.prod_tenant_id       != null && trimspace(var.prod_tenant_id)       != "") ? var.prod_tenant_id       : var.core_tenant_id
 }
 
+# azurerm aliases
 provider "azurerm" {
   alias           = "env"
   features {}
@@ -113,7 +124,7 @@ provider "azurerm" {
 }
 
 provider "azurerm" {
-  alias    = "dev"
+  alias           = "dev"
   features {}
   subscription_id = local.dev_sub
   tenant_id       = local.dev_ten
@@ -121,7 +132,7 @@ provider "azurerm" {
 }
 
 provider "azurerm" {
-  alias    = "qa"
+  alias           = "qa"
   features {}
   subscription_id = local.qa_sub
   tenant_id       = local.qa_ten
@@ -129,7 +140,7 @@ provider "azurerm" {
 }
 
 provider "azurerm" {
-  alias    = "uat"
+  alias           = "uat"
   features {}
   subscription_id = local.uat_sub
   tenant_id       = local.uat_ten
@@ -137,16 +148,27 @@ provider "azurerm" {
 }
 
 provider "azurerm" {
-  alias    = "prod"
+  alias           = "prod"
   features {}
   subscription_id = local.prod_sub
   tenant_id       = local.prod_ten
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
+# =============================================================================
 # Caller identity and RG discovery
+# =============================================================================
 data "azurerm_client_config" "core" { provider = azurerm.core }
-data "azurerm_client_config" "env"  { provider = azurerm.env  }
+data "azurerm_client_config" "env"  { provider = azurerm.env }
+
+# (locals depend on remote state outputs)
+locals {
+  rg_core_name = try(data.terraform_remote_state.core.outputs.meta.rg_core_name, null)
+  rg_app_name  = coalesce(
+    var.env_rg_name,
+    try(data.terraform_remote_state.platform.outputs.meta.rg_name, null)
+  )
+}
 
 data "azurerm_resource_group" "core_rg" {
   provider = azurerm.core
@@ -161,17 +183,20 @@ data "azurerm_resource_group" "env_rg" {
 }
 
 locals {
-  sub_core_resolved       = try(data.azurerm_client_config.core.subscription_id, null)
-  sub_env_resolved        = try(data.azurerm_client_config.env.subscription_id, null)
-  rg_env_name_resolved    = try(data.azurerm_resource_group.env_rg[0].name, null)
-  rg_env_id_resolved      = try(data.azurerm_resource_group.env_rg[0].id,   null)
-  rg_core_name_resolved   = try(data.azurerm_resource_group.core_rg[0].name, null)
+  sub_core_resolved = try(data.azurerm_client_config.core.subscription_id, null)
+  sub_env_resolved  = try(data.azurerm_client_config.env.subscription_id,  null)
 
+  rg_env_name_resolved  = try(data.azurerm_resource_group.env_rg[0].name, null)
+  rg_env_id_resolved    = try(data.azurerm_resource_group.env_rg[0].id,   null)
+
+  rg_core_name_resolved = try(data.azurerm_resource_group.core_rg[0].name,     null)
+  rg_core_id_resolved   = try(data.azurerm_resource_group.core_rg[0].id,       null)
   rg_core_location_resolved = try(data.azurerm_resource_group.core_rg[0].location, null)
-  rg_core_id_resolved       = try(data.azurerm_resource_group.core_rg[0].id, null)
 }
 
+# =============================================================================
 # Resource ID collection and maps
+# =============================================================================
 locals {
   law_id = coalesce(
     var.law_workspace_id_override,
@@ -184,12 +209,6 @@ locals {
   platform_app = try(data.terraform_remote_state.platform.outputs.app, {})
   core_ids     = try(data.terraform_remote_state.core.outputs.ids, {})
   net_vpng     = try(data.terraform_remote_state.network.outputs.vpn_gateway.id, null)
-
-  rg_core_name = try(data.terraform_remote_state.core.outputs.meta.rg_core_name, null)
-  rg_app_name  = coalesce(
-    var.env_rg_name,
-    try(data.terraform_remote_state.platform.outputs.meta.rg_name, null)
-  )
 
   ids_kv = compact(concat(
     [
@@ -222,10 +241,10 @@ locals {
   ))
 
   ids_aks = compact([
-    try(data.terraform_remote_state.platform.outputs.aks.id,       null),
-    try(data.terraform_remote_state.platform.outputs.aks_id,       null),
-    try(data.terraform_remote_state.platform.outputs.ids.aks,      null),
-    try(data.terraform_remote_state.platform.outputs.kubernetes.id,null),
+    try(data.terraform_remote_state.platform.outputs.aks.id,        null),
+    try(data.terraform_remote_state.platform.outputs.aks_id,        null),
+    try(data.terraform_remote_state.platform.outputs.ids.aks,       null),
+    try(data.terraform_remote_state.platform.outputs.kubernetes.id, null),
   ])
 
   ids_funcapps = compact([
@@ -259,29 +278,30 @@ locals {
 
   ids_nsg = compact(local.nsg_ids_flat)
 
-  kv_map    = { for id in local.ids_kv      : id => id }
-  sa_map    = { for id in local.ids_sa      : id => id }
-  sbns_map  = { for id in local.ids_sbns    : id => id }
-  ehns_map  = { for id in local.ids_ehns    : id => id }
-  pg_map    = { for id in local.ids_pg      : id => id }
-  redis_map = { for id in local.ids_redis   : id => id }
-  rsv_map   = { for id in local.ids_rsv     : id => id }
-  appi_map  = { for id in local.ids_appi    : id => id }
-  vpng_map  = { for id in local.ids_vpng    : id => id }
-  cosmos_map = { for id in local.ids_cosmos : id => id }
+  kv_map     = { for id in local.ids_kv       : id => id }
+  sa_map     = { for id in local.ids_sa       : id => id }
+  sbns_map   = { for id in local.ids_sbns     : id => id }
+  ehns_map   = { for id in local.ids_ehns     : id => id }
+  pg_map     = { for id in local.ids_pg       : id => id }
+  redis_map  = { for id in local.ids_redis    : id => id }
+  rsv_map    = { for id in local.ids_rsv      : id => id }
+  appi_map   = { for id in local.ids_appi     : id => id }
+  vpng_map   = { for id in local.ids_vpng     : id => id }
+  cosmos_map = { for id in local.ids_cosmos   : id => id }
 
-  fa_map     = { for id in local.ids_funcapps  : id => id }
-  web_map    = { for id in local.ids_webapps   : id => id }
-  appgw_map  = { for id in local.ids_appgws    : id => id }
-  afd_map    = { for id in local.ids_frontdoor : id => id }
-
-  nsg_map = { for id in local.ids_nsg : id => id }
+  fa_map    = { for id in local.ids_funcapps  : id => id }
+  web_map   = { for id in local.ids_webapps   : id => id }
+  appgw_map = { for id in local.ids_appgws    : id => id }
+  afd_map   = { for id in local.ids_frontdoor : id => id }
+  nsg_map   = { for id in local.ids_nsg       : id => id }
 
   nsg_flow_logs_storage = try(data.terraform_remote_state.platform.outputs.nsg_flow_logs_storage, null)
   nsg_flow_logs_sa_id   = try(local.nsg_flow_logs_storage.id, null)
 }
 
+# =============================================================================
 # Diagnostic categories (data sources)
+# =============================================================================
 data "azurerm_monitor_diagnostic_categories" "kv" {
   for_each    = local.kv_map
   resource_id = each.value
@@ -357,7 +377,9 @@ data "azurerm_monitor_diagnostic_categories" "nsg" {
   resource_id = each.value
 }
 
+# =============================================================================
 # Diagnostic settings to Log Analytics
+# =============================================================================
 locals {
   sub_env_target_id = local.sub_env_resolved != null ? "/subscriptions/${local.sub_env_resolved}" : null
 }
@@ -381,9 +403,7 @@ resource "azurerm_monitor_diagnostic_setting" "nsg" {
         contains(try(each.value.logs, []), c)
       )
     ])
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
 
   dynamic "metric" {
@@ -411,9 +431,7 @@ resource "azurerm_monitor_diagnostic_setting" "sub_env" {
 
   dynamic "enabled_log" {
     for_each = toset(var.subscription_log_categories)
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
 
   lifecycle {
@@ -623,9 +641,7 @@ resource "azurerm_monitor_diagnostic_setting" "rsv" {
 
   dynamic "enabled_log" {
     for_each = toset(var.rsv_log_categories)
-    content {
-      category = enabled_log.value
-    }
+    content { category = enabled_log.value }
   }
 
   lifecycle {
@@ -859,10 +875,9 @@ resource "azurerm_monitor_diagnostic_setting" "cosmos" {
   }
 }
 
-
+# =============================================================================
 # Alerts and Action Groups
-
-
+# =============================================================================
 locals {
   action_group_id = try(data.terraform_remote_state.core.outputs.action_group.id, null)
 }
@@ -983,7 +998,9 @@ resource "azurerm_monitor_activity_log_alert" "rg_changes_core" {
   action   { action_group_id = local.ag_id_core }
 }
 
+# =============================================================================
 # AKS diagnostics
+# =============================================================================
 locals {
   aks_ids = toset(compact([
     try(data.terraform_remote_state.platform.outputs.ids.aks,       null),
@@ -1027,7 +1044,9 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
   }
 }
 
+# =============================================================================
 # Policy compliance – Event Grid system topic
+# =============================================================================
 locals {
   policy_system_topic_parent_ids = {
     for label, cfg in var.policy_source_subscriptions :
@@ -1064,7 +1083,9 @@ resource "azapi_resource" "policy_state_changes" {
   }
 }
 
+# =============================================================================
 # Policy compliance – Logic App and connection
+# =============================================================================
 locals {
   logicapp_parameters = {
     "$connections" = {
@@ -1146,42 +1167,42 @@ locals {
                   "type"   = "Compose"
                   "inputs" = "@first(triggerBody())?['data']?['subscriptionId']"
                   "runAfter" = {
-                    "Compose_SubjectRaw" = [ "Succeeded" ]
+                    "Compose_SubjectRaw" = ["Succeeded"]
                   }
                 },
                 "Compose_ResourceGroup" = {
                   "type"   = "Compose"
                   "inputs" = "@split(outputs('Compose_SubjectRaw'), '/')[4]"
                   "runAfter" = {
-                    "Compose_SubscriptionId" = [ "Succeeded" ]
+                    "Compose_SubscriptionId" = ["Succeeded"]
                   }
                 },
                 "Compose_ProviderNamespace" = {
                   "type"   = "Compose"
                   "inputs" = "@split(outputs('Compose_SubjectRaw'), '/')[6]"
                   "runAfter" = {
-                    "Compose_ResourceGroup" = [ "Succeeded" ]
+                    "Compose_ResourceGroup" = ["Succeeded"]
                   }
                 },
                 "Compose_ResourceType" = {
                   "type"   = "Compose"
                   "inputs" = "@split(outputs('Compose_SubjectRaw'), '/')[7]"
                   "runAfter" = {
-                    "Compose_ProviderNamespace" = [ "Succeeded" ]
+                    "Compose_ProviderNamespace" = ["Succeeded"]
                   }
                 },
                 "Compose_ResourceName" = {
                   "type"   = "Compose"
                   "inputs" = "@last(split(outputs('Compose_SubjectRaw'), '/'))"
                   "runAfter" = {
-                    "Compose_ResourceType" = [ "Succeeded" ]
+                    "Compose_ResourceType" = ["Succeeded"]
                   }
                 },
 
                 "Send_Email" = {
-                  "type"   = "ApiConnection"
+                  "type" = "ApiConnection"
                   "runAfter" = {
-                    "Compose_ResourceName" = [ "Succeeded" ]
+                    "Compose_ResourceName" = ["Succeeded"]
                   }
                   "inputs" = {
                     "host" = {
@@ -1192,8 +1213,8 @@ locals {
                     "method" = "post"
                     "path"   = "/v2/Mail"
                     "body" = {
-                      "To" = var.policy_alert_email
-                      "From": "noreply-alerts@intterragroup.com"
+                      "To"   = var.policy_alert_email
+                      "From" = "noreply-alerts@intterragroup.com"
                       "Subject" = "@{concat('FedRAMP Non-Compliant: ', outputs('Compose_ResourceName'), ' (', outputs('Compose_ResourceType'), ') in RG ', outputs('Compose_ResourceGroup'), ' [', outputs('Compose_SubscriptionId'), ']')}"
                       "Body" = <<-HTML
                         <p><strong>FedRAMP Moderate non-compliant resource detected.</strong></p>
@@ -1362,7 +1383,9 @@ resource "azapi_resource" "policy_to_logicapp" {
   ]
 }
 
+# =============================================================================
 # Subscription budgets for policy sources
+# =============================================================================
 locals {
   budget_emails_effective = length(var.budget_alert_emails) > 0 ? var.budget_alert_emails : local.alert_emails_effective
 
@@ -1394,10 +1417,9 @@ resource "azurerm_consumption_budget_subscription" "policy_source_budgets" {
   }
 }
 
-
+# =============================================================================
 # NSG flow logs
-
-
+# =============================================================================
 locals {
   nsg_flowlog_env_sets = {
     dev  = ["hub", "dev", "qa"]
@@ -1457,35 +1479,11 @@ locals {
     length(local.nsg_flowlog_map) > 0
   )
 
-  nsg_flowlog_map_hub = {
-    for id, item in local.nsg_flowlog_map :
-    id => item
-    if item.env_key == "hub"
-  }
-
-  nsg_flowlog_map_dev = {
-    for id, item in local.nsg_flowlog_map :
-    id => item
-    if item.env_key == "dev"
-  }
-
-  nsg_flowlog_map_qa = {
-    for id, item in local.nsg_flowlog_map :
-    id => item
-    if item.env_key == "qa"
-  }
-
-  nsg_flowlog_map_prod = {
-    for id, item in local.nsg_flowlog_map :
-    id => item
-    if item.env_key == "prod"
-  }
-
-  nsg_flowlog_map_uat = {
-    for id, item in local.nsg_flowlog_map :
-    id => item
-    if item.env_key == "uat"
-  }
+  nsg_flowlog_map_hub = { for id, item in local.nsg_flowlog_map : id => item if item.env_key == "hub"  }
+  nsg_flowlog_map_dev = { for id, item in local.nsg_flowlog_map : id => item if item.env_key == "dev"  }
+  nsg_flowlog_map_qa  = { for id, item in local.nsg_flowlog_map : id => item if item.env_key == "qa"   }
+  nsg_flowlog_map_prod= { for id, item in local.nsg_flowlog_map : id => item if item.env_key == "prod" }
+  nsg_flowlog_map_uat = { for id, item in local.nsg_flowlog_map : id => item if item.env_key == "uat"  }
 }
 
 resource "azurerm_network_watcher_flow_log" "nsg_core" {
@@ -1691,4 +1689,736 @@ resource "azurerm_network_watcher_flow_log" "nsg_uat" {
       error_message = "LAW workspace (ID/GUID) or NSG flow-logs storage account not resolved."
     }
   }
+}
+
+# =============================================================================
+# AzAPI providers for Cost Management Exports (subscription-scoped resources)
+# =============================================================================
+provider "azapi" {
+  alias           = "core"
+  subscription_id = local.core_sub
+  tenant_id       = local.core_tenant
+}
+
+provider "azapi" {
+  alias           = "dev"
+  subscription_id = local.dev_sub
+  tenant_id       = local.dev_ten
+}
+
+provider "azapi" {
+  alias           = "qa"
+  subscription_id = local.qa_sub
+  tenant_id       = local.qa_ten
+}
+
+provider "azapi" {
+  alias           = "prod"
+  subscription_id = local.prod_sub
+  tenant_id       = local.prod_ten
+}
+
+provider "azapi" {
+  alias           = "uat"
+  subscription_id = local.uat_sub
+  tenant_id       = local.uat_ten
+}
+
+# =============================================================================
+# Cost exports destination (core subscription storage)
+# =============================================================================
+resource "random_string" "cost_sa_sfx" {
+  length  = 5
+  special = false
+  upper   = false
+}
+
+locals {
+  # storage account name rules: lowercase, 3-24 chars, unique
+  cost_exports_sa_name = substr(
+    lower("saobs${var.product}${local.plane_code}${var.region}ce${random_string.cost_sa_sfx.result}"),
+    0,
+    24
+  )
+
+  cost_exports_schedule_from = "${formatdate("YYYY-MM-DD", timeadd(timestamp(), var.cost_exports_schedule_start_offset))}T00:00:00Z"
+}
+
+resource "azurerm_storage_account" "cost_exports" {
+  provider            = azurerm.core
+  count               = (var.enable_cost_exports && local.rg_core_name_resolved != null) ? 1 : 0
+  name                = local.cost_exports_sa_name
+  resource_group_name = local.rg_core_name_resolved
+  location            = local.rg_core_location_resolved
+
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+  account_kind             = "StorageV2"
+
+  min_tls_version                 = "TLS1_2"
+  allow_nested_items_to_be_public = false
+  public_network_access_enabled   = true
+
+  tags = var.tags_extra
+}
+
+resource "azurerm_storage_container" "cost_exports" {
+  provider              = azurerm.core
+  count                 = var.enable_cost_exports ? 1 : 0
+  name                  = var.cost_exports_container_name
+  storage_account_name  = azurerm_storage_account.cost_exports[0].name
+  container_access_type = "private"
+}
+
+# =============================================================================
+# Cost Management exports (env subscriptions) -> core storage
+# =============================================================================
+locals {
+  cost_exports_enabled = (
+    var.enable_cost_exports &&
+    length(try(azurerm_storage_account.cost_exports, [])) > 0
+  )
+
+  # Match your "dev => dev+qa" and "prod => prod+uat" pattern
+  cost_export_env_sets = {
+    dev  = ["dev", "qa"]
+    prod = ["prod", "uat"]
+  }
+
+  cost_export_targets = local.cost_exports_enabled ? lookup(local.cost_export_env_sets, local.env_effective, []) : []
+}
+
+locals {
+  cost_exports_destination = local.cost_exports_enabled ? {
+    resourceId     = azurerm_storage_account.cost_exports[0].id
+    container      = var.cost_exports_container_name
+    rootFolderPath = "${var.cost_exports_root_folder}/${var.product}/${local.env_effective}/${var.region}"
+    type           = "AzureBlob"
+  } : null
+}
+
+# ---------- DEV subscription exports ----------
+resource "azapi_resource" "cost_export_dev_last_month" {
+  provider  = azapi.dev
+  count     = contains(local.cost_export_targets, "dev") ? 1 : 0
+  type      = "Microsoft.CostManagement/exports@2024-08-01"
+  name      = "ce-${var.product}-dev-${var.region}-last-month-monthly"
+  parent_id = "/subscriptions/${local.dev_sub}"
+  location  = var.location
+
+  identity { type = "SystemAssigned" }
+
+  body = {
+    properties = {
+      definition = {
+        type      = "Usage"
+        timeframe = "TheLastMonth"
+        dataSet   = { granularity = "Daily" }
+      }
+      deliveryInfo = { destination = local.cost_exports_destination }
+      format       = "Csv"
+      schedule = {
+        recurrence = "Monthly"
+        recurrencePeriod = {
+          from = local.cost_exports_schedule_from
+          to   = var.cost_exports_schedule_end_date
+        }
+        status = "Active"
+      }
+    }
+  }
+
+  response_export_values = ["identity.principalId"]
+}
+
+resource "azapi_resource" "cost_export_dev_mtd_daily" {
+  provider  = azapi.dev
+  count     = contains(local.cost_export_targets, "dev") ? 1 : 0
+  type      = "Microsoft.CostManagement/exports@2024-08-01"
+  name      = "ce-${var.product}-dev-${var.region}-mtd-daily"
+  parent_id = "/subscriptions/${local.dev_sub}"
+  location  = var.location
+
+  identity { type = "SystemAssigned" }
+
+  body = {
+    properties = {
+      definition = {
+        type      = "Usage"
+        timeframe = "MonthToDate"
+        dataSet   = { granularity = "Daily" }
+      }
+      deliveryInfo = { destination = local.cost_exports_destination }
+      format       = "Csv"
+      schedule = {
+        recurrence = "Daily"
+        recurrencePeriod = {
+          from = local.cost_exports_schedule_from
+          to   = var.cost_exports_schedule_end_date
+        }
+        status = "Active"
+      }
+    }
+  }
+
+  response_export_values = ["identity.principalId"]
+}
+
+resource "azapi_resource" "cost_export_dev_manual_custom" {
+  provider  = azapi.dev
+  count     = contains(local.cost_export_targets, "dev") ? 1 : 0
+  type      = "Microsoft.CostManagement/exports@2024-08-01"
+  name      = "ce-${var.product}-dev-${var.region}-manual-custom"
+  parent_id = "/subscriptions/${local.dev_sub}"
+  location  = var.location
+
+  identity { type = "SystemAssigned" }
+
+  body = {
+    properties = {
+      definition = {
+        type      = "Usage"
+        timeframe = "Custom"
+        # Placeholder (Execute can provide a timePeriod payload)
+        timePeriod = {
+          from = "2025-01-01T00:00:00Z"
+          to   = "2025-01-31T23:59:59Z"
+        }
+        dataSet = { granularity = "Daily" }
+      }
+      deliveryInfo = { destination = local.cost_exports_destination }
+      format       = "Csv"
+      schedule = {
+        recurrence = "Monthly"
+        recurrencePeriod = {
+          from = local.cost_exports_schedule_from
+        }
+        status = "Inactive"
+      }
+    }
+  }
+
+  response_export_values = ["identity.principalId"]
+}
+
+# ---------- QA subscription exports ----------
+resource "azapi_resource" "cost_export_qa_last_month" {
+  provider  = azapi.qa
+  count     = contains(local.cost_export_targets, "qa") ? 1 : 0
+  type      = "Microsoft.CostManagement/exports@2024-08-01"
+  name      = "ce-${var.product}-qa-${var.region}-last-month-monthly"
+  parent_id = "/subscriptions/${local.qa_sub}"
+  location  = var.location
+
+  identity { type = "SystemAssigned" }
+
+  body = {
+    properties = {
+      definition = {
+        type      = "Usage"
+        timeframe = "TheLastMonth"
+        dataSet   = { granularity = "Daily" }
+      }
+      deliveryInfo = { destination = local.cost_exports_destination }
+      format       = "Csv"
+      schedule = {
+        recurrence = "Monthly"
+        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        status = "Active"
+      }
+    }
+  }
+
+  response_export_values = ["identity.principalId"]
+}
+
+resource "azapi_resource" "cost_export_qa_mtd_daily" {
+  provider  = azapi.qa
+  count     = contains(local.cost_export_targets, "qa") ? 1 : 0
+  type      = "Microsoft.CostManagement/exports@2024-08-01"
+  name      = "ce-${var.product}-qa-${var.region}-mtd-daily"
+  parent_id = "/subscriptions/${local.qa_sub}"
+  location  = var.location
+
+  identity { type = "SystemAssigned" }
+
+  body = {
+    properties = {
+      definition = {
+        type      = "Usage"
+        timeframe = "MonthToDate"
+        dataSet   = { granularity = "Daily" }
+      }
+      deliveryInfo = { destination = local.cost_exports_destination }
+      format       = "Csv"
+      schedule = {
+        recurrence = "Daily"
+        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        status = "Active"
+      }
+    }
+  }
+
+  response_export_values = ["identity.principalId"]
+}
+
+resource "azapi_resource" "cost_export_qa_manual_custom" {
+  provider  = azapi.qa
+  count     = contains(local.cost_export_targets, "qa") ? 1 : 0
+  type      = "Microsoft.CostManagement/exports@2024-08-01"
+  name      = "ce-${var.product}-qa-${var.region}-manual-custom"
+  parent_id = "/subscriptions/${local.qa_sub}"
+  location  = var.location
+
+  identity { type = "SystemAssigned" }
+
+  body = {
+    properties = {
+      definition = {
+        type      = "Usage"
+        timeframe = "Custom"
+        timePeriod = {
+          from = "2025-01-01T00:00:00Z"
+          to   = "2025-01-31T23:59:59Z"
+        }
+        dataSet = { granularity = "Daily" }
+      }
+      deliveryInfo = { destination = local.cost_exports_destination }
+      format       = "Csv"
+      schedule = {
+        recurrence = "Monthly"
+        recurrencePeriod = { from = local.cost_exports_schedule_from }
+        status = "Inactive"
+      }
+    }
+  }
+
+  response_export_values = ["identity.principalId"]
+}
+
+# ---------- PROD subscription exports ----------
+resource "azapi_resource" "cost_export_prod_last_month" {
+  provider  = azapi.prod
+  count     = contains(local.cost_export_targets, "prod") ? 1 : 0
+  type      = "Microsoft.CostManagement/exports@2024-08-01"
+  name      = "ce-${var.product}-prod-${var.region}-last-month-monthly"
+  parent_id = "/subscriptions/${local.prod_sub}"
+  location  = var.location
+
+  identity { type = "SystemAssigned" }
+
+  body = {
+    properties = {
+      definition = {
+        type      = "Usage"
+        timeframe = "TheLastMonth"
+        dataSet   = { granularity = "Daily" }
+      }
+      deliveryInfo = { destination = local.cost_exports_destination }
+      format       = "Csv"
+      schedule = {
+        recurrence = "Monthly"
+        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        status = "Active"
+      }
+    }
+  }
+
+  response_export_values = ["identity.principalId"]
+}
+
+resource "azapi_resource" "cost_export_prod_mtd_daily" {
+  provider  = azapi.prod
+  count     = contains(local.cost_export_targets, "prod") ? 1 : 0
+  type      = "Microsoft.CostManagement/exports@2024-08-01"
+  name      = "ce-${var.product}-prod-${var.region}-mtd-daily"
+  parent_id = "/subscriptions/${local.prod_sub}"
+  location  = var.location
+
+  identity { type = "SystemAssigned" }
+
+  body = {
+    properties = {
+      definition = {
+        type      = "Usage"
+        timeframe = "MonthToDate"
+        dataSet   = { granularity = "Daily" }
+      }
+      deliveryInfo = { destination = local.cost_exports_destination }
+      format       = "Csv"
+      schedule = {
+        recurrence = "Daily"
+        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        status = "Active"
+      }
+    }
+  }
+
+  response_export_values = ["identity.principalId"]
+}
+
+resource "azapi_resource" "cost_export_prod_manual_custom" {
+  provider  = azapi.prod
+  count     = contains(local.cost_export_targets, "prod") ? 1 : 0
+  type      = "Microsoft.CostManagement/exports@2024-08-01"
+  name      = "ce-${var.product}-prod-${var.region}-manual-custom"
+  parent_id = "/subscriptions/${local.prod_sub}"
+  location  = var.location
+
+  identity { type = "SystemAssigned" }
+
+  body = {
+    properties = {
+      definition = {
+        type      = "Usage"
+        timeframe = "Custom"
+        timePeriod = {
+          from = "2025-01-01T00:00:00Z"
+          to   = "2025-01-31T23:59:59Z"
+        }
+        dataSet = { granularity = "Daily" }
+      }
+      deliveryInfo = { destination = local.cost_exports_destination }
+      format       = "Csv"
+      schedule = {
+        recurrence = "Monthly"
+        recurrencePeriod = { from = local.cost_exports_schedule_from }
+        status = "Inactive"
+      }
+    }
+  }
+
+  response_export_values = ["identity.principalId"]
+}
+
+# ---------- UAT subscription exports ----------
+resource "azapi_resource" "cost_export_uat_last_month" {
+  provider  = azapi.uat
+  count     = contains(local.cost_export_targets, "uat") ? 1 : 0
+  type      = "Microsoft.CostManagement/exports@2024-08-01"
+  name      = "ce-${var.product}-uat-${var.region}-last-month-monthly"
+  parent_id = "/subscriptions/${local.uat_sub}"
+  location  = var.location
+
+  identity { type = "SystemAssigned" }
+
+  body = {
+    properties = {
+      definition = {
+        type      = "Usage"
+        timeframe = "TheLastMonth"
+        dataSet   = { granularity = "Daily" }
+      }
+      deliveryInfo = { destination = local.cost_exports_destination }
+      format       = "Csv"
+      schedule = {
+        recurrence = "Monthly"
+        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        status = "Active"
+      }
+    }
+  }
+
+  response_export_values = ["identity.principalId"]
+}
+
+resource "azapi_resource" "cost_export_uat_mtd_daily" {
+  provider  = azapi.uat
+  count     = contains(local.cost_export_targets, "uat") ? 1 : 0
+  type      = "Microsoft.CostManagement/exports@2024-08-01"
+  name      = "ce-${var.product}-uat-${var.region}-mtd-daily"
+  parent_id = "/subscriptions/${local.uat_sub}"
+  location  = var.location
+
+  identity { type = "SystemAssigned" }
+
+  body = {
+    properties = {
+      definition = {
+        type      = "Usage"
+        timeframe = "MonthToDate"
+        dataSet   = { granularity = "Daily" }
+      }
+      deliveryInfo = { destination = local.cost_exports_destination }
+      format       = "Csv"
+      schedule = {
+        recurrence = "Daily"
+        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        status = "Active"
+      }
+    }
+  }
+
+  response_export_values = ["identity.principalId"]
+}
+
+resource "azapi_resource" "cost_export_uat_manual_custom" {
+  provider  = azapi.uat
+  count     = contains(local.cost_export_targets, "uat") ? 1 : 0
+  type      = "Microsoft.CostManagement/exports@2024-08-01"
+  name      = "ce-${var.product}-uat-${var.region}-manual-custom"
+  parent_id = "/subscriptions/${local.uat_sub}"
+  location  = var.location
+
+  identity { type = "SystemAssigned" }
+
+  body = {
+    properties = {
+      definition = {
+        type      = "Usage"
+        timeframe = "Custom"
+        timePeriod = {
+          from = "2025-01-01T00:00:00Z"
+          to   = "2025-01-31T23:59:59Z"
+        }
+        dataSet = { granularity = "Daily" }
+      }
+      deliveryInfo = { destination = local.cost_exports_destination }
+      format       = "Csv"
+      schedule = {
+        recurrence = "Monthly"
+        recurrencePeriod = { from = local.cost_exports_schedule_from }
+        status = "Inactive"
+      }
+    }
+  }
+
+  response_export_values = ["identity.principalId"]
+}
+
+# ---------- CORE subscription exports ----------
+# nonprod-core runs with env_effective == "dev"
+resource "azapi_resource" "cost_export_core_nonprod_last_month" {
+  provider  = azapi.core
+  count     = (local.cost_exports_enabled && local.env_effective == "dev") ? 1 : 0
+  type      = "Microsoft.CostManagement/exports@2024-08-01"
+  name      = "ce-${var.product}-np-core-${var.region}-last-month-monthly"
+  parent_id = "/subscriptions/${local.core_sub}"
+  location  = var.location
+
+  identity { type = "SystemAssigned" }
+
+  body = {
+    properties = {
+      definition = {
+        type      = "Usage"
+        timeframe = "TheLastMonth"
+        dataSet   = { granularity = "Daily" }
+      }
+      deliveryInfo = { destination = local.cost_exports_destination }
+      format       = "Csv"
+      schedule = {
+        recurrence = "Monthly"
+        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        status = "Active"
+      }
+    }
+  }
+
+  response_export_values = ["identity.principalId"]
+}
+
+resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
+  provider  = azapi.core
+  count     = (local.cost_exports_enabled && local.env_effective == "dev") ? 1 : 0
+  type      = "Microsoft.CostManagement/exports@2024-08-01"
+  name      = "ce-${var.product}-np-core-${var.region}-mtd-daily"
+  parent_id = "/subscriptions/${local.core_sub}"
+  location  = var.location
+
+  identity { type = "SystemAssigned" }
+
+  body = {
+    properties = {
+      definition = {
+        type      = "Usage"
+        timeframe = "MonthToDate"
+        dataSet   = { granularity = "Daily" }
+      }
+      deliveryInfo = { destination = local.cost_exports_destination }
+      format       = "Csv"
+      schedule = {
+        recurrence = "Daily"
+        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        status = "Active"
+      }
+    }
+  }
+
+  response_export_values = ["identity.principalId"]
+}
+
+resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
+  provider  = azapi.core
+  count     = (local.cost_exports_enabled && local.env_effective == "dev") ? 1 : 0
+  type      = "Microsoft.CostManagement/exports@2024-08-01"
+  name      = "ce-${var.product}-np-core-${var.region}-manual-custom"
+  parent_id = "/subscriptions/${local.core_sub}"
+  location  = var.location
+
+  identity { type = "SystemAssigned" }
+
+  body = {
+    properties = {
+      definition = {
+        type      = "Usage"
+        timeframe = "Custom"
+        timePeriod = {
+          from = "2025-01-01T00:00:00Z"
+          to   = "2025-01-31T23:59:59Z"
+        }
+        dataSet = { granularity = "Daily" }
+      }
+      deliveryInfo = { destination = local.cost_exports_destination }
+      format       = "Csv"
+      schedule = {
+        recurrence = "Monthly"
+        recurrencePeriod = { from = local.cost_exports_schedule_from }
+        status = "Inactive"
+      }
+    }
+  }
+
+  response_export_values = ["identity.principalId"]
+}
+
+# prod-core runs with env_effective == "prod"
+resource "azapi_resource" "cost_export_core_prod_last_month" {
+  provider  = azapi.core
+  count     = (local.cost_exports_enabled && local.env_effective == "prod") ? 1 : 0
+  type      = "Microsoft.CostManagement/exports@2024-08-01"
+  name      = "ce-${var.product}-pr-core-${var.region}-last-month-monthly"
+  parent_id = "/subscriptions/${local.core_sub}"
+  location  = var.location
+
+  identity { type = "SystemAssigned" }
+
+  body = {
+    properties = {
+      definition = {
+        type      = "Usage"
+        timeframe = "TheLastMonth"
+        dataSet   = { granularity = "Daily" }
+      }
+      deliveryInfo = { destination = local.cost_exports_destination }
+      format       = "Csv"
+      schedule = {
+        recurrence = "Monthly"
+        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        status = "Active"
+      }
+    }
+  }
+
+  response_export_values = ["identity.principalId"]
+}
+
+resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
+  provider  = azapi.core
+  count     = (local.cost_exports_enabled && local.env_effective == "prod") ? 1 : 0
+  type      = "Microsoft.CostManagement/exports@2024-08-01"
+  name      = "ce-${var.product}-pr-core-${var.region}-mtd-daily"
+  parent_id = "/subscriptions/${local.core_sub}"
+  location  = var.location
+
+  identity { type = "SystemAssigned" }
+
+  body = {
+    properties = {
+      definition = {
+        type      = "Usage"
+        timeframe = "MonthToDate"
+        dataSet   = { granularity = "Daily" }
+      }
+      deliveryInfo = { destination = local.cost_exports_destination }
+      format       = "Csv"
+      schedule = {
+        recurrence = "Daily"
+        recurrencePeriod = { from = local.cost_exports_schedule_from, to = var.cost_exports_schedule_end_date }
+        status = "Active"
+      }
+    }
+  }
+
+  response_export_values = ["identity.principalId"]
+}
+
+resource "azapi_resource" "cost_export_core_prod_manual_custom" {
+  provider  = azapi.core
+  count     = (local.cost_exports_enabled && local.env_effective == "prod") ? 1 : 0
+  type      = "Microsoft.CostManagement/exports@2024-08-01"
+  name      = "ce-${var.product}-pr-core-${var.region}-manual-custom"
+  parent_id = "/subscriptions/${local.core_sub}"
+  location  = var.location
+
+  identity { type = "SystemAssigned" }
+
+  body = {
+    properties = {
+      definition = {
+        type      = "Usage"
+        timeframe = "Custom"
+        timePeriod = {
+          from = "2025-01-01T00:00:00Z"
+          to   = "2025-01-31T23:59:59Z"
+        }
+        dataSet = { granularity = "Daily" }
+      }
+      deliveryInfo = { destination = local.cost_exports_destination }
+      format       = "Csv"
+      schedule = {
+        recurrence = "Monthly"
+        recurrencePeriod = { from = local.cost_exports_schedule_from }
+        status = "Inactive"
+      }
+    }
+  }
+
+  response_export_values = ["identity.principalId"]
+}
+
+# ------------------------------------------------------------
+
+locals {
+  ce_sa_scope = local.cost_exports_enabled ? azurerm_storage_account.cost_exports[0].id : null
+
+  ce_principals = compact([
+    try(jsondecode(azapi_resource.cost_export_dev_last_month[0].output).identity.principalId, null),
+    try(jsondecode(azapi_resource.cost_export_dev_mtd_daily[0].output).identity.principalId, null),
+    try(jsondecode(azapi_resource.cost_export_dev_manual_custom[0].output).identity.principalId, null),
+
+    try(jsondecode(azapi_resource.cost_export_qa_last_month[0].output).identity.principalId, null),
+    try(jsondecode(azapi_resource.cost_export_qa_mtd_daily[0].output).identity.principalId, null),
+    try(jsondecode(azapi_resource.cost_export_qa_manual_custom[0].output).identity.principalId, null),
+
+    try(jsondecode(azapi_resource.cost_export_prod_last_month[0].output).identity.principalId, null),
+    try(jsondecode(azapi_resource.cost_export_prod_mtd_daily[0].output).identity.principalId, null),
+    try(jsondecode(azapi_resource.cost_export_prod_manual_custom[0].output).identity.principalId, null),
+
+    try(jsondecode(azapi_resource.cost_export_uat_last_month[0].output).identity.principalId, null),
+    try(jsondecode(azapi_resource.cost_export_uat_mtd_daily[0].output).identity.principalId, null),
+    try(jsondecode(azapi_resource.cost_export_uat_manual_custom[0].output).identity.principalId, null),
+
+    try(jsondecode(azapi_resource.cost_export_core_nonprod_last_month[0].output).identity.principalId, null),
+    try(jsondecode(azapi_resource.cost_export_core_nonprod_mtd_daily[0].output).identity.principalId, null),
+    try(jsondecode(azapi_resource.cost_export_core_nonprod_manual_custom[0].output).identity.principalId, null),
+
+    try(jsondecode(azapi_resource.cost_export_core_prod_last_month[0].output).identity.principalId, null),
+    try(jsondecode(azapi_resource.cost_export_core_prod_mtd_daily[0].output).identity.principalId, null),
+    try(jsondecode(azapi_resource.cost_export_core_prod_manual_custom[0].output).identity.principalId, null),
+  ])
+}
+
+resource "azurerm_role_assignment" "cost_exports_blob_contrib" {
+  provider = azurerm.core
+  for_each = local.cost_exports_enabled ? { for pid in local.ce_principals : pid => pid } : {}
+
+  scope                = local.ce_sa_scope
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = each.value
+}
+
+resource "azurerm_resource_provider_registration" "cost_exports_rp" {
+  provider = azurerm.core
+  name     = "Microsoft.CostManagementExports"
 }
