@@ -1773,14 +1773,6 @@ resource "time_sleep" "wait_cost_exports_rp_prod" {
   create_duration = "8m"
 }
 
-data "azapi_resource" "cost_exports_container" {
-  provider  = azapi.core
-  type      = "Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01"
-  name      = var.cost_exports_container_name # "cost-exports"
-  parent_id = "${local.existing_exports_sa_id}/blobServices/default"
-}
-
-
 locals {
   # Decide based on inputs / resolved RG, NOT on resources created in this plan
   cost_exports_enabled = var.enable_cost_exports
@@ -1849,7 +1841,6 @@ resource "azapi_resource" "cost_export_dev_last_month" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    data.azapi_resource.cost_exports_container,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
@@ -1862,8 +1853,8 @@ resource "azapi_resource" "cost_export_dev_last_month" {
 
   lifecycle {
     precondition {
-      condition     = var.enable_cost_exports ? try(data.azapi_resource.cost_exports_container.id, null) != null : true
-      error_message = "Cost exports enabled but container '${var.cost_exports_container_name}' not found in the reused storage account."
+      condition     = var.enable_cost_exports ? local.existing_exports_sa_id != null : true
+      error_message = "Cost exports enabled but destination storage account ID not resolved."
     }
   }
 }
@@ -1906,7 +1897,6 @@ resource "azapi_resource" "cost_export_dev_mtd_daily" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    data.azapi_resource.cost_exports_container,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
@@ -1919,8 +1909,8 @@ resource "azapi_resource" "cost_export_dev_mtd_daily" {
 
   lifecycle {
     precondition {
-      condition     = var.enable_cost_exports ? try(data.azapi_resource.cost_exports_container.id, null) != null : true
-      error_message = "Cost exports enabled but container '${var.cost_exports_container_name}' not found in the reused storage account."
+      condition     = var.enable_cost_exports ? local.existing_exports_sa_id != null : true
+      error_message = "Cost exports enabled but destination storage account ID not resolved."
     }
   }
 }
@@ -1967,7 +1957,6 @@ resource "azapi_resource" "cost_export_dev_manual_custom" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    data.azapi_resource.cost_exports_container,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
@@ -1980,8 +1969,8 @@ resource "azapi_resource" "cost_export_dev_manual_custom" {
 
   lifecycle {
     precondition {
-      condition     = var.enable_cost_exports ? try(data.azapi_resource.cost_exports_container.id, null) != null : true
-      error_message = "Cost exports enabled but container '${var.cost_exports_container_name}' not found in the reused storage account."
+      condition     = var.enable_cost_exports ? local.existing_exports_sa_id != null : true
+      error_message = "Cost exports enabled but destination storage account ID not resolved."
     }
   }
 }
@@ -2025,7 +2014,6 @@ resource "azapi_resource" "cost_export_qa_last_month" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    data.azapi_resource.cost_exports_container,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
@@ -2038,8 +2026,8 @@ resource "azapi_resource" "cost_export_qa_last_month" {
 
   lifecycle {
     precondition {
-      condition     = var.enable_cost_exports ? try(data.azapi_resource.cost_exports_container.id, null) != null : true
-      error_message = "Cost exports enabled but container '${var.cost_exports_container_name}' not found in the reused storage account."
+      condition     = var.enable_cost_exports ? local.existing_exports_sa_id != null : true
+      error_message = "Cost exports enabled but destination storage account ID not resolved."
     }
   }
 }
@@ -2082,7 +2070,6 @@ resource "azapi_resource" "cost_export_qa_mtd_daily" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    data.azapi_resource.cost_exports_container,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
@@ -2095,8 +2082,8 @@ resource "azapi_resource" "cost_export_qa_mtd_daily" {
 
   lifecycle {
     precondition {
-      condition     = var.enable_cost_exports ? try(data.azapi_resource.cost_exports_container.id, null) != null : true
-      error_message = "Cost exports enabled but container '${var.cost_exports_container_name}' not found in the reused storage account."
+      condition     = var.enable_cost_exports ? local.existing_exports_sa_id != null : true
+      error_message = "Cost exports enabled but destination storage account ID not resolved."
     }
   }
 }
@@ -2143,7 +2130,6 @@ resource "azapi_resource" "cost_export_qa_manual_custom" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    data.azapi_resource.cost_exports_container,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
@@ -2156,8 +2142,8 @@ resource "azapi_resource" "cost_export_qa_manual_custom" {
 
   lifecycle {
     precondition {
-      condition     = var.enable_cost_exports ? try(data.azapi_resource.cost_exports_container.id, null) != null : true
-      error_message = "Cost exports enabled but container '${var.cost_exports_container_name}' not found in the reused storage account."
+      condition     = var.enable_cost_exports ? local.existing_exports_sa_id != null : true
+      error_message = "Cost exports enabled but destination storage account ID not resolved."
     }
   }
 }
@@ -2201,7 +2187,6 @@ resource "azapi_resource" "cost_export_prod_last_month" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    data.azapi_resource.cost_exports_container,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
@@ -2214,8 +2199,8 @@ resource "azapi_resource" "cost_export_prod_last_month" {
 
   lifecycle {
     precondition {
-      condition     = var.enable_cost_exports ? try(data.azapi_resource.cost_exports_container.id, null) != null : true
-      error_message = "Cost exports enabled but container '${var.cost_exports_container_name}' not found in the reused storage account."
+      condition     = var.enable_cost_exports ? local.existing_exports_sa_id != null : true
+      error_message = "Cost exports enabled but destination storage account ID not resolved."
     }
   }
 }
@@ -2258,7 +2243,6 @@ resource "azapi_resource" "cost_export_prod_mtd_daily" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    data.azapi_resource.cost_exports_container,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
@@ -2271,8 +2255,8 @@ resource "azapi_resource" "cost_export_prod_mtd_daily" {
 
   lifecycle {
     precondition {
-      condition     = var.enable_cost_exports ? try(data.azapi_resource.cost_exports_container.id, null) != null : true
-      error_message = "Cost exports enabled but container '${var.cost_exports_container_name}' not found in the reused storage account."
+      condition     = var.enable_cost_exports ? local.existing_exports_sa_id != null : true
+      error_message = "Cost exports enabled but destination storage account ID not resolved."
     }
   }
 }
@@ -2319,7 +2303,6 @@ resource "azapi_resource" "cost_export_prod_manual_custom" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    data.azapi_resource.cost_exports_container,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
@@ -2332,8 +2315,8 @@ resource "azapi_resource" "cost_export_prod_manual_custom" {
 
   lifecycle {
     precondition {
-      condition     = var.enable_cost_exports ? try(data.azapi_resource.cost_exports_container.id, null) != null : true
-      error_message = "Cost exports enabled but container '${var.cost_exports_container_name}' not found in the reused storage account."
+      condition     = var.enable_cost_exports ? local.existing_exports_sa_id != null : true
+      error_message = "Cost exports enabled but destination storage account ID not resolved."
     }
   }
 }
@@ -2377,7 +2360,6 @@ resource "azapi_resource" "cost_export_uat_last_month" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    data.azapi_resource.cost_exports_container,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
@@ -2390,8 +2372,8 @@ resource "azapi_resource" "cost_export_uat_last_month" {
 
   lifecycle {
     precondition {
-      condition     = var.enable_cost_exports ? try(data.azapi_resource.cost_exports_container.id, null) != null : true
-      error_message = "Cost exports enabled but container '${var.cost_exports_container_name}' not found in the reused storage account."
+      condition     = var.enable_cost_exports ? local.existing_exports_sa_id != null : true
+      error_message = "Cost exports enabled but destination storage account ID not resolved."
     }
   }
 }
@@ -2434,7 +2416,6 @@ resource "azapi_resource" "cost_export_uat_mtd_daily" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    data.azapi_resource.cost_exports_container,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
@@ -2447,8 +2428,8 @@ resource "azapi_resource" "cost_export_uat_mtd_daily" {
 
   lifecycle {
     precondition {
-      condition     = var.enable_cost_exports ? try(data.azapi_resource.cost_exports_container.id, null) != null : true
-      error_message = "Cost exports enabled but container '${var.cost_exports_container_name}' not found in the reused storage account."
+      condition     = var.enable_cost_exports ? local.existing_exports_sa_id != null : true
+      error_message = "Cost exports enabled but destination storage account ID not resolved."
     }
   }
 }
@@ -2495,7 +2476,6 @@ resource "azapi_resource" "cost_export_uat_manual_custom" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    data.azapi_resource.cost_exports_container,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
@@ -2508,8 +2488,8 @@ resource "azapi_resource" "cost_export_uat_manual_custom" {
 
   lifecycle {
     precondition {
-      condition     = var.enable_cost_exports ? try(data.azapi_resource.cost_exports_container.id, null) != null : true
-      error_message = "Cost exports enabled but container '${var.cost_exports_container_name}' not found in the reused storage account."
+      condition     = var.enable_cost_exports ? local.existing_exports_sa_id != null : true
+      error_message = "Cost exports enabled but destination storage account ID not resolved."
     }
   }
 }
@@ -2553,7 +2533,6 @@ resource "azapi_resource" "cost_export_core_nonprod_last_month" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    data.azapi_resource.cost_exports_container,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
@@ -2566,8 +2545,8 @@ resource "azapi_resource" "cost_export_core_nonprod_last_month" {
 
   lifecycle {
     precondition {
-      condition     = var.enable_cost_exports ? try(data.azapi_resource.cost_exports_container.id, null) != null : true
-      error_message = "Cost exports enabled but container '${var.cost_exports_container_name}' not found in the reused storage account."
+      condition     = var.enable_cost_exports ? local.existing_exports_sa_id != null : true
+      error_message = "Cost exports enabled but destination storage account ID not resolved."
     }
   }
 }
@@ -2610,7 +2589,6 @@ resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    data.azapi_resource.cost_exports_container,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
@@ -2623,8 +2601,8 @@ resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
 
   lifecycle {
     precondition {
-      condition     = var.enable_cost_exports ? try(data.azapi_resource.cost_exports_container.id, null) != null : true
-      error_message = "Cost exports enabled but container '${var.cost_exports_container_name}' not found in the reused storage account."
+      condition     = var.enable_cost_exports ? local.existing_exports_sa_id != null : true
+      error_message = "Cost exports enabled but destination storage account ID not resolved."
     }
   }
 }
@@ -2671,7 +2649,6 @@ resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    data.azapi_resource.cost_exports_container,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
@@ -2684,8 +2661,8 @@ resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
 
   lifecycle {
     precondition {
-      condition     = var.enable_cost_exports ? try(data.azapi_resource.cost_exports_container.id, null) != null : true
-      error_message = "Cost exports enabled but container '${var.cost_exports_container_name}' not found in the reused storage account."
+      condition     = var.enable_cost_exports ? local.existing_exports_sa_id != null : true
+      error_message = "Cost exports enabled but destination storage account ID not resolved."
     }
   }
 }
@@ -2728,7 +2705,6 @@ resource "azapi_resource" "cost_export_core_prod_last_month" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    data.azapi_resource.cost_exports_container,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
@@ -2741,8 +2717,8 @@ resource "azapi_resource" "cost_export_core_prod_last_month" {
 
   lifecycle {
     precondition {
-      condition     = var.enable_cost_exports ? try(data.azapi_resource.cost_exports_container.id, null) != null : true
-      error_message = "Cost exports enabled but container '${var.cost_exports_container_name}' not found in the reused storage account."
+      condition     = var.enable_cost_exports ? local.existing_exports_sa_id != null : true
+      error_message = "Cost exports enabled but destination storage account ID not resolved."
     }
   }
 }
@@ -2785,7 +2761,6 @@ resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    data.azapi_resource.cost_exports_container,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
@@ -2798,8 +2773,8 @@ resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
 
   lifecycle {
     precondition {
-      condition     = var.enable_cost_exports ? try(data.azapi_resource.cost_exports_container.id, null) != null : true
-      error_message = "Cost exports enabled but container '${var.cost_exports_container_name}' not found in the reused storage account."
+      condition     = var.enable_cost_exports ? local.existing_exports_sa_id != null : true
+      error_message = "Cost exports enabled but destination storage account ID not resolved."
     }
   }
 }
@@ -2846,7 +2821,6 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    data.azapi_resource.cost_exports_container,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
@@ -2859,8 +2833,8 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
 
   lifecycle {
     precondition {
-      condition     = var.enable_cost_exports ? try(data.azapi_resource.cost_exports_container.id, null) != null : true
-      error_message = "Cost exports enabled but container '${var.cost_exports_container_name}' not found in the reused storage account."
+      condition     = var.enable_cost_exports ? local.existing_exports_sa_id != null : true
+      error_message = "Cost exports enabled but destination storage account ID not resolved."
     }
   }
 }
@@ -2921,7 +2895,6 @@ resource "azurerm_role_assignment" "cost_exports_blob_contrib" {
   depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     time_sleep.wait_cost_exports_rp_core,
-    data.azapi_resource.cost_exports_container,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     time_sleep.wait_cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
