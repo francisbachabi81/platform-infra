@@ -1798,7 +1798,8 @@ locals {
   cost_exports_destination = (var.enable_cost_exports && local.existing_exports_sa_id != null) ? {
     resourceId     = local.existing_exports_sa_id
     container      = var.cost_exports_container_name        # "cost-exports"
-    rootFolderPath = "${var.cost_exports_root_folder}/${var.product}/${local.env_effective}/${var.region}"
+    rootFolderPath = "${var.cost_exports_root_folder}"
+    # rootFolderPath = "${var.cost_exports_root_folder}/${var.product}/${local.env_effective}/${var.region}"
   } : null
 }
 
