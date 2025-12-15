@@ -245,4 +245,4 @@ jobs:
 
       - name: Terraform Apply (approved plan)
         if: ${{ steps.detect.outputs.has_tfplan == 'true' }}
-        run: terraform apply -input=false -auto-approve tfplan
+        run: terraform apply -parallelism=5 -input=false -auto-approve tfplan
