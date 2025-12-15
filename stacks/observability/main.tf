@@ -1718,14 +1718,7 @@ provider "azapi" {
   tenant_id       = local.uat_ten
 }
 
-# =============================================================================
-# Cost exports destination (core subscription storage)
-# + Ensure Microsoft.CostManagementExports is registered in ALL involved subscriptions
-# + Ensure exports wait on RP registration + storage/container
-# =============================================================================
-
 # --- Register required Resource Providers (core + env subscriptions) ---
-# NOTE: RP registration can take time; exports must depend on these.
 resource "azurerm_resource_provider_registration" "cost_exports_rp_core" {
   provider = azurerm.core
   name     = "Microsoft.CostManagementExports"
@@ -1749,12 +1742,6 @@ resource "azurerm_resource_provider_registration" "cost_exports_rp_uat" {
 resource "azurerm_resource_provider_registration" "cost_exports_rp_prod" {
   provider = azurerm.prod
   name     = "Microsoft.CostManagementExports"
-}
-
-# Optional (usually already registered, but harmless)
-resource "azurerm_resource_provider_registration" "cost_rp_core" {
-  provider = azurerm.core
-  name     = "Microsoft.CostManagement"
 }
 
 resource "random_string" "cost_sa_sfx" {
