@@ -1744,6 +1744,32 @@ resource "azurerm_resource_provider_registration" "cost_exports_rp_prod" {
   name     = "Microsoft.CostManagementExports"
 }
 
+# --- RP Registration barriers (helps with eventual consistency in ARM) ---
+resource "time_sleep" "wait_cost_exports_rp_core" {
+  depends_on      = [azurerm_resource_provider_registration.cost_exports_rp_core]
+  create_duration = "90s"
+}
+
+resource "time_sleep" "wait_cost_exports_rp_dev" {
+  depends_on      = [azurerm_resource_provider_registration.cost_exports_rp_dev]
+  create_duration = "90s"
+}
+
+resource "time_sleep" "wait_cost_exports_rp_qa" {
+  depends_on      = [azurerm_resource_provider_registration.cost_exports_rp_qa]
+  create_duration = "90s"
+}
+
+resource "time_sleep" "wait_cost_exports_rp_uat" {
+  depends_on      = [azurerm_resource_provider_registration.cost_exports_rp_uat]
+  create_duration = "90s"
+}
+
+resource "time_sleep" "wait_cost_exports_rp_prod" {
+  depends_on      = [azurerm_resource_provider_registration.cost_exports_rp_prod]
+  create_duration = "90s"
+}
+
 resource "random_string" "cost_sa_sfx" {
   length  = 5
   special = false
@@ -1829,16 +1855,26 @@ locals {
 # Shared dependency bundle for ALL export resources
 locals {
   cost_exports_depends_on = [
-    # Destination subscription RP registration + destination storage readiness
+    # Destination subscription RP registration + propagation
     azurerm_resource_provider_registration.cost_exports_rp_core,
+    time_sleep.wait_cost_exports_rp_core,
+
+    # Destination storage readiness
     azurerm_storage_account.cost_exports,
     azurerm_storage_container.cost_exports,
 
-    # Ensure RP is registered in source subscriptions too
+    # Source subscription RP registration + propagation
     azurerm_resource_provider_registration.cost_exports_rp_dev,
+    time_sleep.wait_cost_exports_rp_dev,
+
     azurerm_resource_provider_registration.cost_exports_rp_qa,
+    time_sleep.wait_cost_exports_rp_qa,
+
     azurerm_resource_provider_registration.cost_exports_rp_uat,
+    time_sleep.wait_cost_exports_rp_uat,
+
     azurerm_resource_provider_registration.cost_exports_rp_prod,
+    time_sleep.wait_cost_exports_rp_prod,
   ]
 }
 
@@ -1877,7 +1913,7 @@ resource "azapi_resource" "cost_export_dev_last_month" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = [ local.cost_exports_depends_on ]
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -1921,7 +1957,7 @@ resource "azapi_resource" "cost_export_dev_mtd_daily" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = [ local.cost_exports_depends_on ]
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -1969,7 +2005,7 @@ resource "azapi_resource" "cost_export_dev_manual_custom" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = [ local.cost_exports_depends_on ]
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2014,7 +2050,7 @@ resource "azapi_resource" "cost_export_qa_last_month" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = [ local.cost_exports_depends_on ]
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2058,7 +2094,7 @@ resource "azapi_resource" "cost_export_qa_mtd_daily" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = [ local.cost_exports_depends_on ]
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2106,7 +2142,7 @@ resource "azapi_resource" "cost_export_qa_manual_custom" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = [ local.cost_exports_depends_on ]
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2151,7 +2187,7 @@ resource "azapi_resource" "cost_export_prod_last_month" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = [ local.cost_exports_depends_on ]
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2195,7 +2231,7 @@ resource "azapi_resource" "cost_export_prod_mtd_daily" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = [ local.cost_exports_depends_on ]
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2243,7 +2279,7 @@ resource "azapi_resource" "cost_export_prod_manual_custom" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = [ local.cost_exports_depends_on ]
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2288,7 +2324,7 @@ resource "azapi_resource" "cost_export_uat_last_month" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = [ local.cost_exports_depends_on ]
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2332,7 +2368,7 @@ resource "azapi_resource" "cost_export_uat_mtd_daily" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = [ local.cost_exports_depends_on ]
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2380,7 +2416,7 @@ resource "azapi_resource" "cost_export_uat_manual_custom" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = [ local.cost_exports_depends_on ]
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2425,7 +2461,7 @@ resource "azapi_resource" "cost_export_core_nonprod_last_month" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = [ local.cost_exports_depends_on ]
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2469,7 +2505,7 @@ resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = [ local.cost_exports_depends_on ]
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2517,7 +2553,7 @@ resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = [ local.cost_exports_depends_on ]
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2561,7 +2597,7 @@ resource "azapi_resource" "cost_export_core_prod_last_month" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = [ local.cost_exports_depends_on ]
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2605,7 +2641,7 @@ resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = [ local.cost_exports_depends_on ]
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2653,7 +2689,7 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
 
   response_export_values = ["identity.principalId"]
 
-  depends_on = [ local.cost_exports_depends_on ]
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {
@@ -2716,7 +2752,7 @@ resource "azurerm_role_assignment" "cost_exports_blob_contrib" {
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = local.ce_principal_ids[each.key]
 
-  depends_on = [ local.cost_exports_depends_on ]
+  depends_on = local.cost_exports_depends_on
 
   lifecycle {
     precondition {

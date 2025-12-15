@@ -10,6 +10,10 @@ terraform {
       source  = "azure/azapi"
       version = "~> 2.7"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = ">= 0.9.1"
+    }
   }
 
   # Required so your `terraform init -backend-config="..."` has a backend to override
