@@ -2623,8 +2623,7 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
 # ------------------------------------------------------------
 
 locals {
-  # Stable keys (always known at plan time)
-  ce_principals_by_name = {
+  ce_principal_ids = {
     dev_last_month     = try(jsondecode(azapi_resource.cost_export_dev_last_month[0].output).identity.principalId, null)
     dev_mtd_daily      = try(jsondecode(azapi_resource.cost_export_dev_mtd_daily[0].output).identity.principalId, null)
     dev_manual_custom  = try(jsondecode(azapi_resource.cost_export_dev_manual_custom[0].output).identity.principalId, null)
@@ -2650,11 +2649,15 @@ locals {
     core_pr_manual_custom = try(jsondecode(azapi_resource.cost_export_core_prod_manual_custom[0].output).identity.principalId, null)
   }
 
-  # Filter out nulls (values can be unknown until apply, that's fine)
-  ce_principals_by_name_effective = {
-    for k, v in local.ce_principals_by_name : k => v
-    if v != null
-  }
+  ce_role_targets = merge(
+    contains(local.cost_export_targets, "dev")  ? { dev_last_month = true, dev_mtd_daily = true, dev_manual_custom = true } : {},
+    contains(local.cost_export_targets, "qa")   ? { qa_last_month  = true, qa_mtd_daily  = true, qa_manual_custom  = true } : {},
+    contains(local.cost_export_targets, "prod") ? { prod_last_month = true, prod_mtd_daily = true, prod_manual_custom = true } : {},
+    contains(local.cost_export_targets, "uat")  ? { uat_last_month = true, uat_mtd_daily = true, uat_manual_custom = true } : {},
+
+    (local.cost_exports_enabled && local.env_effective == "dev")  ? { core_np_last_month = true, core_np_mtd_daily = true, core_np_manual_custom = true } : {},
+    (local.cost_exports_enabled && local.env_effective == "prod") ? { core_pr_last_month = true, core_pr_mtd_daily = true, core_pr_manual_custom = true } : {}
+  )
 
   ce_sa_scope = local.cost_exports_enabled ? azurerm_storage_account.cost_exports[0].id : null
 }
@@ -2662,21 +2665,20 @@ locals {
 resource "azurerm_role_assignment" "cost_exports_blob_contrib" {
   provider = azurerm.core
 
-  for_each = local.cost_exports_enabled ? local.ce_principals_by_name_effective : {}
+  for_each = local.cost_exports_enabled ? local.ce_role_targets : {}
 
   scope                = local.ce_sa_scope
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = each.value
-
-  depends_on = [
-    azurerm_storage_account.cost_exports,
-    azurerm_storage_container.cost_exports,
-  ]
+  principal_id         = local.ce_principal_ids[each.key]
 
   lifecycle {
     precondition {
       condition     = local.ce_sa_scope != null
       error_message = "Cost exports storage account scope not resolved."
+    }
+    precondition {
+      condition     = local.ce_principal_ids[each.key] != null
+      error_message = "PrincipalId not resolved for ${each.key}. Ensure the corresponding export resource is being created."
     }
   }
 }
