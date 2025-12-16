@@ -636,6 +636,8 @@ module "aks1_env_shared_nonprod" {
   identity_type             = "UserAssigned"
   user_assigned_identity_id = local.aks_uai_id
 
+  temporary_name_for_rotation = "rot${local.plane_code}${var.region}"
+
   tags = merge(local.tags_common, local.tags_aks, var.tags)
 
   depends_on = [
@@ -668,6 +670,8 @@ module "aks1_env_prod" {
   identity_type             = "UserAssigned"
   user_assigned_identity_id = local.aks_uai_id
 
+  temporary_name_for_rotation = "rot${local.plane_code}${var.region}"
+
   tags = merge(local.tags_common, local.tags_aks, var.tags)
 
   depends_on = [
@@ -699,6 +703,8 @@ module "aks1_env_uat" {
   private_dns_zone_id       = local.aks_private_dns_zone_id
   identity_type             = "UserAssigned"
   user_assigned_identity_id = local.aks_uai_id
+
+  temporary_name_for_rotation = "rot${local.plane_code}${var.region}"
 
   tags = merge(local.tags_common, local.tags_aks, var.tags)
 

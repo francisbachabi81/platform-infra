@@ -124,3 +124,9 @@ variable "user_assigned_identity_id" {
   type        = string
   default     = null
 }
+
+variable "temporary_name_for_rotation" {
+  type        = string
+  description = "Temporary node pool name used for default node pool rotation (1-12 lowercase alphanumeric, must start with a letter)."
+  default     = "rotpool01"
+}

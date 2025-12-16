@@ -33,6 +33,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
     vnet_subnet_id       = var.default_nodepool_subnet_id
     orchestrator_version = var.kubernetes_version
     type                 = "VirtualMachineScaleSets"
+    temporary_name_for_rotation = var.temporary_name_for_rotation
 
     upgrade_settings {
       max_surge                     = "10%"
