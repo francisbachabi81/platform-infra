@@ -8,7 +8,8 @@ terraform {
 
 locals {
   # Outbound only if explicitly enabled *and* we have a subnet
-  enable_outbound = var.enable_outbound && var.outbound_subnet_id != null
+  # enable_outbound = var.enable_outbound && var.outbound_subnet_id != null
+  enable_outbound = var.enable_outbound
   # Ruleset only if outbound is enabled and rules were provided
   enable_ruleset = local.enable_outbound && length(var.forwarding_rules) > 0
 
@@ -61,6 +62,13 @@ resource "azurerm_private_dns_resolver_outbound_endpoint" "outbound" {
   private_dns_resolver_id = azurerm_private_dns_resolver.this.id
   subnet_id               = var.outbound_subnet_id
   tags                    = var.tags
+
+  lifecycle {
+    precondition {
+      condition     = !var.enable_outbound || var.outbound_subnet_id != null
+      error_message = "enable_outbound=true requires outbound_subnet_id to be set (non-null)."
+    }
+  }
 }
 
 resource "azurerm_private_dns_resolver_dns_forwarding_ruleset" "rs" {
