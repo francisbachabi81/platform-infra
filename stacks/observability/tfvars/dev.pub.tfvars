@@ -3,6 +3,7 @@ env      = "dev"
 location = "Central US"
 region          = "cus"
 
+# Alerting (Action Group recipients)
 action_group_email_receivers = [
   {
     name                    = "Ops Manager"
@@ -18,31 +19,38 @@ action_group_email_receivers = [
 
 # FedRAMP Policy events pipeline
 enable_policy_compliance_alerts = true
-management_group_name = "b332ab98-00a1-42a1-9388-63538bc86612"
+management_group_name = "7d30ad8b-5042-456b-80bf-e848b6bef108"
 policy_alert_email   = "cloudops@intterragroup.com"
 policy_source_subscriptions = {
   dev-core = {
-    subscription_id = "62ae6908-cbcb-40cb-8773-54bd318ff7f9"
+    subscription_id = "57f8aa30-981c-4764-94f6-6691c4d5c01c"
   }
   core = {
-    subscription_id = "df6dc63f-c4dc-4590-ba4b-f2ce9639ca6c"
+    subscription_id = "ee8a4693-54d4-4de8-842b-b6f35fc0674d"
   }
   qa-core = {
-    subscription_id = "d4c1d472-722c-49c2-857f-4243441104c8"
+    subscription_id = "647feab6-e53a-4db2-99ab-55d04a5997d7"
   }
 }
 
-enable_subscription_budgets = true
-subscription_budget_amount = 500
-subscription_budget_threshold = 80
+# Subscription budgets
+enable_subscription_budgets    = true
+subscription_budget_amount     = 500
+subscription_budget_threshold  = 80
 subscription_budget_start_date = "2025-12-01T00:00:00Z"
 subscription_budget_end_date   = "2035-01-01T00:00:00Z"
+
 budget_alert_emails = [
   "cloudops@intterragroup.com"
 ]
 
-# tags
+# NSG flow logs
+# enable_nsg_flow_logs = false
+
+# Tags
 tags_extra = {
   purpose = "observability"
   layer   = "platform"
 }
+
+enable_cost_exports = true

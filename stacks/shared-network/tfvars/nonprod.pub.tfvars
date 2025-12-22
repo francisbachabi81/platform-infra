@@ -35,7 +35,7 @@ private_zones = [
 
 # Public DNS zones
 public_dns_zones = [
-  "dev.horizon.intterra.io"
+  "dev.public.intterra.io"
 ]
 
 # VNets — NONPROD plane: hub + dev + qa
@@ -312,3 +312,5 @@ tags = {
 # Front Door
 fd_create_frontdoor = true
 fd_sku_name         = "Standard_AzureFrontDoor"
+
+dnsresolver_enable_outbound = false
