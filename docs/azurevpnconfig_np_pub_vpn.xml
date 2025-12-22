@@ -1,0 +1,42 @@
+<AzVpnProfile xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://schemas.datacontract.org/2004/07/">
+  <any xmlns:d2p1="http://schemas.datacontract.org/2004/07/System.Xml" i:nil="true" />
+  <clientauth>
+    <aad>
+      <audience>c632b3df-fb67-4d84-bdcf-b95ad541b5c8</audience>
+      <cachesigninuser>true</cachesigninuser>
+      <enablegrouptoken>false</enablegrouptoken>
+      <issuer>https://sts.windows.net/dd58f16c-b85a-4d66-99e1-f86905453853/</issuer>
+      <tenant>https://login.microsoftonline.com/dd58f16c-b85a-4d66-99e1-f86905453853</tenant>
+    </aad>
+    <cert i:nil="true" />
+    <type>aad</type>
+    <usernamepass i:nil="true" />
+  </clientauth>
+  </clientauth>
+  <clientconfig>
+    <dnsservers>
+      <dnsserver>172.10.50.4</dnsserver>  <!-- DNS Private Resolver inbound #1 -->
+    </dnsservers>
+</clientconfig>
+  <name>PUB-NP-VPN</name>
+  <protocolconfig>
+    <sslprotocolConfig>
+      <transportprotocol>tcp</transportprotocol>
+    </sslprotocolConfig>
+  </protocolconfig>
+  <serverlist>
+    <ServerEntry>
+      <displayname i:nil="true" />
+      <fqdn>azuregateway-1d800075-cbb6-4507-af26-c0ac20eeefc5-e4a73f8ea59f.vpn.azure.com</fqdn>
+    </ServerEntry>
+  </serverlist>
+  <servervalidation>
+    <Cert>
+      <hash>DF3C24F9BFD666761B268073FE06D1CC8D4F82A4</hash>
+      <issuer i:nil="true" />
+    </Cert>
+    <serversecret>c513707e122c876cee4873ff974903845f3470cd7e162b8ae962396c365692be4b3fd7e2e84a37a222bfc449ca8a1c8eff88b96ab6b5a7bc7c79cb71fed9597566244258be4c39658950e2412c690375dd1c47e32cdc132a4554a8d78492b8f420125e87afc9062c9a6f32ab0e9963288d6b4e09f97ed24557596f5c547af8abeb6f9709b309d55fb4586d616ddacf58e824d12bc10ed7b98673852ca2c6aa8f19deb8083be8990f50fc1168ab1c79de1140d80804df8a4a697e769c4dcf0416df241fdf0699d38ebc4e33de71cde12f6bcd9bb296016e97f83a79023102a96e62461dd6393e933ef06115587bb41dd4a0ab39c8cb16fd993f1a1f22727c6d0d</serversecret>
+    <type>cert</type>
+  </servervalidation>
+  <version>1</version>
+</AzVpnProfile>
