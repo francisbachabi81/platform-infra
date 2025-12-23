@@ -17,3 +17,7 @@ output "private_ip_address" {
   description = "Static private IP address assigned to the VM."
   value       = azurerm_network_interface.this.ip_configuration[0].private_ip_address
 }
+
+output "vm_identity_principal_id" {
+  value = azurerm_linux_virtual_machine.this.identity[0].principal_id
+}

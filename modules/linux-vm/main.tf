@@ -27,6 +27,10 @@ resource "azurerm_linux_virtual_machine" "this" {
   admin_password                  = var.admin_password
   disable_password_authentication = false
 
+  identity {
+    type = "SystemAssigned"
+  }
+
   os_disk {
     name                 = "${var.name}-osdisk"
     caching              = "ReadWrite"
