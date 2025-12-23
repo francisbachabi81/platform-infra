@@ -574,12 +574,6 @@ variable "cost_exports_root_folder" {
   default     = "cost-management"
 }
 
-variable "cost_exports_schedule_start_offset" {
-  description = "How far in the future to set the schedule start date (must be in the future). Examples: \"24h\", \"48h\"."
-  type        = string
-  default     = "24h"
-}
-
 variable "cost_exports_schedule_end_date" {
   description = "Optional schedule end date (ISO8601). Leave null for no end date."
   type        = string

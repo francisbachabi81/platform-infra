@@ -24,8 +24,6 @@ output "targets" {
     frontdoor_ids = try(keys(local.afd_map),       [])
     aks_ids       = try(keys(local.aks_map),       [])
     nsg_ids       = try(keys(local.nsg_map),       [])
-    law_id        = local.law_id
-    nsg_ids       = try(keys(local.nsg_map), [])
     vnet_ids      = distinct(flatten([for _, v in local.vnet_ids_by_env_effective : v]))
     law_id        = local.law_id
   }
