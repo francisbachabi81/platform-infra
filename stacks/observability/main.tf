@@ -654,7 +654,7 @@ resource "azurerm_monitor_diagnostic_setting" "rsv" {
   }
 
   dynamic "metric" {
-    for_each = toset(try(each.value.metrics, []))
+    for_each = var.enable_diagnostic_metrics ? toset(try(each.value.metrics, [])) : toset([])
     content {
       category = metric.value
       enabled  = true
@@ -885,7 +885,7 @@ resource "azurerm_monitor_diagnostic_setting" "cosmos" {
   }
 
   dynamic "metric" {
-    for_each = toset(try(each.value.metrics, []))
+    for_each = var.enable_diagnostic_metrics ? toset(try(each.value.metrics, [])) : toset([])
     content {
       category = metric.value
       enabled  = true

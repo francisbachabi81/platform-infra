@@ -610,3 +610,9 @@ variable "vnet_flow_logs_storage_account_id_override" {
   type        = string
   default     = null
 }
+
+variable "enable_diagnostic_metrics" {
+  type        = bool
+  description = "Enable metrics in diagnostic settings (logs remain managed)."
+  default     = false
+}
