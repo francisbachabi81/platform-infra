@@ -138,13 +138,8 @@ variable "plan_sku_name" {
 }
 
 variable "application_insights_connection_string" {
-  type      = string
-  default   = null
-  sensitive = true
-}
-
-variable "application_insights_connection_string" {
   type        = string
   default     = null
+  sensitive = true
   description = "Application Insights connection string. If set, will be injected into app settings."
 }
