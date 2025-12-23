@@ -12,7 +12,6 @@
     <type>aad</type>
     <usernamepass i:nil="true" />
   </clientauth>
-  </clientauth>
   <clientconfig>
     <dnsservers>
       <dnsserver>172.10.50.4</dnsserver>  <!-- DNS Private Resolver inbound #1 -->

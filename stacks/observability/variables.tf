@@ -585,3 +585,31 @@ variable "cost_exports_schedule_end_date" {
   type        = string
   default     = null
 }
+
+variable "vnet_ids_by_env" {
+  type = map(list(string))
+  # example:
+  # {
+  #   dev = ["<vnetId1>", "<vnetId2>"]
+  #   qa  = ["<vnetId3>"]
+  # }
+}
+
+# VNet flow logs (preferred; replaces NSG flow logs)
+variable "enable_vnet_flow_logs" {
+  description = "Enable VNet flow logs for VNets (hub/dev/qa/prod/uat) using Network Watcher."
+  type        = bool
+  default     = null
+}
+
+variable "vnet_flow_logs_retention_days" {
+  description = "Retention (days) for VNet flow logs in Traffic Analytics."
+  type        = number
+  default     = null
+}
+
+variable "vnet_flow_logs_storage_account_id_override" {
+  description = "Optional override for the Storage Account used for VNet flow logs. Must live in Core subscription."
+  type        = string
+  default     = null
+}

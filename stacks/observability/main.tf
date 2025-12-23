@@ -1421,29 +1421,81 @@ resource "azurerm_consumption_budget_subscription" "policy_source_budgets" {
 }
 
 # =============================================================================
-# NSG flow logs
+# VNet flow logs (replaces NSG flow logs)
 # =============================================================================
 locals {
-  nsg_flowlog_env_sets = {
+  # --- Backward compat defaults (prefer new vnet_* vars if set) ---
+  flow_logs_enabled_effective = coalesce(var.enable_vnet_flow_logs, var.enable_nsg_flow_logs, false)
+  flow_logs_retention_days    = coalesce(var.vnet_flow_logs_retention_days, var.nsg_flow_logs_retention_days, 30)
+  flow_logs_sa_override_id    = coalesce(var.vnet_flow_logs_storage_account_id_override, var.nsg_flow_logs_storage_account_id_override)
+
+  # Prefer explicit override for workspace GUID first
+  law_workspace_guid = coalesce(
+    var.law_workspace_guid_override,
+    try(data.terraform_remote_state.core.outputs.observability.law_workspace_guid, null),
+    try(data.terraform_remote_state.platform.outputs.observability.law_workspace_guid, null),
+    null
+  )
+
+  # Storage account for flow logs (from platform remote state OR explicit override)
+  flow_logs_storage = try(data.terraform_remote_state.platform.outputs.nsg_flow_logs_storage, null)
+  flow_logs_sa_id   = coalesce(local.flow_logs_sa_override_id, try(local.flow_logs_storage.id, null))
+
+  # Pull VNets from:
+  # 1) shared-network remote state (if you expose it), and
+  # 2) explicit var.vnet_ids_by_env (already in your variables.tf)
+  vnet_ids_by_env_remote = try(data.terraform_remote_state.network.outputs.vnet_ids_by_env, {})
+
+  vnet_env_keys_all = toset(concat(
+    keys(local.vnet_ids_by_env_remote),
+    keys(var.vnet_ids_by_env)
+  ))
+
+  vnet_ids_by_env_effective = {
+    for k in local.vnet_env_keys_all :
+    k => distinct(compact(concat(
+      lookup(local.vnet_ids_by_env_remote, k, []),
+      lookup(var.vnet_ids_by_env,        k, [])
+    )))
+  }
+
+  # Match your existing pattern:
+  # - dev env stack manages: hub + dev + qa
+  # - prod env stack manages: hub + prod + uat
+  vnet_flowlog_env_sets = {
     dev  = ["hub", "dev", "qa"]
     prod = ["hub", "prod", "uat"]
   }
 
-  nsg_flowlog_env_keys = lookup(local.nsg_flowlog_env_sets, local.env_effective, [])
+  vnet_flowlog_env_keys = lookup(local.vnet_flowlog_env_sets, local.env_effective, [])
 
-  nsg_flowlog_items = flatten([
-    for env_key in local.nsg_flowlog_env_keys : [
-      for _, nsg_id in try(data.terraform_remote_state.network.outputs.nsg_ids_by_env[env_key], {}) : {
-        id      = nsg_id
+  vnet_flowlog_items = flatten([
+    for env_key in local.vnet_flowlog_env_keys : [
+      for vnet_id in lookup(local.vnet_ids_by_env_effective, env_key, []) : {
+        id      = vnet_id
         env_key = env_key
       }
     ]
   ])
 
-  nsg_flowlog_map = {
-    for item in local.nsg_flowlog_items :
+  vnet_flowlog_map = {
+    for item in local.vnet_flowlog_items :
     item.id => item
   }
+
+  vnet_flowlogs_enabled = (
+    local.flow_logs_enabled_effective &&
+    local.law_id != null &&
+    local.law_workspace_guid != null &&
+    local.flow_logs_sa_id != null &&
+    length(local.vnet_flowlog_map) > 0
+  )
+
+  vnet_flowlog_map_hub  = { for id, item in local.vnet_flowlog_map : id => item if item.env_key == "hub"  }
+  vnet_flowlog_map_dev  = { for id, item in local.vnet_flowlog_map : id => item if item.env_key == "dev"  }
+  vnet_flowlog_map_qa   = { for id, item in local.vnet_flowlog_map : id => item if item.env_key == "qa"   }
+  vnet_flowlog_map_prod = { for id, item in local.vnet_flowlog_map : id => item if item.env_key == "prod" }
+  vnet_flowlog_map_uat  = { for id, item in local.vnet_flowlog_map : id => item if item.env_key == "uat"  }
 
   network_watcher_by_env = {
     hub = {
@@ -1467,32 +1519,13 @@ locals {
       rg   = "rg-${var.product}-uat-${var.region}-net-01"
     }
   }
-
-  law_workspace_guid = coalesce(
-    try(data.terraform_remote_state.core.outputs.observability.law_workspace_guid, null),
-    try(data.terraform_remote_state.platform.outputs.observability.law_workspace_guid, null),
-    null
-  )
-
-  nsg_flowlogs_enabled = (
-    var.enable_nsg_flow_logs &&
-    local.law_id != null &&
-    local.law_workspace_guid != null &&
-    local.nsg_flow_logs_sa_id != null &&
-    length(local.nsg_flowlog_map) > 0
-  )
-
-  nsg_flowlog_map_hub = { for id, item in local.nsg_flowlog_map : id => item if item.env_key == "hub"  }
-  nsg_flowlog_map_dev = { for id, item in local.nsg_flowlog_map : id => item if item.env_key == "dev"  }
-  nsg_flowlog_map_qa  = { for id, item in local.nsg_flowlog_map : id => item if item.env_key == "qa"   }
-  nsg_flowlog_map_prod= { for id, item in local.nsg_flowlog_map : id => item if item.env_key == "prod" }
-  nsg_flowlog_map_uat = { for id, item in local.nsg_flowlog_map : id => item if item.env_key == "uat"  }
 }
 
-resource "azurerm_network_watcher_flow_log" "nsg_core" {
+# HUB (core subscription)
+resource "azurerm_network_watcher_flow_log" "vnet_core" {
   provider = azurerm.core
 
-  for_each = (local.nsg_flowlogs_enabled && contains(["dev", "prod"], local.env_effective)) ? local.nsg_flowlog_map_hub : {}
+  for_each = (local.vnet_flowlogs_enabled && contains(["dev", "prod"], local.env_effective)) ? local.vnet_flowlog_map_hub : {}
 
   name = "fl-${var.product}-${each.value.env_key}-${var.region}-${basename(each.value.id)}"
 
@@ -1500,14 +1533,14 @@ resource "azurerm_network_watcher_flow_log" "nsg_core" {
   resource_group_name  = local.network_watcher_by_env[each.value.env_key].rg
 
   target_resource_id = each.value.id
-  storage_account_id = local.nsg_flow_logs_sa_id
+  storage_account_id = local.flow_logs_sa_id
 
   enabled = true
   version = 2
 
   retention_policy {
     enabled = true
-    days    = var.nsg_flow_logs_retention_days
+    days    = local.flow_logs_retention_days
   }
 
   traffic_analytics {
@@ -1523,17 +1556,18 @@ resource "azurerm_network_watcher_flow_log" "nsg_core" {
       condition = (
         local.law_id != null &&
         local.law_workspace_guid != null &&
-        local.nsg_flow_logs_sa_id != null
+        local.flow_logs_sa_id != null
       )
-      error_message = "LAW workspace (ID/GUID) or NSG flow-logs storage account not resolved."
+      error_message = "LAW workspace (ID/GUID) or flow-logs storage account not resolved."
     }
   }
 }
 
-resource "azurerm_network_watcher_flow_log" "nsg_dev" {
+# DEV subscription
+resource "azurerm_network_watcher_flow_log" "vnet_dev" {
   provider = azurerm.dev
 
-  for_each = (local.nsg_flowlogs_enabled && local.env_effective == "dev") ? local.nsg_flowlog_map_dev : {}
+  for_each = (local.vnet_flowlogs_enabled && local.env_effective == "dev") ? local.vnet_flowlog_map_dev : {}
 
   name = "fl-${var.product}-${each.value.env_key}-${var.region}-${basename(each.value.id)}"
 
@@ -1541,14 +1575,14 @@ resource "azurerm_network_watcher_flow_log" "nsg_dev" {
   resource_group_name  = local.network_watcher_by_env["dev"].rg
 
   target_resource_id = each.value.id
-  storage_account_id = local.nsg_flow_logs_sa_id
+  storage_account_id = local.flow_logs_sa_id
 
   enabled = true
   version = 2
 
   retention_policy {
     enabled = true
-    days    = var.nsg_flow_logs_retention_days
+    days    = local.flow_logs_retention_days
   }
 
   traffic_analytics {
@@ -1558,23 +1592,13 @@ resource "azurerm_network_watcher_flow_log" "nsg_dev" {
     workspace_resource_id = local.law_id
     interval_in_minutes   = 10
   }
-
-  lifecycle {
-    precondition {
-      condition = (
-        local.law_id != null &&
-        local.law_workspace_guid != null &&
-        local.nsg_flow_logs_sa_id != null
-      )
-      error_message = "LAW workspace (ID/GUID) or NSG flow-logs storage account not resolved."
-    }
-  }
 }
 
-resource "azurerm_network_watcher_flow_log" "nsg_qa" {
+# QA subscription (created by the dev stack)
+resource "azurerm_network_watcher_flow_log" "vnet_qa" {
   provider = azurerm.qa
 
-  for_each = (local.nsg_flowlogs_enabled && local.env_effective == "dev") ? local.nsg_flowlog_map_qa : {}
+  for_each = (local.vnet_flowlogs_enabled && local.env_effective == "dev") ? local.vnet_flowlog_map_qa : {}
 
   name = "fl-${var.product}-${each.value.env_key}-${var.region}-${basename(each.value.id)}"
 
@@ -1582,14 +1606,14 @@ resource "azurerm_network_watcher_flow_log" "nsg_qa" {
   resource_group_name  = local.network_watcher_by_env["qa"].rg
 
   target_resource_id = each.value.id
-  storage_account_id = local.nsg_flow_logs_sa_id
+  storage_account_id = local.flow_logs_sa_id
 
   enabled = true
   version = 2
 
   retention_policy {
     enabled = true
-    days    = var.nsg_flow_logs_retention_days
+    days    = local.flow_logs_retention_days
   }
 
   traffic_analytics {
@@ -1599,23 +1623,13 @@ resource "azurerm_network_watcher_flow_log" "nsg_qa" {
     workspace_resource_id = local.law_id
     interval_in_minutes   = 10
   }
-
-  lifecycle {
-    precondition {
-      condition = (
-        local.law_id != null &&
-        local.law_workspace_guid != null &&
-        local.nsg_flow_logs_sa_id != null
-      )
-      error_message = "LAW workspace (ID/GUID) or NSG flow-logs storage account not resolved."
-    }
-  }
 }
 
-resource "azurerm_network_watcher_flow_log" "nsg_prod" {
+# PROD subscription
+resource "azurerm_network_watcher_flow_log" "vnet_prod" {
   provider = azurerm.prod
 
-  for_each = (local.nsg_flowlogs_enabled && local.env_effective == "prod") ? local.nsg_flowlog_map_prod : {}
+  for_each = (local.vnet_flowlogs_enabled && local.env_effective == "prod") ? local.vnet_flowlog_map_prod : {}
 
   name = "fl-${var.product}-${each.value.env_key}-${var.region}-${basename(each.value.id)}"
 
@@ -1623,14 +1637,14 @@ resource "azurerm_network_watcher_flow_log" "nsg_prod" {
   resource_group_name  = local.network_watcher_by_env["prod"].rg
 
   target_resource_id = each.value.id
-  storage_account_id = local.nsg_flow_logs_sa_id
+  storage_account_id = local.flow_logs_sa_id
 
   enabled = true
   version = 2
 
   retention_policy {
     enabled = true
-    days    = var.nsg_flow_logs_retention_days
+    days    = local.flow_logs_retention_days
   }
 
   traffic_analytics {
@@ -1640,23 +1654,13 @@ resource "azurerm_network_watcher_flow_log" "nsg_prod" {
     workspace_resource_id = local.law_id
     interval_in_minutes   = 10
   }
-
-  lifecycle {
-    precondition {
-      condition = (
-        local.law_id != null &&
-        local.law_workspace_guid != null &&
-        local.nsg_flow_logs_sa_id != null
-      )
-      error_message = "LAW workspace (ID/GUID) or NSG flow-logs storage account not resolved."
-    }
-  }
 }
 
-resource "azurerm_network_watcher_flow_log" "nsg_uat" {
+# UAT subscription (created by the prod stack)
+resource "azurerm_network_watcher_flow_log" "vnet_uat" {
   provider = azurerm.uat
 
-  for_each = (local.nsg_flowlogs_enabled && local.env_effective == "prod") ? local.nsg_flowlog_map_uat : {}
+  for_each = (local.vnet_flowlogs_enabled && local.env_effective == "prod") ? local.vnet_flowlog_map_uat : {}
 
   name = "fl-${var.product}-${each.value.env_key}-${var.region}-${basename(each.value.id)}"
 
@@ -1664,14 +1668,14 @@ resource "azurerm_network_watcher_flow_log" "nsg_uat" {
   resource_group_name  = local.network_watcher_by_env["uat"].rg
 
   target_resource_id = each.value.id
-  storage_account_id = local.nsg_flow_logs_sa_id
+  storage_account_id = local.flow_logs_sa_id
 
   enabled = true
   version = 2
 
   retention_policy {
     enabled = true
-    days    = var.nsg_flow_logs_retention_days
+    days    = local.flow_logs_retention_days
   }
 
   traffic_analytics {
@@ -1681,18 +1685,281 @@ resource "azurerm_network_watcher_flow_log" "nsg_uat" {
     workspace_resource_id = local.law_id
     interval_in_minutes   = 10
   }
-
-  lifecycle {
-    precondition {
-      condition = (
-        local.law_id != null &&
-        local.law_workspace_guid != null &&
-        local.nsg_flow_logs_sa_id != null
-      )
-      error_message = "LAW workspace (ID/GUID) or NSG flow-logs storage account not resolved."
-    }
-  }
 }
+
+# =============================================================================
+# NSG flow logs
+# =============================================================================
+# locals {
+#   nsg_flowlog_env_sets = {
+#     dev  = ["hub", "dev", "qa"]
+#     prod = ["hub", "prod", "uat"]
+#   }
+
+#   nsg_flowlog_env_keys = lookup(local.nsg_flowlog_env_sets, local.env_effective, [])
+
+#   nsg_flowlog_items = flatten([
+#     for env_key in local.nsg_flowlog_env_keys : [
+#       for _, nsg_id in try(data.terraform_remote_state.network.outputs.nsg_ids_by_env[env_key], {}) : {
+#         id      = nsg_id
+#         env_key = env_key
+#       }
+#     ]
+#   ])
+
+#   nsg_flowlog_map = {
+#     for item in local.nsg_flowlog_items :
+#     item.id => item
+#   }
+
+#   network_watcher_by_env = {
+#     hub = {
+#       name = "nw-${var.product}-${local.plane_code}-${var.region}-01"
+#       rg   = "rg-${var.product}-${local.plane_code}-${var.region}-net-01"
+#     }
+#     dev = {
+#       name = "nw-${var.product}-dev-${var.region}-01"
+#       rg   = "rg-${var.product}-dev-${var.region}-net-01"
+#     }
+#     qa = {
+#       name = "nw-${var.product}-qa-${var.region}-01"
+#       rg   = "rg-${var.product}-qa-${var.region}-net-01"
+#     }
+#     prod = {
+#       name = "nw-${var.product}-prod-${var.region}-01"
+#       rg   = "rg-${var.product}-prod-${var.region}-net-01"
+#     }
+#     uat = {
+#       name = "nw-${var.product}-uat-${var.region}-01"
+#       rg   = "rg-${var.product}-uat-${var.region}-net-01"
+#     }
+#   }
+
+#   law_workspace_guid = coalesce(
+#     try(data.terraform_remote_state.core.outputs.observability.law_workspace_guid, null),
+#     try(data.terraform_remote_state.platform.outputs.observability.law_workspace_guid, null),
+#     null
+#   )
+
+#   nsg_flowlogs_enabled = (
+#     var.enable_nsg_flow_logs &&
+#     local.law_id != null &&
+#     local.law_workspace_guid != null &&
+#     local.nsg_flow_logs_sa_id != null &&
+#     length(local.nsg_flowlog_map) > 0
+#   )
+
+#   nsg_flowlog_map_hub = { for id, item in local.nsg_flowlog_map : id => item if item.env_key == "hub"  }
+#   nsg_flowlog_map_dev = { for id, item in local.nsg_flowlog_map : id => item if item.env_key == "dev"  }
+#   nsg_flowlog_map_qa  = { for id, item in local.nsg_flowlog_map : id => item if item.env_key == "qa"   }
+#   nsg_flowlog_map_prod= { for id, item in local.nsg_flowlog_map : id => item if item.env_key == "prod" }
+#   nsg_flowlog_map_uat = { for id, item in local.nsg_flowlog_map : id => item if item.env_key == "uat"  }
+# }
+
+# resource "azurerm_network_watcher_flow_log" "nsg_core" {
+#   provider = azurerm.core
+
+#   for_each = (local.nsg_flowlogs_enabled && contains(["dev", "prod"], local.env_effective)) ? local.nsg_flowlog_map_hub : {}
+
+#   name = "fl-${var.product}-${each.value.env_key}-${var.region}-${basename(each.value.id)}"
+
+#   network_watcher_name = local.network_watcher_by_env[each.value.env_key].name
+#   resource_group_name  = local.network_watcher_by_env[each.value.env_key].rg
+
+#   target_resource_id = each.value.id
+#   storage_account_id = local.nsg_flow_logs_sa_id
+
+#   enabled = true
+#   version = 2
+
+#   retention_policy {
+#     enabled = true
+#     days    = var.nsg_flow_logs_retention_days
+#   }
+
+#   traffic_analytics {
+#     enabled               = true
+#     workspace_id          = local.law_workspace_guid
+#     workspace_region      = var.location
+#     workspace_resource_id = local.law_id
+#     interval_in_minutes   = 10
+#   }
+
+#   lifecycle {
+#     precondition {
+#       condition = (
+#         local.law_id != null &&
+#         local.law_workspace_guid != null &&
+#         local.nsg_flow_logs_sa_id != null
+#       )
+#       error_message = "LAW workspace (ID/GUID) or NSG flow-logs storage account not resolved."
+#     }
+#   }
+# }
+
+# resource "azurerm_network_watcher_flow_log" "nsg_dev" {
+#   provider = azurerm.dev
+
+#   for_each = (local.nsg_flowlogs_enabled && local.env_effective == "dev") ? local.nsg_flowlog_map_dev : {}
+
+#   name = "fl-${var.product}-${each.value.env_key}-${var.region}-${basename(each.value.id)}"
+
+#   network_watcher_name = local.network_watcher_by_env["dev"].name
+#   resource_group_name  = local.network_watcher_by_env["dev"].rg
+
+#   target_resource_id = each.value.id
+#   storage_account_id = local.nsg_flow_logs_sa_id
+
+#   enabled = true
+#   version = 2
+
+#   retention_policy {
+#     enabled = true
+#     days    = var.nsg_flow_logs_retention_days
+#   }
+
+#   traffic_analytics {
+#     enabled               = true
+#     workspace_id          = local.law_workspace_guid
+#     workspace_region      = var.location
+#     workspace_resource_id = local.law_id
+#     interval_in_minutes   = 10
+#   }
+
+#   lifecycle {
+#     precondition {
+#       condition = (
+#         local.law_id != null &&
+#         local.law_workspace_guid != null &&
+#         local.nsg_flow_logs_sa_id != null
+#       )
+#       error_message = "LAW workspace (ID/GUID) or NSG flow-logs storage account not resolved."
+#     }
+#   }
+# }
+
+# resource "azurerm_network_watcher_flow_log" "nsg_qa" {
+#   provider = azurerm.qa
+
+#   for_each = (local.nsg_flowlogs_enabled && local.env_effective == "dev") ? local.nsg_flowlog_map_qa : {}
+
+#   name = "fl-${var.product}-${each.value.env_key}-${var.region}-${basename(each.value.id)}"
+
+#   network_watcher_name = local.network_watcher_by_env["qa"].name
+#   resource_group_name  = local.network_watcher_by_env["qa"].rg
+
+#   target_resource_id = each.value.id
+#   storage_account_id = local.nsg_flow_logs_sa_id
+
+#   enabled = true
+#   version = 2
+
+#   retention_policy {
+#     enabled = true
+#     days    = var.nsg_flow_logs_retention_days
+#   }
+
+#   traffic_analytics {
+#     enabled               = true
+#     workspace_id          = local.law_workspace_guid
+#     workspace_region      = var.location
+#     workspace_resource_id = local.law_id
+#     interval_in_minutes   = 10
+#   }
+
+#   lifecycle {
+#     precondition {
+#       condition = (
+#         local.law_id != null &&
+#         local.law_workspace_guid != null &&
+#         local.nsg_flow_logs_sa_id != null
+#       )
+#       error_message = "LAW workspace (ID/GUID) or NSG flow-logs storage account not resolved."
+#     }
+#   }
+# }
+
+# resource "azurerm_network_watcher_flow_log" "nsg_prod" {
+#   provider = azurerm.prod
+
+#   for_each = (local.nsg_flowlogs_enabled && local.env_effective == "prod") ? local.nsg_flowlog_map_prod : {}
+
+#   name = "fl-${var.product}-${each.value.env_key}-${var.region}-${basename(each.value.id)}"
+
+#   network_watcher_name = local.network_watcher_by_env["prod"].name
+#   resource_group_name  = local.network_watcher_by_env["prod"].rg
+
+#   target_resource_id = each.value.id
+#   storage_account_id = local.nsg_flow_logs_sa_id
+
+#   enabled = true
+#   version = 2
+
+#   retention_policy {
+#     enabled = true
+#     days    = var.nsg_flow_logs_retention_days
+#   }
+
+#   traffic_analytics {
+#     enabled               = true
+#     workspace_id          = local.law_workspace_guid
+#     workspace_region      = var.location
+#     workspace_resource_id = local.law_id
+#     interval_in_minutes   = 10
+#   }
+
+#   lifecycle {
+#     precondition {
+#       condition = (
+#         local.law_id != null &&
+#         local.law_workspace_guid != null &&
+#         local.nsg_flow_logs_sa_id != null
+#       )
+#       error_message = "LAW workspace (ID/GUID) or NSG flow-logs storage account not resolved."
+#     }
+#   }
+# }
+
+# resource "azurerm_network_watcher_flow_log" "nsg_uat" {
+#   provider = azurerm.uat
+
+#   for_each = (local.nsg_flowlogs_enabled && local.env_effective == "prod") ? local.nsg_flowlog_map_uat : {}
+
+#   name = "fl-${var.product}-${each.value.env_key}-${var.region}-${basename(each.value.id)}"
+
+#   network_watcher_name = local.network_watcher_by_env["uat"].name
+#   resource_group_name  = local.network_watcher_by_env["uat"].rg
+
+#   target_resource_id = each.value.id
+#   storage_account_id = local.nsg_flow_logs_sa_id
+
+#   enabled = true
+#   version = 2
+
+#   retention_policy {
+#     enabled = true
+#     days    = var.nsg_flow_logs_retention_days
+#   }
+
+#   traffic_analytics {
+#     enabled               = true
+#     workspace_id          = local.law_workspace_guid
+#     workspace_region      = var.location
+#     workspace_resource_id = local.law_id
+#     interval_in_minutes   = 10
+#   }
+
+#   lifecycle {
+#     precondition {
+#       condition = (
+#         local.law_id != null &&
+#         local.law_workspace_guid != null &&
+#         local.nsg_flow_logs_sa_id != null
+#       )
+#       error_message = "LAW workspace (ID/GUID) or NSG flow-logs storage account not resolved."
+#     }
+#   }
+# }
 
 # =============================================================================
 # AzAPI providers for Cost Management Exports (subscription-scoped resources)
@@ -1722,54 +1989,36 @@ provider "azapi" {
 }
 
 # --- Register required Resource Providers (core + env subscriptions) ---
-resource "azurerm_resource_provider_registration" "cost_exports_rp_core" {
-  provider = azurerm.core
-  name     = "Microsoft.CostManagementExports"
+locals {
+  cost_exports_rp_targets = (
+  !local.cost_exports_enabled ? toset([]) :
+  local.env_effective == "dev"  ? toset(["core", "dev", "qa"]) :
+  local.env_effective == "prod" ? toset(["core", "uat", "prod"]) :
+  toset([])
+)
+
+  # Map alias -> provider config (must exist as provider aliases above)
+  azurerm_provider_by_alias = {
+    core = azurerm.core
+    dev  = azurerm.dev
+    qa   = azurerm.qa
+    uat  = azurerm.uat
+    prod = azurerm.prod
+  }
 }
 
-resource "azurerm_resource_provider_registration" "cost_exports_rp_dev" {
-  provider = azurerm.dev
-  name     = "Microsoft.CostManagementExports"
-}
+resource "azurerm_resource_provider_registration" "cost_exports_rp" {
+  for_each = local.cost_exports_rp_targets
 
-resource "azurerm_resource_provider_registration" "cost_exports_rp_qa" {
-  provider = azurerm.qa
-  name     = "Microsoft.CostManagementExports"
-}
-
-resource "azurerm_resource_provider_registration" "cost_exports_rp_uat" {
-  provider = azurerm.uat
-  name     = "Microsoft.CostManagementExports"
-}
-
-resource "azurerm_resource_provider_registration" "cost_exports_rp_prod" {
-  provider = azurerm.prod
+  provider = local.azurerm_provider_by_alias[each.key]
   name     = "Microsoft.CostManagementExports"
 }
 
 # --- RP Registration barriers (helps with eventual consistency in ARM) ---
-resource "time_sleep" "wait_cost_exports_rp_core" {
-  depends_on      = [azurerm_resource_provider_registration.cost_exports_rp_core]
-  create_duration = "8m"
-}
+resource "time_sleep" "wait_cost_exports_rp" {
+  for_each = local.cost_exports_rp_targets
 
-resource "time_sleep" "wait_cost_exports_rp_dev" {
-  depends_on      = [azurerm_resource_provider_registration.cost_exports_rp_dev]
-  create_duration = "8m"
-}
-
-resource "time_sleep" "wait_cost_exports_rp_qa" {
-  depends_on      = [azurerm_resource_provider_registration.cost_exports_rp_qa]
-  create_duration = "8m"
-}
-
-resource "time_sleep" "wait_cost_exports_rp_uat" {
-  depends_on      = [azurerm_resource_provider_registration.cost_exports_rp_uat]
-  create_duration = "8m"
-}
-
-resource "time_sleep" "wait_cost_exports_rp_prod" {
-  depends_on      = [azurerm_resource_provider_registration.cost_exports_rp_prod]
+  depends_on      = [azurerm_resource_provider_registration.cost_exports_rp[each.key]]
   create_duration = "8m"
 }
 
@@ -1839,18 +2088,7 @@ resource "azapi_resource" "cost_export_dev_last_month" {
 
 #  response_export_values = ["identity.principalId"]
 
-  depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    time_sleep.wait_cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_exports_rp_dev,
-    time_sleep.wait_cost_exports_rp_dev,
-    azurerm_resource_provider_registration.cost_exports_rp_qa,
-    time_sleep.wait_cost_exports_rp_qa,
-    azurerm_resource_provider_registration.cost_exports_rp_uat,
-    time_sleep.wait_cost_exports_rp_uat,
-    azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod
-  ]
+  depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
     precondition {
@@ -1895,18 +2133,7 @@ resource "azapi_resource" "cost_export_dev_mtd_daily" {
 
 #  response_export_values = ["identity.principalId"]
 
-  depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    time_sleep.wait_cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_exports_rp_dev,
-    time_sleep.wait_cost_exports_rp_dev,
-    azurerm_resource_provider_registration.cost_exports_rp_qa,
-    time_sleep.wait_cost_exports_rp_qa,
-    azurerm_resource_provider_registration.cost_exports_rp_uat,
-    time_sleep.wait_cost_exports_rp_uat,
-    azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod
-  ]
+  depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
     precondition {
@@ -1955,18 +2182,7 @@ resource "azapi_resource" "cost_export_dev_manual_custom" {
 
 #  response_export_values = ["identity.principalId"]
 
-  depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    time_sleep.wait_cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_exports_rp_dev,
-    time_sleep.wait_cost_exports_rp_dev,
-    azurerm_resource_provider_registration.cost_exports_rp_qa,
-    time_sleep.wait_cost_exports_rp_qa,
-    azurerm_resource_provider_registration.cost_exports_rp_uat,
-    time_sleep.wait_cost_exports_rp_uat,
-    azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod
-  ]
+  depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
     precondition {
@@ -2012,18 +2228,7 @@ resource "azapi_resource" "cost_export_qa_last_month" {
 
 #  response_export_values = ["identity.principalId"]
 
-  depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    time_sleep.wait_cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_exports_rp_dev,
-    time_sleep.wait_cost_exports_rp_dev,
-    azurerm_resource_provider_registration.cost_exports_rp_qa,
-    time_sleep.wait_cost_exports_rp_qa,
-    azurerm_resource_provider_registration.cost_exports_rp_uat,
-    time_sleep.wait_cost_exports_rp_uat,
-    azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod
-  ]
+  depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
     precondition {
@@ -2068,18 +2273,7 @@ resource "azapi_resource" "cost_export_qa_mtd_daily" {
 
 #  response_export_values = ["identity.principalId"]
 
-  depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    time_sleep.wait_cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_exports_rp_dev,
-    time_sleep.wait_cost_exports_rp_dev,
-    azurerm_resource_provider_registration.cost_exports_rp_qa,
-    time_sleep.wait_cost_exports_rp_qa,
-    azurerm_resource_provider_registration.cost_exports_rp_uat,
-    time_sleep.wait_cost_exports_rp_uat,
-    azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod
-  ]
+  depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
     precondition {
@@ -2128,18 +2322,7 @@ resource "azapi_resource" "cost_export_qa_manual_custom" {
 
 #  response_export_values = ["identity.principalId"]
 
-  depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    time_sleep.wait_cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_exports_rp_dev,
-    time_sleep.wait_cost_exports_rp_dev,
-    azurerm_resource_provider_registration.cost_exports_rp_qa,
-    time_sleep.wait_cost_exports_rp_qa,
-    azurerm_resource_provider_registration.cost_exports_rp_uat,
-    time_sleep.wait_cost_exports_rp_uat,
-    azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod
-  ]
+  depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
     precondition {
@@ -2185,18 +2368,7 @@ resource "azapi_resource" "cost_export_prod_last_month" {
 
 #  response_export_values = ["identity.principalId"]
 
-  depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    time_sleep.wait_cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_exports_rp_dev,
-    time_sleep.wait_cost_exports_rp_dev,
-    azurerm_resource_provider_registration.cost_exports_rp_qa,
-    time_sleep.wait_cost_exports_rp_qa,
-    azurerm_resource_provider_registration.cost_exports_rp_uat,
-    time_sleep.wait_cost_exports_rp_uat,
-    azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod
-  ]
+  depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
     precondition {
@@ -2241,18 +2413,7 @@ resource "azapi_resource" "cost_export_prod_mtd_daily" {
 
 #  response_export_values = ["identity.principalId"]
 
-  depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    time_sleep.wait_cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_exports_rp_dev,
-    time_sleep.wait_cost_exports_rp_dev,
-    azurerm_resource_provider_registration.cost_exports_rp_qa,
-    time_sleep.wait_cost_exports_rp_qa,
-    azurerm_resource_provider_registration.cost_exports_rp_uat,
-    time_sleep.wait_cost_exports_rp_uat,
-    azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod
-  ]
+  depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
     precondition {
@@ -2301,18 +2462,7 @@ resource "azapi_resource" "cost_export_prod_manual_custom" {
 
 #  response_export_values = ["identity.principalId"]
 
-  depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    time_sleep.wait_cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_exports_rp_dev,
-    time_sleep.wait_cost_exports_rp_dev,
-    azurerm_resource_provider_registration.cost_exports_rp_qa,
-    time_sleep.wait_cost_exports_rp_qa,
-    azurerm_resource_provider_registration.cost_exports_rp_uat,
-    time_sleep.wait_cost_exports_rp_uat,
-    azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod
-  ]
+  depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
     precondition {
@@ -2358,18 +2508,7 @@ resource "azapi_resource" "cost_export_uat_last_month" {
 
 #  response_export_values = ["identity.principalId"]
 
-  depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    time_sleep.wait_cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_exports_rp_dev,
-    time_sleep.wait_cost_exports_rp_dev,
-    azurerm_resource_provider_registration.cost_exports_rp_qa,
-    time_sleep.wait_cost_exports_rp_qa,
-    azurerm_resource_provider_registration.cost_exports_rp_uat,
-    time_sleep.wait_cost_exports_rp_uat,
-    azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod
-  ]
+  depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
     precondition {
@@ -2414,18 +2553,7 @@ resource "azapi_resource" "cost_export_uat_mtd_daily" {
 
 #  response_export_values = ["identity.principalId"]
 
-  depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    time_sleep.wait_cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_exports_rp_dev,
-    time_sleep.wait_cost_exports_rp_dev,
-    azurerm_resource_provider_registration.cost_exports_rp_qa,
-    time_sleep.wait_cost_exports_rp_qa,
-    azurerm_resource_provider_registration.cost_exports_rp_uat,
-    time_sleep.wait_cost_exports_rp_uat,
-    azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod
-  ]
+  depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
     precondition {
@@ -2474,18 +2602,7 @@ resource "azapi_resource" "cost_export_uat_manual_custom" {
 
 #  response_export_values = ["identity.principalId"]
 
-  depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    time_sleep.wait_cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_exports_rp_dev,
-    time_sleep.wait_cost_exports_rp_dev,
-    azurerm_resource_provider_registration.cost_exports_rp_qa,
-    time_sleep.wait_cost_exports_rp_qa,
-    azurerm_resource_provider_registration.cost_exports_rp_uat,
-    time_sleep.wait_cost_exports_rp_uat,
-    azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod
-  ]
+  depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
     precondition {
@@ -2531,18 +2648,7 @@ resource "azapi_resource" "cost_export_core_nonprod_last_month" {
 
 #  response_export_values = ["identity.principalId"]
 
-  depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    time_sleep.wait_cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_exports_rp_dev,
-    time_sleep.wait_cost_exports_rp_dev,
-    azurerm_resource_provider_registration.cost_exports_rp_qa,
-    time_sleep.wait_cost_exports_rp_qa,
-    azurerm_resource_provider_registration.cost_exports_rp_uat,
-    time_sleep.wait_cost_exports_rp_uat,
-    azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod
-  ]
+  depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
     precondition {
@@ -2587,18 +2693,7 @@ resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
 
 #  response_export_values = ["identity.principalId"]
 
-  depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    time_sleep.wait_cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_exports_rp_dev,
-    time_sleep.wait_cost_exports_rp_dev,
-    azurerm_resource_provider_registration.cost_exports_rp_qa,
-    time_sleep.wait_cost_exports_rp_qa,
-    azurerm_resource_provider_registration.cost_exports_rp_uat,
-    time_sleep.wait_cost_exports_rp_uat,
-    azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod
-  ]
+  depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
     precondition {
@@ -2647,18 +2742,7 @@ resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
 
 #  response_export_values = ["identity.principalId"]
 
-  depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    time_sleep.wait_cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_exports_rp_dev,
-    time_sleep.wait_cost_exports_rp_dev,
-    azurerm_resource_provider_registration.cost_exports_rp_qa,
-    time_sleep.wait_cost_exports_rp_qa,
-    azurerm_resource_provider_registration.cost_exports_rp_uat,
-    time_sleep.wait_cost_exports_rp_uat,
-    azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod
-  ]
+  depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
     precondition {
@@ -2703,18 +2787,7 @@ resource "azapi_resource" "cost_export_core_prod_last_month" {
 
 #  response_export_values = ["identity.principalId"]
 
-  depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    time_sleep.wait_cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_exports_rp_dev,
-    time_sleep.wait_cost_exports_rp_dev,
-    azurerm_resource_provider_registration.cost_exports_rp_qa,
-    time_sleep.wait_cost_exports_rp_qa,
-    azurerm_resource_provider_registration.cost_exports_rp_uat,
-    time_sleep.wait_cost_exports_rp_uat,
-    azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod
-  ]
+  depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
     precondition {
@@ -2759,18 +2832,7 @@ resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
 
 #  response_export_values = ["identity.principalId"]
 
-  depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    time_sleep.wait_cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_exports_rp_dev,
-    time_sleep.wait_cost_exports_rp_dev,
-    azurerm_resource_provider_registration.cost_exports_rp_qa,
-    time_sleep.wait_cost_exports_rp_qa,
-    azurerm_resource_provider_registration.cost_exports_rp_uat,
-    time_sleep.wait_cost_exports_rp_uat,
-    azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod
-  ]
+  depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
     precondition {
@@ -2819,18 +2881,7 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
 
 #  response_export_values = ["identity.principalId"]
 
-  depends_on = [
-    azurerm_resource_provider_registration.cost_exports_rp_core,
-    time_sleep.wait_cost_exports_rp_core,
-    azurerm_resource_provider_registration.cost_exports_rp_dev,
-    time_sleep.wait_cost_exports_rp_dev,
-    azurerm_resource_provider_registration.cost_exports_rp_qa,
-    time_sleep.wait_cost_exports_rp_qa,
-    azurerm_resource_provider_registration.cost_exports_rp_uat,
-    time_sleep.wait_cost_exports_rp_uat,
-    azurerm_resource_provider_registration.cost_exports_rp_prod,
-    time_sleep.wait_cost_exports_rp_prod
-  ]
+  depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
     precondition {
