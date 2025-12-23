@@ -643,14 +643,28 @@ resource "azurerm_monitor_diagnostic_setting" "rsv" {
   log_analytics_workspace_id = local.law_id
 
   dynamic "enabled_log" {
-    for_each = toset(var.rsv_log_categories)
+    for_each = toset([
+      for c in var.rsv_log_categories :
+      c if (
+        contains(try(each.value.log_category_types, []), c) ||
+        contains(try(each.value.logs, []), c)
+      )
+    ])
     content { category = enabled_log.value }
+  }
+
+  dynamic "metric" {
+    for_each = toset(try(each.value.metrics, []))
+    content {
+      category = metric.value
+      enabled  = true
+    }
   }
 
   lifecycle {
     precondition {
       condition     = local.law_id != null
-      error_message = "LAW workspace ID could not be resolved for Recovery Services Vault diagnostics."
+      error_message = "LAW workspace ID could not be resolved for Redis diagnostics."
     }
   }
 }
@@ -870,10 +884,18 @@ resource "azurerm_monitor_diagnostic_setting" "cosmos" {
     content { category = enabled_log.value }
   }
 
+  dynamic "metric" {
+    for_each = toset(try(each.value.metrics, []))
+    content {
+      category = metric.value
+      enabled  = true
+    }
+  }
+
   lifecycle {
     precondition {
       condition     = local.law_id != null
-      error_message = "LAW workspace ID could not be resolved for Cosmos diagnostics."
+      error_message = "LAW workspace ID could not be resolved for Redis diagnostics."
     }
   }
 }
