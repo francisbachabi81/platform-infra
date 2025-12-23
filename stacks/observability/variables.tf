@@ -587,12 +587,9 @@ variable "cost_exports_schedule_end_date" {
 }
 
 variable "vnet_ids_by_env" {
-  type = map(list(string))
-  # example:
-  # {
-  #   dev = ["<vnetId1>", "<vnetId2>"]
-  #   qa  = ["<vnetId3>"]
-  # }
+  description = "Optional explicit VNet IDs by env. If empty, module will try to discover VNets from shared-network remote state."
+  type        = map(list(string))
+  default     = {}
 }
 
 # VNet flow logs (preferred; replaces NSG flow logs)
