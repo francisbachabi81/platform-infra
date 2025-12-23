@@ -430,26 +430,6 @@ variable "aks_ingress_allowed_cidrs" {
   }
 }
 
-# variable "aks_ingress_allowed_cidrs" {
-#   description = "CIDR(s) or service tags allowed to reach AKS LB/Ingress from Internet side"
-#   type        = map(list(string))
-
-#   # Replace the x.x.x.x values with your actual App Gateway / WAF public IPs
-#   default = {
-#     nonprod = [
-#       "0.0.0.0/0",         # keep wide-open for labs / nonprod if you want
-#       "203.0.113.10/32",   # nonprod AppGW/WAF public IP
-#     ]
-
-#     prod = [
-#       "198.51.100.10/32",  # prod AppGW/WAF public IP 1
-#       "198.51.100.11/32",  # prod AppGW/WAF public IP 2 (optional)
-#       # if you are NOT using an AKS-managed NSG for this rule, you could also add:
-#       # "AzureFrontDoor.Backend"
-#     ]
-#   }
-# }
-
 variable "baseline_allowed_service_tags" {
   type = list(string)
   default = [
@@ -461,3 +441,72 @@ variable "baseline_allowed_service_tags" {
     # "AzureActiveDirectory",
   ]
 }
+
+# AppGW Stage 2 controls
+variable "appgw_enable_stage2" {
+  type        = bool
+  description = "Enable App Gateway Stage 2 (UAMI + KV access + SSL/listeners/rules)."
+  default     = false
+}
+
+variable "appgw_backend_ips_by_env" {
+  type = map(string)
+  description = <<EOT
+Backend IPs per environment for App Gateway to forward to.
+Example:
+  {
+    dev  = "10.20.1.10"
+    qa   = "10.20.2.10"
+    uat  = "10.30.1.10"
+    prod = "10.30.2.10"
+  }
+EOT
+  default = {}
+}
+
+variable "appgw_key_vault_id" {
+  type        = string
+  description = "Key Vault ID that stores the SSL cert secrets (one secret per env)."
+}
+
+variable "appgw_stage2_env_enabled" {
+  type = map(bool)
+  description = <<EOT
+Enable Stage 2 config per environment so you can deploy cert/listeners independently.
+Example:
+  { dev = true, qa = false }  # only configure dev now
+EOT
+  default = {}
+}
+
+variable "appgw_ssl_cert_secret_name_by_env" {
+  type = map(string)
+  description = <<EOT
+Key Vault secret name (per env) containing the PFX/base64 or whatever your stage2 module expects.
+Examples:
+  dev  = "appgw-dev-cert"
+  qa   = "appgw-qa-cert"
+  uat  = "appgw-uat-cert"
+  prod = "appgw-prod-cert"
+EOT
+  default = {}
+}
+
+variable "appgw_stage2_uami_name" {
+  type        = string
+  description = "Optional override name for the User Assigned Managed Identity used by AppGW Stage 2."
+  default     = null
+}
+
+variable "appgw_hostnames_by_env" {
+  type        = map(string)
+  description = "Optional override hostnames by env (defaults are dev/qa/uat + prod root)."
+  default     = {}
+}
+
+variable "appgw_ssl_policy_name" {
+  type        = string
+  description = "Optional SSL policy name to apply in stage2 (module-dependent)."
+  default     = null
+}
+
