@@ -1181,6 +1181,12 @@ locals {
 }
 
 # GitHub Actions runner egress
+
+locals {
+  # HRZ keeps the real runner egress; PUB uses fixed 1.1.1.1
+  ghrunner_egress_ip = lower(var.product) == "pub" ? "172.10.13.10" : "10.10.13.10"
+}
+
 resource "azurerm_network_security_rule" "allow_ghrunner_https_internet_hub" {
   for_each                    = local.ghrunner_targets_hub
   name                        = "allow-ghrunner-https-internet"
@@ -1190,7 +1196,7 @@ resource "azurerm_network_security_rule" "allow_ghrunner_https_internet_hub" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "443"
-  source_address_prefix       = "10.10.13.10"
+  source_address_prefix       = local.ghrunner_egress_ip
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
@@ -1209,7 +1215,7 @@ resource "azurerm_network_security_rule" "allow_ghrunner_http_internet_hub" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "80"
-  source_address_prefix       = "10.10.13.10"
+  source_address_prefix       = local.ghrunner_egress_ip
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
