@@ -611,8 +611,14 @@ variable "vnet_flow_logs_storage_account_id_override" {
   default     = null
 }
 
-variable "enable_diagnostic_metrics" {
+variable "enable_cosmos_metrics" {
   type        = bool
-  description = "Enable metrics in diagnostic settings (logs remain managed)."
+  description = "Enable diagnostic metrics for Cosmos diagnostic settings."
+  default     = false
+}
+
+variable "enable_rsv_metrics" {
+  type        = bool
+  description = "Enable diagnostic metrics for Recovery Services Vault diagnostic settings."
   default     = false
 }

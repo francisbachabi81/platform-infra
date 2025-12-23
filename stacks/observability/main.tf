@@ -654,7 +654,7 @@ resource "azurerm_monitor_diagnostic_setting" "rsv" {
   }
 
   dynamic "metric" {
-    for_each = var.enable_diagnostic_metrics ? toset(try(each.value.metrics, [])) : toset([])
+    for_each = var.enable_rsv_metrics ? toset(try(each.value.metrics, [])) : toset([])
     content {
       category = metric.value
       enabled  = true
@@ -662,6 +662,8 @@ resource "azurerm_monitor_diagnostic_setting" "rsv" {
   }
 
   lifecycle {
+    # ignore_changes = [metric]
+
     precondition {
       condition     = local.law_id != null
       error_message = "LAW workspace ID could not be resolved for Redis diagnostics."
@@ -885,7 +887,7 @@ resource "azurerm_monitor_diagnostic_setting" "cosmos" {
   }
 
   dynamic "metric" {
-    for_each = var.enable_diagnostic_metrics ? toset(try(each.value.metrics, [])) : toset([])
+    for_each = var.enable_cosmos_metrics ? toset(try(each.value.metrics, [])) : toset([])
     content {
       category = metric.value
       enabled  = true
@@ -893,6 +895,8 @@ resource "azurerm_monitor_diagnostic_setting" "cosmos" {
   }
 
   lifecycle {
+    # ignore_changes = [metric]
+
     precondition {
       condition     = local.law_id != null
       error_message = "LAW workspace ID could not be resolved for Redis diagnostics."
