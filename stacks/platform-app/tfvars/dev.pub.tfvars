@@ -49,6 +49,8 @@ servicebus_capacity           = 1
 servicebus_queues = [
   "incident-processor",
   "location-processor",
+  "notification",
+  "notification-dispatcher"
 ]
 
 servicebus_topics             = []

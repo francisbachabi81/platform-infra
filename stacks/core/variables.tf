@@ -279,3 +279,49 @@ variable "query_pack_queries" {
   }))
   default = {}
 }
+
+variable "create_core_uami" {
+  description = "Create a core user-assigned managed identity (UAMI) for shared core access (e.g., Key Vault reads)."
+  type        = bool
+  default     = true
+}
+
+variable "create_core_key_vault" {
+  description = "Create a Key Vault for core secrets/certs used by core and downstream stacks."
+  type        = bool
+  default     = true
+}
+
+variable "core_key_vault_soft_delete_retention_days" {
+  description = "Soft delete retention days for Key Vault."
+  type        = number
+  default     = 90
+  validation {
+    condition     = var.core_key_vault_soft_delete_retention_days >= 7 && var.core_key_vault_soft_delete_retention_days <= 90
+    error_message = "core_key_vault_soft_delete_retention_days must be between 7 and 90."
+  }
+}
+
+variable "core_key_vault_purge_protection_enabled" {
+  description = "Enable purge protection on the core Key Vault."
+  type        = bool
+  default     = false
+}
+
+variable "core_key_vault_grant_uami_secrets_user" {
+  description = "Grant the core UAMI the 'Key Vault Secrets User' role on the core Key Vault."
+  type        = bool
+  default     = true
+}
+
+variable "core_kv_pe_subnet_id_override" {
+  description = "Optional override for the hub privatelink subnet ID used for the core Key Vault private endpoint."
+  type        = string
+  default     = null
+}
+
+variable "core_kv_private_dns_zone_ids_override" {
+  description = "Optional override map of private DNS zone IDs used for core Key Vault private endpoint DNS zone group."
+  type        = map(string)
+  default     = null
+}

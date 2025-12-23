@@ -60,6 +60,8 @@ servicebus_capacity = 1            # for Premium: messaging units; for lower SKU
 servicebus_queues = [
   "incident-processor",
   "location-processor",
+  "notification",
+  "notification-dispatcher"
 ]
 
 servicebus_topics             = []

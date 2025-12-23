@@ -125,3 +125,11 @@ output "communication_services" {
 
   sensitive = true  # because it contains ACS keys/connection strings
 }
+
+output "core_key_vault" {
+  value = try({
+    id        = module.kv_core[0].id
+    name      = module.kv_core[0].name
+    vault_uri = module.kv_core[0].vault_uri
+  }, null)
+}

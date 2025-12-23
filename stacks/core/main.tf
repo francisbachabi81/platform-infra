@@ -71,6 +71,9 @@ locals {
   # Azure Gov (hrz) = "usgov", Azure Commercial (pub) = "United States"
   acs_data_location   = var.product == "hrz" ? "usgov" : "United States"
   email_data_location = local.acs_data_location
+
+  # Core identity + Key Vault
+  core_uami_name = "uai-${var.product}-${local.plane_code}-${var.region}-core-01"
 }
 
 # Remote state – shared-network
@@ -87,6 +90,29 @@ data "terraform_remote_state" "shared" {
     tenant_id            = var.tenant_id
     subscription_id      = var.subscription_id
   }
+}
+
+locals {
+  # Pull hub subnet IDs from shared-network state (same structure you already use for core_vm_subnet_id)
+  hub_subnet_ids = var.shared_state_enabled ? try(
+    data.terraform_remote_state.shared[0].outputs.subnet_ids_by_env["hub"],
+    {}
+  ) : {}
+
+  # Prefer "privatelink-hub" but fall back to "privatelink" (matches your platform-app pattern)
+  hub_privatelink_subnet_id = coalesce(
+    var.core_kv_pe_subnet_id_override,
+    try(local.hub_subnet_ids["privatelink-hub"], null),
+    try(local.hub_subnet_ids["privatelink"],     null)
+  )
+
+  # Private DNS zone IDs from shared-network state (supports both newer + legacy output names)
+  hub_private_dns_zone_ids = coalesce(
+    var.core_kv_private_dns_zone_ids_override,
+    var.shared_state_enabled ? try(data.terraform_remote_state.shared[0].outputs.private_dns.zone_ids, null) : null,
+    var.shared_state_enabled ? try(data.terraform_remote_state.shared[0].outputs.private_dns_zone_ids, null) : null,
+    {}
+  )
 }
 
 # Core RG
@@ -435,5 +461,73 @@ resource "azurerm_log_analytics_query_pack_query" "core" {
   depends_on = [
     azurerm_log_analytics_workspace.plane,
     azurerm_log_analytics_query_pack.core
+  ]
+}
+
+# Core UAMI
+resource "azurerm_user_assigned_identity" "core" {
+  count               = (var.create_core_uami && local.create_scope_both) ? 1 : 0
+  name                = local.core_uami_name
+  location            = var.location
+  resource_group_name = local.rg_name_core
+
+  tags = merge(local.tags_common, {
+    purpose = "core-deployment-identity"
+  })
+
+  depends_on = [module.rg_core_platform]
+}
+
+locals {
+  core_kv_base_name    = "kvt-${var.product}-${local.plane_code}-${var.region}-core-01"
+  core_kv_name_cleaned = replace(lower(trimspace(local.core_kv_base_name)), "-", "")
+}
+
+module "kv_core" {
+  count  = (var.create_core_key_vault && local.create_scope_both) ? 1 : 0
+  source = "../../modules/keyvault"
+
+  product             = var.product
+  name                = local.core_kv_base_name
+  location            = var.location
+  resource_group_name = local.rg_name_core
+  tenant_id           = var.tenant_id
+
+  # Private Endpoint into HUB privatelink subnet
+  pe_subnet_id         = local.hub_privatelink_subnet_id
+  private_dns_zone_ids = local.hub_private_dns_zone_ids
+
+  # Names consistent with your convention
+  pe_name                = "pep-${local.core_kv_name_cleaned}-vault"
+  psc_name               = "psc-${local.core_kv_name_cleaned}-vault"
+  pe_dns_zone_group_name = "pdns-${local.core_kv_name_cleaned}-vault"
+
+  purge_protection_enabled   = var.core_key_vault_purge_protection_enabled
+  soft_delete_retention_days = var.core_key_vault_soft_delete_retention_days
+
+  tags = merge(local.tags_common, {
+    service = "key-vault"
+    purpose = "core-secrets"
+  }, var.tags)
+
+  depends_on = [module.rg_core_platform]
+}
+
+# RBAC: allow core UAMI to read secrets from core KV
+resource "azurerm_role_assignment" "core_kv_secrets_user" {
+  count = (
+    var.create_core_key_vault
+    && var.create_core_uami
+    && var.core_key_vault_grant_uami_secrets_user
+    && local.create_scope_both
+  ) ? 1 : 0
+
+  scope                = module.kv_core[0].id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.core[0].principal_id
+
+  depends_on = [
+    module.kv_core,
+    azurerm_user_assigned_identity.core
   ]
 }
