@@ -1444,7 +1444,27 @@ locals {
   # Pull VNets from:
   # 1) shared-network remote state (if you expose it), and
   # 2) explicit var.vnet_ids_by_env (already in your variables.tf)
-  vnet_ids_by_env_remote = try(data.terraform_remote_state.network.outputs.vnet_ids_by_env, {})
+  # vnet_ids_by_env_remote = try(data.terraform_remote_state.network.outputs.vnet_ids_by_env, {})
+
+  # shared-network exposes vnet_map with keys:
+  # - "nphub" or "prhub"
+  # - dev, qa, prod, uat
+  _shared_vnet_map = try(data.terraform_remote_state.network.outputs.vnet_map, {})
+
+  _shared_hub_vnet_id = coalesce(
+    try(local._shared_vnet_map["nphub"].id, null),
+    try(local._shared_vnet_map["prhub"].id, null),
+    null
+  )
+
+  # Normalize into the env keys your observability stack expects: hub/dev/qa/prod/uat
+  vnet_ids_by_env_remote = {
+    hub  = compact([local._shared_hub_vnet_id])
+    dev  = compact([try(local._shared_vnet_map["dev"].id,  null)])
+    qa   = compact([try(local._shared_vnet_map["qa"].id,   null)])
+    prod = compact([try(local._shared_vnet_map["prod"].id, null)])
+    uat  = compact([try(local._shared_vnet_map["uat"].id,  null)])
+  }
 
   vnet_env_keys_all = toset(concat(
     keys(local.vnet_ids_by_env_remote),
@@ -1497,28 +1517,31 @@ locals {
   vnet_flowlog_map_prod = { for id, item in local.vnet_flowlog_map : id => item if item.env_key == "prod" }
   vnet_flowlog_map_uat  = { for id, item in local.vnet_flowlog_map : id => item if item.env_key == "uat"  }
 
-  network_watcher_by_env = {
-    hub = {
-      name = "nw-${var.product}-${local.plane_code}-${var.region}-01"
-      rg   = "rg-${var.product}-${local.plane_code}-${var.region}-net-01"
+  network_watcher_by_env = coalesce(
+    try(data.terraform_remote_state.network.outputs.network_watchers, null),
+    {
+      hub = {
+        name = "nw-${var.product}-${local.plane_code}-${var.region}-01"
+        rg   = "rg-${var.product}-${local.plane_code}-${var.region}-net-01"
+      }
+      dev = {
+        name = "nw-${var.product}-dev-${var.region}-01"
+        rg   = "rg-${var.product}-dev-${var.region}-net-01"
+      }
+      qa = {
+        name = "nw-${var.product}-qa-${var.region}-01"
+        rg   = "rg-${var.product}-qa-${var.region}-net-01"
+      }
+      prod = {
+        name = "nw-${var.product}-prod-${var.region}-01"
+        rg   = "rg-${var.product}-prod-${var.region}-net-01"
+      }
+      uat = {
+        name = "nw-${var.product}-uat-${var.region}-01"
+        rg   = "rg-${var.product}-uat-${var.region}-net-01"
+      }
     }
-    dev = {
-      name = "nw-${var.product}-dev-${var.region}-01"
-      rg   = "rg-${var.product}-dev-${var.region}-net-01"
-    }
-    qa = {
-      name = "nw-${var.product}-qa-${var.region}-01"
-      rg   = "rg-${var.product}-qa-${var.region}-net-01"
-    }
-    prod = {
-      name = "nw-${var.product}-prod-${var.region}-01"
-      rg   = "rg-${var.product}-prod-${var.region}-net-01"
-    }
-    uat = {
-      name = "nw-${var.product}-uat-${var.region}-01"
-      rg   = "rg-${var.product}-uat-${var.region}-net-01"
-    }
-  }
+  )
 }
 
 # HUB (core subscription)
@@ -1529,8 +1552,8 @@ resource "azurerm_network_watcher_flow_log" "vnet_core" {
 
   name = "fl-${var.product}-${each.value.env_key}-${var.region}-${basename(each.value.id)}"
 
-  network_watcher_name = local.network_watcher_by_env[each.value.env_key].name
-  resource_group_name  = local.network_watcher_by_env[each.value.env_key].rg
+  network_watcher_name = local.network_watcher_by_env["hub"].name
+  resource_group_name  = local.network_watcher_by_env["hub"].rg
 
   target_resource_id = each.value.id
   storage_account_id = local.flow_logs_sa_id

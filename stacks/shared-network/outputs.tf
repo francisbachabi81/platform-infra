@@ -207,3 +207,13 @@ output "nsg_ids_by_env" {
     uat  = try(module.nsg_uat[0].nsg_ids, {})
   }
 }
+
+output "vnet_ids_by_env" {
+  value = {
+    hub  = compact([try(local.vnet_map_consolidated[local._hub_key].id, null)])
+    dev  = compact([try(local.vnet_map_consolidated["dev"].id, null)])
+    qa   = compact([try(local.vnet_map_consolidated["qa"].id, null)])
+    prod = compact([try(local.vnet_map_consolidated["prod"].id, null)])
+    uat  = compact([try(local.vnet_map_consolidated["uat"].id, null)])
+  }
+}

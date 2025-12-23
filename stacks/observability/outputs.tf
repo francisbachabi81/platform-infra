@@ -25,6 +25,9 @@ output "targets" {
     aks_ids       = try(keys(local.aks_map),       [])
     nsg_ids       = try(keys(local.nsg_map),       [])
     law_id        = local.law_id
+    nsg_ids       = try(keys(local.nsg_map), [])
+    vnet_ids      = distinct(flatten([for _, v in local.vnet_ids_by_env_effective : v]))
+    law_id        = local.law_id
   }
 }
 
@@ -60,4 +63,14 @@ output "nsg_diag_categories_debug" {
       metrics            = try(v.metrics, [])
     }
   }
+}
+
+output "vnet_flow_log_ids" {
+  value = concat(
+    [for _, v in azurerm_network_watcher_flow_log.vnet_core : v.id],
+    [for _, v in azurerm_network_watcher_flow_log.vnet_dev  : v.id],
+    [for _, v in azurerm_network_watcher_flow_log.vnet_qa   : v.id],
+    [for _, v in azurerm_network_watcher_flow_log.vnet_prod : v.id],
+    [for _, v in azurerm_network_watcher_flow_log.vnet_uat  : v.id],
+  )
 }
