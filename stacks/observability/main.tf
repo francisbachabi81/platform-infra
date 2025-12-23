@@ -1427,7 +1427,13 @@ locals {
   # --- Backward compat defaults (prefer new vnet_* vars if set) ---
   flow_logs_enabled_effective = coalesce(var.enable_vnet_flow_logs, var.enable_nsg_flow_logs, false)
   flow_logs_retention_days    = coalesce(var.vnet_flow_logs_retention_days, var.nsg_flow_logs_retention_days, 30)
-  flow_logs_sa_override_id    = coalesce(var.vnet_flow_logs_storage_account_id_override, var.nsg_flow_logs_storage_account_id_override)
+  flow_logs_sa_override_id = try(
+    coalesce(
+      var.vnet_flow_logs_storage_account_id_override,
+      var.nsg_flow_logs_storage_account_id_override
+    ),
+    null
+  )
 
   # Prefer explicit override for workspace GUID first
   law_workspace_guid = coalesce(
@@ -2055,27 +2061,17 @@ resource "azurerm_resource_provider_registration" "cost_exports_rp_prod" {
   name     = "Microsoft.CostManagementExports"
 }
 
-# Optional: a single barrier depends_on list (static refs only)
-locals {
-  cost_exports_rp_barrier = compact([
-    try(azurerm_resource_provider_registration.cost_exports_rp_core[0].id, null),
-    try(azurerm_resource_provider_registration.cost_exports_rp_dev[0].id,  null),
-    try(azurerm_resource_provider_registration.cost_exports_rp_qa[0].id,   null),
-    try(azurerm_resource_provider_registration.cost_exports_rp_uat[0].id,  null),
-    try(azurerm_resource_provider_registration.cost_exports_rp_prod[0].id, null),
-  ])
-}
-
 resource "time_sleep" "wait_cost_exports_rp" {
-  count           = length(local.cost_exports_rp_barrier) > 0 ? 1 : 0
-  depends_on      = [
+  count           = length(local.cost_exports_rp_targets) > 0 ? 1 : 0
+  create_duration = "8m"
+
+  depends_on = [
     azurerm_resource_provider_registration.cost_exports_rp_core,
     azurerm_resource_provider_registration.cost_exports_rp_dev,
     azurerm_resource_provider_registration.cost_exports_rp_qa,
     azurerm_resource_provider_registration.cost_exports_rp_uat,
     azurerm_resource_provider_registration.cost_exports_rp_prod,
   ]
-  create_duration = "8m"
 }
 
 locals {
