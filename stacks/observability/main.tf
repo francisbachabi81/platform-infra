@@ -2011,37 +2011,70 @@ provider "azapi" {
   tenant_id       = local.uat_ten
 }
 
-# --- Register required Resource Providers (core + env subscriptions) ---
-locals {
-  cost_exports_rp_targets = (
-  !local.cost_exports_enabled ? toset([]) :
-  local.env_effective == "dev"  ? toset(["core", "dev", "qa"]) :
-  local.env_effective == "prod" ? toset(["core", "uat", "prod"]) :
-  toset([])
-)
+# --- Register required Resource Providers (explicit per provider alias) ---
 
-  # Map alias -> provider config (must exist as provider aliases above)
-  azurerm_provider_by_alias = {
-    core = azurerm.core
-    dev  = azurerm.dev
-    qa   = azurerm.qa
-    uat  = azurerm.uat
-    prod = azurerm.prod
-  }
+locals {
+  cost_exports_enabled = var.enable_cost_exports
+
+  # same logic you had
+  cost_exports_rp_targets = (
+    !local.cost_exports_enabled ? toset([]) :
+    local.env_effective == "dev"  ? toset(["core", "dev", "qa"]) :
+    local.env_effective == "prod" ? toset(["core", "uat", "prod"]) :
+    toset([])
+  )
 }
 
-resource "azurerm_resource_provider_registration" "cost_exports_rp" {
-  for_each = local.cost_exports_rp_targets
-
-  provider = local.azurerm_provider_by_alias[each.key]
+resource "azurerm_resource_provider_registration" "cost_exports_rp_core" {
+  count    = contains(local.cost_exports_rp_targets, "core") ? 1 : 0
+  provider = azurerm.core
   name     = "Microsoft.CostManagementExports"
 }
 
-# --- RP Registration barriers (helps with eventual consistency in ARM) ---
-resource "time_sleep" "wait_cost_exports_rp" {
-  for_each = local.cost_exports_rp_targets
+resource "azurerm_resource_provider_registration" "cost_exports_rp_dev" {
+  count    = contains(local.cost_exports_rp_targets, "dev") ? 1 : 0
+  provider = azurerm.dev
+  name     = "Microsoft.CostManagementExports"
+}
 
-  depends_on      = [azurerm_resource_provider_registration.cost_exports_rp[each.key]]
+resource "azurerm_resource_provider_registration" "cost_exports_rp_qa" {
+  count    = contains(local.cost_exports_rp_targets, "qa") ? 1 : 0
+  provider = azurerm.qa
+  name     = "Microsoft.CostManagementExports"
+}
+
+resource "azurerm_resource_provider_registration" "cost_exports_rp_uat" {
+  count    = contains(local.cost_exports_rp_targets, "uat") ? 1 : 0
+  provider = azurerm.uat
+  name     = "Microsoft.CostManagementExports"
+}
+
+resource "azurerm_resource_provider_registration" "cost_exports_rp_prod" {
+  count    = contains(local.cost_exports_rp_targets, "prod") ? 1 : 0
+  provider = azurerm.prod
+  name     = "Microsoft.CostManagementExports"
+}
+
+# Optional: a single barrier depends_on list (static refs only)
+locals {
+  cost_exports_rp_barrier = compact([
+    try(azurerm_resource_provider_registration.cost_exports_rp_core[0].id, null),
+    try(azurerm_resource_provider_registration.cost_exports_rp_dev[0].id,  null),
+    try(azurerm_resource_provider_registration.cost_exports_rp_qa[0].id,   null),
+    try(azurerm_resource_provider_registration.cost_exports_rp_uat[0].id,  null),
+    try(azurerm_resource_provider_registration.cost_exports_rp_prod[0].id, null),
+  ])
+}
+
+resource "time_sleep" "wait_cost_exports_rp" {
+  count           = length(local.cost_exports_rp_barrier) > 0 ? 1 : 0
+  depends_on      = [
+    azurerm_resource_provider_registration.cost_exports_rp_core,
+    azurerm_resource_provider_registration.cost_exports_rp_dev,
+    azurerm_resource_provider_registration.cost_exports_rp_qa,
+    azurerm_resource_provider_registration.cost_exports_rp_uat,
+    azurerm_resource_provider_registration.cost_exports_rp_prod,
+  ]
   create_duration = "8m"
 }
 
