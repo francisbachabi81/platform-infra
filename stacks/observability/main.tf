@@ -2079,9 +2079,6 @@ resource "time_sleep" "wait_cost_exports_rp" {
 }
 
 locals {
-  # Decide based on inputs / resolved RG, NOT on resources created in this plan
-  cost_exports_enabled = var.enable_cost_exports
-
   cost_exports_schedule_from = var.cost_exports_schedule_from
   cost_exports_schedule_to   = coalesce(var.cost_exports_schedule_end_date, "2035-01-01T00:00:00Z")
 }
