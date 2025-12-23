@@ -378,6 +378,8 @@ module "core_vm" {
   admin_username = var.core_vm_admin_username
   admin_password = var.core_vm_admin_password
 
+  enable_system_assigned_identity = true
+
   vm_size         = var.core_runner_vm_size
   image_publisher = var.core_runner_vm_image_publisher
   image_offer     = var.core_runner_vm_image_offer

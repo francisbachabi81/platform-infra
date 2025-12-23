@@ -27,8 +27,15 @@ resource "azurerm_linux_virtual_machine" "this" {
   admin_password                  = var.admin_password
   disable_password_authentication = false
 
-  identity {
-    type = "SystemAssigned"
+  # identity {
+  #   type = "SystemAssigned"
+  # }
+
+  dynamic "identity" {
+    for_each = var.enable_system_assigned_identity ? [1] : []
+    content {
+      type = "SystemAssigned"
+    }
   }
 
   os_disk {

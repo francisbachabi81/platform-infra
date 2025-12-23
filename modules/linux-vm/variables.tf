@@ -69,3 +69,9 @@ variable "tags" {
   description = "Tags to apply to the VM and NIC."
   default     = {}
 }
+
+variable "enable_system_assigned_identity" {
+  type        = bool
+  description = "Enable SystemAssigned managed identity on the VM."
+  default     = true
+}

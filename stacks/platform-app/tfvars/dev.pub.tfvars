@@ -125,8 +125,8 @@ pg_replica_enabled = false  # no replica
 # - Azure Commercial:
 #   • pg_zone may be set explicitly (1/2/3) if SKU/region supports it.
 #   • HA may support SameZone or ZoneRedundant depending on SKU/region.
-pg_zone    = null   # no explicit AZ in Gov for this SKU
-pg_ha_zone = null   # ignored while HA is off and no explicit AZ
+pg_zone    = "1"   # no explicit AZ in Gov for this SKU
+pg_ha_zone = "2"   # ignored while HA is off and no explicit AZ
 
 pg_firewall_rules = []
 pg_databases      = ["appdb","citus"]

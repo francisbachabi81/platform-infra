@@ -69,7 +69,10 @@ resource "azurerm_linux_function_app" "func_linux" {
       WEBSITE_RUN_FROM_PACKAGE       = var.website_run_from_package
       FUNCTIONS_WORKER_PROCESS_COUNT = tostring(var.functions_worker_process_count)
     },
-    var.app_settings
+    var.app_settings,
+    var.application_insights_connection_string != null && trimspace(var.application_insights_connection_string) != "" ? {
+      APPLICATIONINSIGHTS_CONNECTION_STRING = var.application_insights_connection_string
+    } : {}
   )
 
   lifecycle {
