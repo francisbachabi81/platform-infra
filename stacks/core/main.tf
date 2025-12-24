@@ -465,18 +465,18 @@ resource "azurerm_log_analytics_query_pack_query" "core" {
 }
 
 # Core UAMI
-resource "azurerm_user_assigned_identity" "core" {
-  count               = (var.create_core_uami && local.create_scope_both) ? 1 : 0
-  name                = local.core_uami_name
-  location            = var.location
-  resource_group_name = local.rg_name_core
+# resource "azurerm_user_assigned_identity" "core" {
+#   count               = (var.create_core_uami && local.create_scope_both) ? 1 : 0
+#   name                = local.core_uami_name
+#   location            = var.location
+#   resource_group_name = local.rg_name_core
 
-  tags = merge(local.tags_common, {
-    purpose = "core-deployment-identity"
-  })
+#   tags = merge(local.tags_common, {
+#     purpose = "core-deployment-identity"
+#   })
 
-  depends_on = [module.rg_core_platform]
-}
+#   depends_on = [module.rg_core_platform]
+# }
 
 locals {
   core_kv_base_name    = "kvt-${var.product}-${local.plane_code}-${var.region}-core-01"
@@ -514,20 +514,20 @@ module "kv_core" {
 }
 
 # RBAC: allow core UAMI to read secrets from core KV
-resource "azurerm_role_assignment" "core_kv_secrets_user" {
-  count = (
-    var.create_core_key_vault
-    && var.create_core_uami
-    && var.core_key_vault_grant_uami_secrets_user
-    && local.create_scope_both
-  ) ? 1 : 0
+# resource "azurerm_role_assignment" "core_kv_secrets_user" {
+#   count = (
+#     var.create_core_key_vault
+#     && var.create_core_uami
+#     && var.core_key_vault_grant_uami_secrets_user
+#     && local.create_scope_both
+#   ) ? 1 : 0
 
-  scope                = module.kv_core[0].id
-  role_definition_name = "Key Vault Secrets User"
-  principal_id         = azurerm_user_assigned_identity.core[0].principal_id
+#   scope                = module.kv_core[0].id
+#   role_definition_name = "Key Vault Secrets User"
+#   principal_id         = azurerm_user_assigned_identity.core[0].principal_id
 
-  depends_on = [
-    module.kv_core,
-    azurerm_user_assigned_identity.core
-  ]
-}
+#   depends_on = [
+#     module.kv_core,
+#     azurerm_user_assigned_identity.core
+#   ]
+# }
