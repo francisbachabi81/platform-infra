@@ -1,6 +1,9 @@
 product = "hrz"
 env     = "dev"
 
+location = "USGov Arizona"
+region   = "usaz"
+
 tags = {
   purpose = "appgw-config"
   env     = "dev"

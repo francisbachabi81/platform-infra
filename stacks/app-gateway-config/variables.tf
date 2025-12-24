@@ -6,6 +6,26 @@ variable "tags" {
   default = {} 
 }
 
+variable "plane" {
+  type        = string
+  default     = null
+  description = "nonprod | prod (optional if env provided)"
+  validation {
+    condition     = var.plane == null || contains(["nonprod", "prod"], lower(var.plane))
+    error_message = "plane must be one of: nonprod, prod."
+  }
+}
+
+variable "location" {
+  type    = string
+  default = null
+}
+
+variable "region" {
+  description = "short region code, e.g. usaz or cus"
+  type        = string
+}
+
 # -------------------------------------------------------------------
 # Remote state wiring
 # -------------------------------------------------------------------
