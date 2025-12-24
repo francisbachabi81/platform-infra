@@ -92,11 +92,11 @@ locals {
   shared_kv = lookup(local.shared_outputs, "appgw_ssl_key_vault", null)
 
   core_outputs = var.core_state == null ? {} : try(data.terraform_remote_state.core[0].outputs, {})
-  core_kv      = coalesce(
-    try(local.core_outputs.core_key_vault, null),
-    try(local.core_outputs.key_vault, null),
-    null
-  )
+  core_kv = (
+  can(local.core_outputs.core_key_vault) ? local.core_outputs.core_key_vault :
+  can(local.core_outputs.key_vault)      ? local.core_outputs.key_vault :
+  null
+)
 
   # ------------------------------------------------------------
   # Safe "first non-null" selection (does NOT throw like coalesce())
@@ -212,7 +212,7 @@ locals {
   ] : []
 
   _listeners = local.agw_ready ? [
-    for name, l in var.listeners : {
+    for name, l in (local.agw_ready ? var.listeners : {}) : {
       name       = name
       properties = merge(
         {
@@ -244,7 +244,7 @@ locals {
   ] : []
 
   _rules = local.agw_ready ? [
-    for r in var.routing_rules : {
+    for r in (local.agw_ready ? var.routing_rules : []) : {
       name       = r.name
       properties = merge(
         {
