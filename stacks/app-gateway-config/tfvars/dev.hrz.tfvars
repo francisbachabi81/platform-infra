@@ -10,6 +10,7 @@ shared_network_state = {
   resource_group_name  = "rg-core-infra-state"
   storage_account_name = "sacoretfstateinfra"
   container_name       = "tfstate"
+  key                  = "shared-network/hrz/usaz/np.tfstate"
 }
 
 # SSL cert in Key Vault
