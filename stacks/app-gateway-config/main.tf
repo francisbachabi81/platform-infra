@@ -71,32 +71,30 @@ locals {
   # (Supports either old or new output names without hard failing)
   # ------------------------------------------------------------
 
+  shared_outputs = try(data.terraform_remote_state.shared_network.outputs, {})
+
   # AppGW output might be "app_gateway" or "application_gateway" depending on the shared stack
   shared_appgw = coalesce(
-    try(data.terraform_remote_state.shared_network.outputs.app_gateway, null),
-    try(data.terraform_remote_state.shared_network.outputs.application_gateway, null),
+    try(local.shared_outputs.app_gateway, null),
+    try(local.shared_outputs.application_gateway, null),
     null
   )
 
-  # UAMI output name can vary too
   shared_uami = coalesce(
-    try(data.terraform_remote_state.shared_network.outputs.appgw_uami, null),
-    try(data.terraform_remote_state.shared_network.outputs.uami_appgw, null),
-    try(data.terraform_remote_state.shared_network.outputs.uami, null),
+    try(local.shared_outputs.appgw_uami, null),
+    try(local.shared_outputs.uami_appgw, null),
+    try(local.shared_outputs.uami, null),
     null
   )
 
   # KV output name can vary
-  shared_kv = coalesce(
-    try(data.terraform_remote_state.shared_network.outputs.appgw_ssl_key_vault, null),
-    try(data.terraform_remote_state.shared_network.outputs.ssl_key_vault, null),
-    try(data.terraform_remote_state.shared_network.outputs.key_vault, null),
-    null
-  )
 
-  core_kv = var.core_state == null ? null : coalesce(
-    try(data.terraform_remote_state.core[0].outputs.core_key_vault, null),
-    try(data.terraform_remote_state.core[0].outputs.key_vault, null),
+  shared_kv = lookup(local.shared_outputs, "appgw_ssl_key_vault", null)
+
+  core_outputs = var.core_state == null ? {} : try(data.terraform_remote_state.core[0].outputs, {})
+  core_kv      = coalesce(
+    try(local.core_outputs.core_key_vault, null),
+    try(local.core_outputs.key_vault, null),
     null
   )
 
@@ -114,7 +112,7 @@ locals {
 
   uami_principal_id = try(local.shared_uami.principal_id, null)
 
-  agw_ready = local.agw_id != null && trim(local.agw_id) != ""
+  agw_ready = local.agw_id != null && trimspace(local.agw_id) != ""
 
   # ------------------------------------------------------------
   # SSL secret id (either direct URI or build from vault_uri + name + version)
