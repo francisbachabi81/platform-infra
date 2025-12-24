@@ -25,8 +25,7 @@ data "terraform_remote_state" "shared_network" {
     storage_account_name = var.shared_network_state.storage_account_name
     container_name       = var.shared_network_state.container_name
     key                  = var.shared_network_state.key
-    tenant_id            = var.tenant_id
-    subscription_id      = var.subscription_id
+    use_azuread_auth     = true
   }
 }
 
@@ -38,8 +37,7 @@ data "terraform_remote_state" "core" {
     storage_account_name = var.core_state.storage_account_name
     container_name       = var.core_state.container_name
     key                  = var.core_state.key
-    tenant_id            = var.tenant_id
-    subscription_id      = var.subscription_id
+    use_azuread_auth     = true
   }
 }
 
