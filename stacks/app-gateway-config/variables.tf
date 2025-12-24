@@ -6,6 +6,24 @@ variable "tags" {
   default = {} 
 }
 
+variable "subscription_id" {
+  description = "Target subscription id"
+  type        = string
+  validation {
+    condition     = can(regex("^[0-9a-fA-F-]{36}$", var.subscription_id))
+    error_message = "subscription_id must be a guid."
+  }
+}
+
+variable "tenant_id" {
+  description = "Entra tenant id"
+  type        = string
+  validation {
+    condition     = can(regex("^[0-9a-fA-F-]{36}$", var.tenant_id))
+    error_message = "tenant_id must be a guid."
+  }
+}
+
 # -------------------------------------------------------------------
 # Remote state wiring
 # -------------------------------------------------------------------
