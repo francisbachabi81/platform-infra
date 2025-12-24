@@ -848,7 +848,7 @@ resource "azurerm_subnet_network_security_group_association" "appgw_assoc" {
 
 resource "azurerm_user_assigned_identity" "appgw" {
   count               = local.appgw_enabled ? 1 : 0
-  name                = "uami-${var.product}-${local.plane_code}-${var.region}-appgw-01"
+  name                = "uai-${var.product}-${local.plane_code}-${var.region}-appgw-01"
   location            = var.location
   resource_group_name = local.appgw_hub_rg
 
