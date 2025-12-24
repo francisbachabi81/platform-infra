@@ -38,35 +38,6 @@ output "resource_groups" {
   }
 }
 
-# consolidated vnets + subnets for downstream stacks
-locals {
-  _hub_key = local.is_nonprod ? "nphub" : "prhub"
-
-  _vnet_map_nonprod = local.is_nonprod ? {
-    (local._hub_key) = { id = module.vnet_hub.id,     name = module.vnet_hub.name,     subnets = module.vnet_hub.subnet_ids }
-    dev              = { id = module.vnet_dev[0].id,  name = module.vnet_dev[0].name,  subnets = module.vnet_dev[0].subnet_ids }
-    qa               = { id = module.vnet_qa[0].id,   name = module.vnet_qa[0].name,   subnets = module.vnet_qa[0].subnet_ids }
-  } : {}
-
-  _vnet_map_prod = local.is_prod ? {
-    (local._hub_key) = { id = module.vnet_hub.id,     name = module.vnet_hub.name,     subnets = module.vnet_hub.subnet_ids }
-    prod             = { id = module.vnet_prod[0].id, name = module.vnet_prod[0].name, subnets = module.vnet_prod[0].subnet_ids }
-    uat              = { id = module.vnet_uat[0].id,  name = module.vnet_uat[0].name,  subnets = module.vnet_uat[0].subnet_ids }
-  } : {}
-
-  vnet_map_consolidated = merge(local._vnet_map_nonprod, local._vnet_map_prod)
-
-  vnets_env_keyed = {
-    for k, m in local.vnet_map_consolidated :
-    (k == "nphub" ? "nonprod_hub" :
-     k == "prhub" ? "prod_hub"    :
-     k == "dev"   ? "dev_spoke"   :
-     k == "qa"    ? "qa_spoke"    :
-     k == "prod"  ? "prod_spoke"  :
-     k == "uat"   ? "uat_spoke"   : k) => m
-  }
-}
-
 output "vnets" {
   value = local.vnets_env_keyed
 }
@@ -96,10 +67,10 @@ output "vpn_gateway" {
 
 output "app_gateway" {
   value = try({
-    id             = module.appgw[0].id
-    name           = module.appgw[0].name
+    id             = azurerm_application_gateway.appgw[0].id
+    name           = azurerm_application_gateway.appgw[0].name
     resource_group = local.appgw_hub_rg
-    public_ip      = try(module.appgw[0].frontend_public_ip, null)
+    public_ip      = try(azurerm_public_ip.appgw[0].ip_address, null)
     subnet_id      = local.appgw_subnet_id
     sku_name       = var.appgw_sku_name
     sku_tier       = var.appgw_sku_tier
@@ -107,6 +78,21 @@ output "app_gateway" {
     waf_policy_id  = try(module.waf[0].id, null)
     nsg_id         = try(azurerm_network_security_group.appgw_nsg[0].id, null)
   }, null)
+}
+
+output "appgw_uami" {
+  description = "User-assigned managed identity for Application Gateway (for Key Vault access)."
+  value = try({
+    id           = azurerm_user_assigned_identity.appgw[0].id
+    name         = azurerm_user_assigned_identity.appgw[0].name
+    principal_id = azurerm_user_assigned_identity.appgw[0].principal_id
+    client_id    = azurerm_user_assigned_identity.appgw[0].client_id
+  }, null)
+}
+
+output "appgw_public_ip_id" {
+  description = "Public IP resource id used by Application Gateway (null for private-only)."
+  value       = try(azurerm_public_ip.appgw[0].id, null)
 }
 
 output "dns_private_resolver" {
@@ -173,7 +159,6 @@ output "network_watchers" {
   }
 }
 
-# convenience projections for common subnet lookups
 output "subnet_ids_by_env" {
   value = {
     hub  = try(module.vnet_hub.subnet_ids, {})
@@ -184,11 +169,8 @@ output "subnet_ids_by_env" {
   }
 }
 
-# small helpers (null-safe for lane)
 output "appgw_public_ip" {
-  value = (
-    local.appgw_enabled && var.appgw_public_ip_enabled && try(length(module.appgw) > 0, false)
-  ) ? try(module.appgw[0].frontend_public_ip, null) : null
+  value = (local.appgw_enabled && var.appgw_public_ip_enabled) ? try(azurerm_public_ip.appgw[0].ip_address, null) : null
 }
 
 output "hub_ids" {
@@ -218,6 +200,16 @@ output "vnet_ids_by_env" {
   }
 }
 
+# output "vnet_ids_by_env" {
+#   value = {
+#     hub  = try(local.vnet_map_consolidated[local._hub_key].id, null)
+#     dev  = try(local.vnet_map_consolidated["dev"].id, null)
+#     qa   = try(local.vnet_map_consolidated["qa"].id, null)
+#     prod = try(local.vnet_map_consolidated["prod"].id, null)
+#     uat  = try(local.vnet_map_consolidated["uat"].id, null)
+#   }
+# }
+
 output "vnet_ids" {
   value = {
     hub  = module.vnet_hub.id
@@ -226,8 +218,4 @@ output "vnet_ids" {
     uat  = try(module.vnet_uat[0].id, null)
     prod = try(module.vnet_prod[0].id, null)
   }
-}
-
-output "private_dns_zone_ids" {
-  value = try(module.pdns.zone_ids, {}) # adjust to your private-dns module output name
 }

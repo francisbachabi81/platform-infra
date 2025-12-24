@@ -832,31 +832,162 @@ resource "azurerm_subnet_network_security_group_association" "appgw_assoc" {
   ]
 }
 
-module "appgw" {
-  count                 = local.appgw_enabled ? 1 : 0
-  source                = "../../modules/app-gateway"
-  name                  = local.name_agw
-  location              = var.location
-  resource_group_name   = local.appgw_hub_rg
-  public_ip_enabled     = var.appgw_public_ip_enabled
-  public_ip_name        = local.name_agw_pip
-  subnet_id             = local.appgw_subnet_id
-  sku_name              = var.appgw_sku_name
-  sku_tier              = var.appgw_sku_tier
-  capacity              = var.appgw_capacity
-  cookie_based_affinity = var.appgw_cookie_based_affinity
-  waf_policy_id         = try(module.waf[0].id, null)
+# -------------------------------------------------------------------
+# Application Gateway (BAREBONES) + User Assigned Managed Identity
+# -------------------------------------------------------------------
+# NOTE:
+# - Azure Application Gateway cannot be created truly "empty" via azurerm; Azure
+#   requires a minimal set of objects (frontend port, listener, backend pool,
+#   http settings, routing rule). We create *placeholder* objects here and then
+#   IGNORE changes to all runtime config so the app-gateway-config stack can
+#   manage the real configuration without drift.
+#
+# - The app-gateway-config stack should PATCH/UPDATE the gateway configuration
+#   and will grant this UAMI permissions to read the Key Vault secret used
+#   for SSL certificates.
+
+resource "azurerm_user_assigned_identity" "appgw" {
+  count               = local.appgw_enabled ? 1 : 0
+  name                = "uami-${var.product}-${local.plane_code}-${var.region}-appgw-01"
+  location            = var.location
+  resource_group_name = local.appgw_hub_rg
 
   tags = merge(
     local.tag_base,
-    local.plane_tags,          # nonprod/prod plane
-    local.fedramp_common_tags, # shared FedRAMP/boundary metadata
+    local.plane_tags,
+    local.fedramp_common_tags,
     {
-      purpose = "app-gateway-waf"
+      purpose = "app-gateway-uami"
       service = "ingress"
       lane    = local.lane
     }
   )
+}
+
+resource "azurerm_public_ip" "appgw" {
+  count               = (local.appgw_enabled && var.appgw_public_ip_enabled) ? 1 : 0
+  name                = local.name_agw_pip
+  location            = var.location
+  resource_group_name = local.appgw_hub_rg
+  allocation_method   = "Static"
+  sku                 = "Standard"
+
+  tags = merge(
+    local.tag_base,
+    local.plane_tags,
+    local.fedramp_common_tags,
+    {
+      purpose = "app-gateway-public-ip"
+      service = "ingress"
+      lane    = local.lane
+    }
+  )
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+locals {
+  appgw_public_ip_id = (local.appgw_enabled && var.appgw_public_ip_enabled) ? azurerm_public_ip.appgw[0].id : null
+}
+
+resource "azurerm_application_gateway" "appgw" {
+  count               = local.appgw_enabled ? 1 : 0
+  name                = local.name_agw
+  location            = var.location
+  resource_group_name = local.appgw_hub_rg
+
+  sku {
+    name     = var.appgw_sku_name
+    tier     = var.appgw_sku_tier
+    capacity = var.appgw_capacity
+  }
+
+  gateway_ip_configuration {
+    name      = "agwipc"
+    subnet_id = local.appgw_subnet_id
+  }
+
+  # Frontend IP:
+  # - Public when appgw_public_ip_enabled = true
+  # - Private (dynamic) when false (can be made static later by app-gateway-config)
+  frontend_ip_configuration {
+    name                          = "feip"
+    public_ip_address_id          = local.appgw_public_ip_id
+    private_ip_address_allocation = var.appgw_public_ip_enabled ? null : "Dynamic"
+    subnet_id                     = var.appgw_public_ip_enabled ? null : local.appgw_subnet_id
+  }
+
+  # ---- Placeholder configuration (ignored for drift) ----
+  frontend_port {
+    name = "bootstrap-feport-80"
+    port = 80
+  }
+
+  backend_address_pool {
+    name = "bootstrap-bepool"
+  }
+
+  backend_http_settings {
+    name                  = "bootstrap-bhs-http"
+    protocol              = "Http"
+    port                  = 80
+    request_timeout       = 20
+    cookie_based_affinity = var.appgw_cookie_based_affinity
+  }
+
+  http_listener {
+    name                           = "bootstrap-listener-http"
+    frontend_ip_configuration_name = "feip"
+    frontend_port_name             = "bootstrap-feport-80"
+    protocol                       = "Http"
+  }
+
+  request_routing_rule {
+    name                       = "bootstrap-rule-http"
+    rule_type                  = "Basic"
+    http_listener_name         = "bootstrap-listener-http"
+    backend_address_pool_name  = "bootstrap-bepool"
+    backend_http_settings_name = "bootstrap-bhs-http"
+    priority                   = 1
+  }
+
+  # Attach UAMI for future Key Vault access
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.appgw[0].id]
+  }
+
+  tags = merge(
+    local.tag_base,
+    local.plane_tags,
+    local.fedramp_common_tags,
+    {
+      purpose = "app-gateway"
+      service = "ingress"
+      lane    = local.lane
+    }
+  )
+
+  lifecycle {
+    ignore_changes = [
+      # runtime configuration is owned by app-gateway-config stack
+      backend_address_pool,
+      backend_http_settings,
+      http_listener,
+      request_routing_rule,
+      probe,
+      ssl_certificate,
+      ssl_policy,
+      url_path_map,
+      redirect_configuration,
+      rewrite_rule_set,
+      authentication_certificate,
+      trusted_root_certificate,
+      frontend_port
+    ]
+  }
 
   depends_on = [
     azurerm_subnet_network_security_group_association.appgw_assoc
