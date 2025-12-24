@@ -146,8 +146,8 @@ locals {
   # Build runtime config lists only when we have AGW id
   # ------------------------------------------------------------
 
-  _backend_pools = local.agw_ready ? [
-    for name, b in var.backend_pools : {
+  _backend_pools = [
+    for name, b in (local.agw_ready ? var.backend_pools : tomap({})) : {
       name       = name
       properties = {
         backendAddresses = concat(
@@ -156,111 +156,111 @@ locals {
         )
       }
     }
-  ] : []
+  ]
 
-  _probes = local.agw_ready ? [
-    for name, p in var.probes : {
-      name       = name
-      properties = {
-        protocol           = p.protocol
-        host               = try(p.host, null)
-        path               = p.path
-        interval           = try(p.interval, 30)
-        timeout            = try(p.timeout, 30)
-        unhealthyThreshold = try(p.unhealthy_threshold, 3)
-        pickHostNameFromBackendHttpSettings = try(p.pick_host_name_from_backend_http_settings, false)
-        match = {
-          statusCodes = try(p.match_status_codes, ["200-399"])
-        }
+_probes = [
+  for name, p in (local.agw_ready ? var.probes : tomap({})) : {
+    name       = name
+    properties = {
+      protocol           = p.protocol
+      host               = try(p.host, null)
+      path               = p.path
+      interval           = try(p.interval, 30)
+      timeout            = try(p.timeout, 30)
+      unhealthyThreshold = try(p.unhealthy_threshold, 3)
+      pickHostNameFromBackendHttpSettings = try(p.pick_host_name_from_backend_http_settings, false)
+      match = {
+        statusCodes = try(p.match_status_codes, ["200-399"])
       }
     }
-  ] : []
+  }
+]
 
-  _http_settings = local.agw_ready ? [
-    for name, s in var.backend_http_settings : {
-      name       = name
-      properties = merge(
-        {
-          port                = s.port
-          protocol            = s.protocol
-          requestTimeout      = try(s.request_timeout, 20)
-          cookieBasedAffinity = try(s.cookie_based_affinity, "Disabled")
-          pickHostNameFromBackendAddress = try(s.pick_host_name_from_backend_address, false)
-        },
-        try(s.probe_name, null) != null ? {
-          probe = { id = "${local.agw_id}/probes/${s.probe_name}" }
-        } : {},
-        try(s.host_name, null) != null ? {
-          hostName = s.host_name
-        } : {}
-      )
-    }
-  ] : []
+_http_settings = [
+  for name, s in (local.agw_ready ? var.backend_http_settings : tomap({})) : {
+    name       = name
+    properties = merge(
+      {
+        port                = s.port
+        protocol            = s.protocol
+        requestTimeout      = try(s.request_timeout, 20)
+        cookieBasedAffinity = try(s.cookie_based_affinity, "Disabled")
+        pickHostNameFromBackendAddress = try(s.pick_host_name_from_backend_address, false)
+      },
+      try(s.probe_name, null) != null ? {
+        probe = { id = "${local.agw_id}/probes/${s.probe_name}" }
+      } : {},
+      try(s.host_name, null) != null ? {
+        hostName = s.host_name
+      } : {}
+    )
+  }
+]
 
-  _frontend_ports = local.agw_ready ? [
-    for name, port in var.frontend_ports : {
-      name       = name
-      properties = { port = port }
-    }
-  ] : []
+_frontend_ports = [
+  for name, port in (local.agw_ready ? var.frontend_ports : tomap({})) : {
+    name       = name
+    properties = { port = port }
+  }
+]
 
-  _ssl_certs = (local.agw_ready && local.ssl_secret_id != null) ? [
-    {
-      name       = var.ssl_certificate_name
-      properties = { keyVaultSecretId = local.ssl_secret_id }
-    }
-  ] : []
+_ssl_certs = [
+  for c in ((local.agw_ready && local.ssl_secret_id != null) ? tolist([1]) : tolist([])) : {
+    name       = var.ssl_certificate_name
+    properties = { keyVaultSecretId = local.ssl_secret_id }
+  }
+]
 
-  _listeners = local.agw_ready ? [
-    for name, l in (local.agw_ready ? var.listeners : {}) : {
-      name       = name
-      properties = merge(
-        {
-          protocol = l.protocol
-          frontendIPConfiguration = { id = "${local.agw_id}/frontendIPConfigurations/${l.frontend_ip_configuration_name}" }
-          frontendPort            = { id = "${local.agw_id}/frontendPorts/${l.frontend_port_name}" }
-          hostName                = try(l.host_name, null)
-          requireServerNameIndication = try(l.require_sni, false)
-        },
-        l.protocol == "Https" ? {
-          sslCertificate = {
-            id = "${local.agw_id}/sslCertificates/${coalesce(try(l.ssl_certificate_name, null), var.ssl_certificate_name)}"
-          }
-        } : {}
-      )
-    }
-  ] : []
-
-  _redirects = local.agw_ready ? [
-    for name, r in var.redirect_configurations : {
-      name       = name
-      properties = {
-        redirectType       = try(r.redirect_type, "Permanent")
-        targetListener     = { id = "${local.agw_id}/httpListeners/${r.target_listener_name}" }
-        includePath        = try(r.include_path, true)
-        includeQueryString = try(r.include_query_string, true)
-      }
-    }
-  ] : []
-
-  _rules = local.agw_ready ? [
-    for r in (local.agw_ready ? var.routing_rules : []) : {
-      name       = r.name
-      properties = merge(
-        {
-          ruleType     = try(r.rule_type, "Basic")
-          priority     = r.priority
-          httpListener = { id = "${local.agw_id}/httpListeners/${r.http_listener_name}" }
-        },
-        try(r.redirect_configuration_name, null) != null ? {
-          redirectConfiguration = { id = "${local.agw_id}/redirectConfigurations/${r.redirect_configuration_name}" }
-        } : {
-          backendAddressPool  = { id = "${local.agw_id}/backendAddressPools/${r.backend_address_pool_name}" }
-          backendHttpSettings = { id = "${local.agw_id}/backendHttpSettingsCollection/${r.backend_http_settings_name}" }
+_listeners = [
+  for name, l in (local.agw_ready ? var.listeners : tomap({})) : {
+    name = name
+    properties = merge(
+      {
+        protocol                    = l.protocol
+        frontendIPConfiguration      = { id = "${local.agw_id}/frontendIPConfigurations/${l.frontend_ip_configuration_name}" }
+        frontendPort                = { id = "${local.agw_id}/frontendPorts/${l.frontend_port_name}" }
+        hostName                    = try(l.host_name, null)
+        requireServerNameIndication = try(l.require_sni, false)
+      },
+      l.protocol == "Https" ? {
+        sslCertificate = {
+          id = "${local.agw_id}/sslCertificates/${(try(l.ssl_certificate_name, null) != null ? l.ssl_certificate_name : var.ssl_certificate_name)}"
         }
-      )
+      } : {}
+    )
+  }
+]
+
+_redirects = [
+  for name, r in (local.agw_ready ? var.redirect_configurations : tomap({})) : {
+    name       = name
+    properties = {
+      redirectType       = try(r.redirect_type, "Permanent")
+      targetListener     = { id = "${local.agw_id}/httpListeners/${r.target_listener_name}" }
+      includePath        = try(r.include_path, true)
+      includeQueryString = try(r.include_query_string, true)
     }
-  ] : []
+  }
+]
+
+_rules = [
+  for r in (local.agw_ready ? var.routing_rules : tolist([])) : {
+    name = r.name
+    properties = merge(
+      {
+        ruleType     = try(r.rule_type, "Basic")
+        priority     = r.priority
+        httpListener = { id = "${local.agw_id}/httpListeners/${r.http_listener_name}" }
+      },
+      try(r.redirect_configuration_name, null) != null ? {
+        redirectConfiguration = { id = "${local.agw_id}/redirectConfigurations/${r.redirect_configuration_name}" }
+      } : {
+        backendAddressPool  = { id = "${local.agw_id}/backendAddressPools/${r.backend_address_pool_name}" }
+        backendHttpSettings = { id = "${local.agw_id}/backendHttpSettingsCollection/${r.backend_http_settings_name}" }
+      }
+    )
+  }
+]
 
   azapi_body = local.agw_ready ? {
     properties = {
