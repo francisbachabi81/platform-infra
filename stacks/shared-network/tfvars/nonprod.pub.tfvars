@@ -314,19 +314,3 @@ fd_create_frontdoor = true
 fd_sku_name         = "Standard_AzureFrontDoor"
 
 dnsresolver_enable_outbound = false
-
-# AppGW Stage 2 controls
-appgw_enable_stage2 = false
-appgw_stage2_env_enabled = {
-  dev = false
-  qa  = false
-}
-appgw_ssl_cert_secret_name_by_env = {
-  dev = "appgw-gateway-cert-public-dev"
-  qa  = "appgw-gateway-cert-public-qa"
-}
-appgw_backend_ips_by_env = {
-  dev = "62.10.212.49"
-  qa  = "10.20.2.10"
-}
-appgw_key_vault_id = "/subscriptions/df6dc63f-c4dc-4590-ba4b-f2ce9639ca6c/resourceGroups/rg-hrz-np-usaz-core-01/providers/Microsoft.KeyVault/vaults/kvt-hrz-np-usaz-core-01"

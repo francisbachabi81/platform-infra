@@ -217,3 +217,17 @@ output "vnet_ids_by_env" {
     uat  = compact([try(local.vnet_map_consolidated["uat"].id, null)])
   }
 }
+
+output "vnet_ids" {
+  value = {
+    hub  = module.vnet_hub.id
+    dev  = try(module.vnet_dev[0].id, null)
+    qa   = try(module.vnet_qa[0].id, null)
+    uat  = try(module.vnet_uat[0].id, null)
+    prod = try(module.vnet_prod[0].id, null)
+  }
+}
+
+output "private_dns_zone_ids" {
+  value = try(module.pdns.zone_ids, {}) # adjust to your private-dns module output name
+}
