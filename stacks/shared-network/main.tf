@@ -904,6 +904,9 @@ resource "azurerm_application_gateway" "appgw" {
     capacity = var.appgw_capacity
   }
 
+  # WAF_v2 (policy attachment)
+  firewall_policy_id = try(module.waf[0].id, null)
+
   gateway_ip_configuration {
     name      = "agwipc"
     subnet_id = local.appgw_subnet_id
