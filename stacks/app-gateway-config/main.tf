@@ -1,4 +1,5 @@
 terraform {
+  required_version = ">= 1.3.0"
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
@@ -42,29 +43,174 @@ data "terraform_remote_state" "core" {
 }
 
 locals {
-  shared_appgw = try(data.terraform_remote_state.shared_network.outputs.app_gateway, null)
-  shared_uami  = try(data.terraform_remote_state.shared_network.outputs.appgw_uami, null)
-  shared_kv    = try(data.terraform_remote_state.shared_network.outputs.appgw_ssl_key_vault, null)
+  # ------------------------------------------------------------
+  # Output-compat helpers
+  # (Supports either old or new output names without hard failing)
+  # ------------------------------------------------------------
 
-  core_kv = var.core_state == null ? null : try(data.terraform_remote_state.core[0].outputs.core_key_vault, null)
+  # AppGW output might be "app_gateway" or "application_gateway" depending on the shared stack
+  shared_appgw = coalesce(
+    try(data.terraform_remote_state.shared_network.outputs.app_gateway, null),
+    try(data.terraform_remote_state.shared_network.outputs.application_gateway, null),
+    null
+  )
 
-  kv_id  = coalesce(try(local.shared_kv.id, null), try(local.core_kv.id, null))
-  kv_uri = coalesce(try(local.shared_kv.vault_uri, null), try(local.core_kv.vault_uri, null))
+  # UAMI output name can vary too
+  shared_uami = coalesce(
+    try(data.terraform_remote_state.shared_network.outputs.appgw_uami, null),
+    try(data.terraform_remote_state.shared_network.outputs.uami_appgw, null),
+    try(data.terraform_remote_state.shared_network.outputs.uami, null),
+    null
+  )
+
+  # KV output name can vary
+  shared_kv = coalesce(
+    try(data.terraform_remote_state.shared_network.outputs.appgw_ssl_key_vault, null),
+    try(data.terraform_remote_state.shared_network.outputs.ssl_key_vault, null),
+    try(data.terraform_remote_state.shared_network.outputs.key_vault, null),
+    null
+  )
+
+  core_kv = var.core_state == null ? null : coalesce(
+    try(data.terraform_remote_state.core[0].outputs.core_key_vault, null),
+    try(data.terraform_remote_state.core[0].outputs.key_vault, null),
+    null
+  )
+
+  # ------------------------------------------------------------
+  # Safe "first non-null" selection (does NOT throw like coalesce())
+  # ------------------------------------------------------------
+  _kv_id_candidates  = compact([try(local.shared_kv.id, null), try(local.core_kv.id, null)])
+  _kv_uri_candidates = compact([try(local.shared_kv.vault_uri, null), try(local.core_kv.vault_uri, null)])
+
+  kv_id  = try(local._kv_id_candidates[0], null)
+  kv_uri = try(local._kv_uri_candidates[0], null)
 
   agw_id   = try(local.shared_appgw.id, null)
   agw_name = try(local.shared_appgw.name, null)
 
   uami_principal_id = try(local.shared_uami.principal_id, null)
 
+  agw_ready = local.agw_id != null && trim(local.agw_id) != ""
+
+  # ------------------------------------------------------------
+  # SSL secret id (either direct URI or build from vault_uri + name + version)
+  # ------------------------------------------------------------
   ssl_secret_id = (
     var.ssl_key_vault_secret_id != null ? var.ssl_key_vault_secret_id :
-    (var.ssl_secret_name != null && local.kv_uri != null ? (
-      var.ssl_secret_version != null ? "${trim(local.kv_uri, "/")}/secrets/${var.ssl_secret_name}/${var.ssl_secret_version}" :
-      "${trim(local.kv_uri, "/")}/secrets/${var.ssl_secret_name}"
-    ) : null)
+    (
+      var.ssl_secret_name != null && local.kv_uri != null ?
+      (
+        var.ssl_secret_version != null ?
+        "${trim(local.kv_uri, "/")}/secrets/${var.ssl_secret_name}/${var.ssl_secret_version}" :
+        "${trim(local.kv_uri, "/")}/secrets/${var.ssl_secret_name}"
+      ) :
+      null
+    )
   )
 
-  _redirects = [
+  # "Do we intend to configure anything?" (helps us fail-fast if AGW isn't found)
+  wants_config = (
+    length(var.backend_pools) > 0 ||
+    length(var.probes) > 0 ||
+    length(var.backend_http_settings) > 0 ||
+    length(var.frontend_ports) > 0 ||
+    length(var.listeners) > 0 ||
+    length(var.redirect_configurations) > 0 ||
+    length(var.routing_rules) > 0 ||
+    local.ssl_secret_id != null
+  )
+
+  # ------------------------------------------------------------
+  # Build runtime config lists only when we have AGW id
+  # ------------------------------------------------------------
+
+  _backend_pools = local.agw_ready ? [
+    for name, b in var.backend_pools : {
+      name       = name
+      properties = {
+        backendAddresses = concat(
+          [for ip in try(b.ip_addresses, []) : { ipAddress = ip }],
+          [for fqdn in try(b.fqdns, [])      : { fqdn      = fqdn }]
+        )
+      }
+    }
+  ] : []
+
+  _probes = local.agw_ready ? [
+    for name, p in var.probes : {
+      name       = name
+      properties = {
+        protocol           = p.protocol
+        host               = try(p.host, null)
+        path               = p.path
+        interval           = try(p.interval, 30)
+        timeout            = try(p.timeout, 30)
+        unhealthyThreshold = try(p.unhealthy_threshold, 3)
+        pickHostNameFromBackendHttpSettings = try(p.pick_host_name_from_backend_http_settings, false)
+        match = {
+          statusCodes = try(p.match_status_codes, ["200-399"])
+        }
+      }
+    }
+  ] : []
+
+  _http_settings = local.agw_ready ? [
+    for name, s in var.backend_http_settings : {
+      name       = name
+      properties = merge(
+        {
+          port                = s.port
+          protocol            = s.protocol
+          requestTimeout      = try(s.request_timeout, 20)
+          cookieBasedAffinity = try(s.cookie_based_affinity, "Disabled")
+          pickHostNameFromBackendAddress = try(s.pick_host_name_from_backend_address, false)
+        },
+        try(s.probe_name, null) != null ? {
+          probe = { id = "${local.agw_id}/probes/${s.probe_name}" }
+        } : {},
+        try(s.host_name, null) != null ? {
+          hostName = s.host_name
+        } : {}
+      )
+    }
+  ] : []
+
+  _frontend_ports = local.agw_ready ? [
+    for name, port in var.frontend_ports : {
+      name       = name
+      properties = { port = port }
+    }
+  ] : []
+
+  _ssl_certs = (local.agw_ready && local.ssl_secret_id != null) ? [
+    {
+      name       = var.ssl_certificate_name
+      properties = { keyVaultSecretId = local.ssl_secret_id }
+    }
+  ] : []
+
+  _listeners = local.agw_ready ? [
+    for name, l in var.listeners : {
+      name       = name
+      properties = merge(
+        {
+          protocol = l.protocol
+          frontendIPConfiguration = { id = "${local.agw_id}/frontendIPConfigurations/${l.frontend_ip_configuration_name}" }
+          frontendPort            = { id = "${local.agw_id}/frontendPorts/${l.frontend_port_name}" }
+          hostName                = try(l.host_name, null)
+          requireServerNameIndication = try(l.require_sni, false)
+        },
+        l.protocol == "Https" ? {
+          sslCertificate = {
+            id = "${local.agw_id}/sslCertificates/${coalesce(try(l.ssl_certificate_name, null), var.ssl_certificate_name)}"
+          }
+        } : {}
+      )
+    }
+  ] : []
+
+  _redirects = local.agw_ready ? [
     for name, r in var.redirect_configurations : {
       name       = name
       properties = {
@@ -74,13 +220,62 @@ locals {
         includeQueryString = try(r.include_query_string, true)
       }
     }
-  ]
+  ] : []
+
+  _rules = local.agw_ready ? [
+    for r in var.routing_rules : {
+      name       = r.name
+      properties = merge(
+        {
+          ruleType     = try(r.rule_type, "Basic")
+          priority     = r.priority
+          httpListener = { id = "${local.agw_id}/httpListeners/${r.http_listener_name}" }
+        },
+        try(r.redirect_configuration_name, null) != null ? {
+          redirectConfiguration = { id = "${local.agw_id}/redirectConfigurations/${r.redirect_configuration_name}" }
+        } : {
+          backendAddressPool  = { id = "${local.agw_id}/backendAddressPools/${r.backend_address_pool_name}" }
+          backendHttpSettings = { id = "${local.agw_id}/backendHttpSettingsCollection/${r.backend_http_settings_name}" }
+        }
+      )
+    }
+  ] : []
+
+  azapi_body = local.agw_ready ? {
+    properties = {
+      backendAddressPools           = local._backend_pools
+      backendHttpSettingsCollection = local._http_settings
+      probes                        = local._probes
+      frontendPorts                 = local._frontend_ports
+      sslCertificates               = local._ssl_certs
+      httpListeners                 = local._listeners
+      redirectConfigurations        = local._redirects
+      requestRoutingRules           = local._rules
+    }
+  } : null
 }
 
 # -------------------------------------------------------------------
-# RBAC: allow the AGW UAMI to GET secrets from the Key Vault
+# Optional guardrails (recommended)
+# Fail early if you intend to configure but AGW id isn't available.
 # -------------------------------------------------------------------
-# NOTE: For KV RBAC mode, this role is sufficient for reading secret versions.
+check "shared_network_has_agw" {
+  assert {
+    condition = !(local.wants_config && !local.agw_ready)
+    error_message = "app-gateway-config wants to apply runtime config, but shared-network remote state did not provide an Application Gateway id. Verify shared-network outputs and shared_network_state.key."
+  }
+}
+
+check "kv_required_when_ssl_used" {
+  assert {
+    condition = !(local.ssl_secret_id != null && local.kv_id == null && var.ssl_key_vault_secret_id == null)
+    error_message = "SSL secret name/version was provided but no Key Vault URI/id could be resolved from shared-network or core state. Provide ssl_key_vault_secret_id or ensure KV outputs exist."
+  }
+}
+
+# -------------------------------------------------------------------
+# RBAC: allow the AGW UAMI to GET secrets from the Key Vault (RBAC vault)
+# -------------------------------------------------------------------
 resource "azurerm_role_assignment" "uami_kv_secrets_user" {
   count                = (local.kv_id != null && local.uami_principal_id != null) ? 1 : 0
   scope                = local.kv_id
@@ -90,133 +285,9 @@ resource "azurerm_role_assignment" "uami_kv_secrets_user" {
 
 # -------------------------------------------------------------------
 # Application Gateway runtime configuration via AzAPI PATCH
-# This stack owns *all* runtime config (pools, listeners, rules, probes, ssl)
 # -------------------------------------------------------------------
-locals {
-  # Build backend pools
-  _backend_pools = [
-    for name, b in var.backend_pools : {
-      name       = name
-      properties = {
-        backendAddresses = concat(
-          [for ip in try(b.ip_addresses, []) : { ipAddress = ip }],
-          [for fqdn in try(b.fqdns, [])        : { fqdn      = fqdn }]
-        )
-      }
-    }
-  ]
-
-  # Build probes
-  _probes = [
-    for name, p in var.probes : {
-      name       = name
-      properties = {
-        protocol          = p.protocol
-        host              = p.host
-        path              = p.path
-        interval          = p.interval
-        timeout           = p.timeout
-        unhealthyThreshold = p.unhealthy_threshold
-        pickHostNameFromBackendHttpSettings = try(p.pick_host_name_from_backend_http_settings, false)
-        match = {
-          statusCodes = try(p.match_status_codes, ["200-399"])
-        }
-      }
-    }
-  ]
-
-  # Build HTTP settings
-    _http_settings = [
-      for name, s in var.backend_http_settings : {
-        name       = name
-        properties = merge(
-          {
-            port                = s.port
-            protocol            = s.protocol
-            requestTimeout      = try(s.request_timeout, 20)
-            cookieBasedAffinity = try(s.cookie_based_affinity, "Disabled")
-            pickHostNameFromBackendAddress = try(s.pick_host_name_from_backend_address, false)
-          },
-          try(s.probe_name, null) != null ? {
-            probe = { id = "${local.agw_id}/probes/${s.probe_name}" }
-          } : {},
-          try(s.host_name, null) != null ? {
-            hostName = s.host_name
-          } : {}
-        )
-      }
-    ]
-
-  # Build frontend ports
-  _frontend_ports = [
-    for name, port in var.frontend_ports : {
-      name       = name
-      properties = { port = port }
-    }
-  ]
-
-  # SSL certificates
-  _ssl_certs = local.ssl_secret_id == null ? [] : [
-    {
-      name       = var.ssl_certificate_name
-      properties = { keyVaultSecretId = local.ssl_secret_id }
-    }
-  ]
-
-  # Listeners
-  _listeners = [
-    for name, l in var.listeners : {
-      name       = name
-      properties = merge(
-        {
-          protocol = l.protocol
-          frontendIPConfiguration = { id = "${local.agw_id}/frontendIPConfigurations/${l.frontend_ip_configuration_name}" }
-          frontendPort            = { id = "${local.agw_id}/frontendPorts/${l.frontend_port_name}" }
-          hostName = try(l.host_name, null)
-          requireServerNameIndication = try(l.require_sni, false)
-        },
-        l.protocol == "Https" ? { sslCertificate = { id = "${local.agw_id}/sslCertificates/${coalesce(try(l.ssl_certificate_name, null), var.ssl_certificate_name)}" } } : {}
-      )
-    }
-  ]
-
-  # Request routing rules
-    _rules = [
-      for r in var.routing_rules : {
-        name       = r.name
-        properties = merge(
-          {
-            ruleType     = try(r.rule_type, "Basic")
-            priority     = r.priority
-            httpListener = { id = "${local.agw_id}/httpListeners/${r.http_listener_name}" }
-          },
-          # Redirect rule (no backend pool/settings)
-          try(r.redirect_configuration_name, null) != null ? {
-            redirectConfiguration = { id = "${local.agw_id}/redirectConfigurations/${r.redirect_configuration_name}" }
-          } : {
-            backendAddressPool  = { id = "${local.agw_id}/backendAddressPools/${r.backend_address_pool_name}" }
-            backendHttpSettings = { id = "${local.agw_id}/backendHttpSettingsCollection/${r.backend_http_settings_name}" }
-          }
-        )
-      }
-    ]
-
-    azapi_body = {
-      properties = {
-        backendAddressPools           = local._backend_pools
-        backendHttpSettingsCollection = local._http_settings
-        probes                        = local._probes
-        frontendPorts                 = local._frontend_ports
-        sslCertificates               = local._ssl_certs
-        httpListeners                 = local._listeners
-        redirectConfigurations        = local._redirects
-        requestRoutingRules           = local._rules
-      }
-    }
-}
-
 resource "azapi_update_resource" "agw_config" {
-  count       = local.agw_id == null ? 0 : 1
+  count       = local.agw_ready ? 1 : 0
   type        = "Microsoft.Network/applicationGateways@2023-09-01"
   resource_id = local.agw_id
 
