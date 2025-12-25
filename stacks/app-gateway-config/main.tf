@@ -101,7 +101,7 @@ locals {
     null
   )
 
-  core_outputs   = try(data.terraform_remote_state.core[0].outputs, {})
+  core_outputs   = try(data.terraform_remote_state.core.outputs, {})
 
   core_kv = (
     lookup(local.core_outputs, "core_key_vault", null) != null ? lookup(local.core_outputs, "core_key_vault", null) :
