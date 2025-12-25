@@ -17,6 +17,8 @@ provider "azurerm" {
 }
 
 provider "azapi" {
+  # Force azapi to NOT attempt MSI on GitHub runners
+  use_msi = false
   use_cli = true
 }
 
@@ -93,14 +95,20 @@ locals {
 
   # KV output name can vary
 
-  shared_kv = lookup(local.shared_outputs, "appgw_ssl_key_vault", null)
+  shared_kv = coalesce(
+    try(local.shared_outputs.appgw_ssl_key_vault, null),
+    try(local.shared_outputs.ssl_key_vault, null),
+    try(local.shared_outputs.key_vault, null),
+    null
+  )
 
   core_outputs = var.core_state == null ? {} : try(data.terraform_remote_state.core[0].outputs, {})
-  core_kv = (
-  can(local.core_outputs.core_key_vault) ? local.core_outputs.core_key_vault :
-  can(local.core_outputs.key_vault)      ? local.core_outputs.key_vault :
-  null
-)
+
+  core_kv = coalesce(
+    try(local.core_outputs.core_key_vault, null),
+    try(local.core_outputs.key_vault, null),
+    null
+  )
 
   # ------------------------------------------------------------
   # Safe "first non-null" selection (does NOT throw like coalesce())
