@@ -14,6 +14,8 @@ permissions:
 
 env:
   TF_IN_AUTOMATION: true
+  ARM_USE_CLI: true
+  ARM_USE_AZUREAD: true
 
 jobs:
   apply:
