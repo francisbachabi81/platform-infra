@@ -127,9 +127,18 @@ output "communication_services" {
 }
 
 output "core_key_vault" {
-  value = {
-    id        = module.kv_core[*].id
-    name      = module.kv_core[*].name
-    vault_uri = module.kv_core[*].vault_uri
+  value = length(module.kv_core) == 0 ? null : {
+    id        = try(module.kv_core[0].id, null)
+    name      = try(module.kv_core[0].name, null)
+
+    # Try multiple common output names the keyvault module might use
+    vault_uri = coalesce(
+      try(module.kv_core[0].vault_uri, null),
+      try(module.kv_core[0].uri, null),
+      try(module.kv_core[0].vaultUri, null),
+      try(module.kv_core[0].key_vault_uri, null),
+      try(module.kv_core[0].kv_uri, null),
+      null
+    )
   }
 }

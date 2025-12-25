@@ -12,3 +12,7 @@ output "private_endpoint_id" {
   value       = try(azurerm_private_endpoint.this.id, null)
   description = "Private Endpoint ID."
 }
+
+output "vault_uri" {
+  value = azurerm_key_vault.this.vault_uri
+}
