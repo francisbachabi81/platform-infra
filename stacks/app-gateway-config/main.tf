@@ -60,7 +60,6 @@ data "terraform_remote_state" "shared_network" {
 }
 
 data "terraform_remote_state" "core" {
-  count   = var.core_state == null ? 0 : 1
   backend = "azurerm"
   config = {
     resource_group_name  = var.core_state.resource_group_name
