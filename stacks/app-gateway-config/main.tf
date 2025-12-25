@@ -95,18 +95,18 @@ locals {
 
   # KV output name can vary
 
-  shared_kv = coalesce(
-    try(local.shared_outputs.appgw_ssl_key_vault, null),
-    try(local.shared_outputs.ssl_key_vault, null),
-    try(local.shared_outputs.key_vault, null),
+  shared_kv = (
+    lookup(local.shared_outputs, "appgw_ssl_key_vault", null) != null ? lookup(local.shared_outputs, "appgw_ssl_key_vault", null) :
+    lookup(local.shared_outputs, "ssl_key_vault", null)       != null ? lookup(local.shared_outputs, "ssl_key_vault", null) :
+    lookup(local.shared_outputs, "key_vault", null)           != null ? lookup(local.shared_outputs, "key_vault", null) :
     null
   )
 
-  core_outputs = var.core_state == null ? {} : try(data.terraform_remote_state.core[0].outputs, {})
+  core_outputs   = var.core_state == null ? {} : try(data.terraform_remote_state.core[0].outputs, {})
 
-  core_kv = coalesce(
-    try(local.core_outputs.core_key_vault, null),
-    try(local.core_outputs.key_vault, null),
+  core_kv = (
+    lookup(local.core_outputs, "core_key_vault", null) != null ? lookup(local.core_outputs, "core_key_vault", null) :
+    lookup(local.core_outputs, "key_vault", null)      != null ? lookup(local.core_outputs, "key_vault", null) :
     null
   )
 
