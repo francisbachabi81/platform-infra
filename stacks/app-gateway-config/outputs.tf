@@ -13,3 +13,14 @@ output "ssl" {
     ssl_certificate_name     = var.ssl_certificate_name
   }
 }
+
+output "debug_appgw_config" {
+  value = {
+    kv_id            = local.kv_id
+    kv_uri           = local.kv_uri
+    uami_principal_id = local.uami_principal_id
+    agw_id           = local.agw_id
+    shared_kv        = local.shared_kv
+    shared_uami      = local.shared_uami
+  }
+}
