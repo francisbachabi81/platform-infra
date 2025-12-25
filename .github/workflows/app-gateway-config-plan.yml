@@ -1,8 +1,8 @@
 name: "Plan | 05-AppGateway-Config"
-run-name: "${{ format('🧩 {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs.product, inputs.env, github.ref_name, github.run_number) }}"
+run-name: "${{ format('🧩 {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs.product, inputs.plane, github.ref_name, github.run_number) }}"
 
 concurrency:
-  group: plan-app-gateway-config-${{ inputs.product }}-${{ inputs.env }}-${{ github.ref }}
+  group: plan-app-gateway-config-${{ inputs.product }}-${{ inputs.plane }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -12,11 +12,11 @@ env:
 on:
   workflow_dispatch:
     inputs:
-      env:
-        description: "Environment"
+      plane:
+        description: "Plane (Option A): one state per plane"
         type: choice
-        options: [dev, qa, uat, prod]
-        default: dev
+        options: [nonprod, prod]
+        default: nonprod
       product:
         description: "Product"
         type: choice
@@ -34,9 +34,9 @@ permissions:
 
 jobs:
   plan:
-    name: "Plan (app-gateway-config: ${{ inputs.env }}.${{ inputs.product }})"
+    name: "Plan (app-gateway-config: ${{ inputs.plane }}.${{ inputs.product }})"
     runs-on: ubuntu-latest
-    environment: ${{ inputs.env }}
+    environment: ${{ inputs.plane }}
     defaults:
       run:
         working-directory: stacks/app-gateway-config
@@ -77,14 +77,8 @@ jobs:
           write_output() { printf '%s<<__OUT__\n%s\n__OUT__\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
           trim(){ printf "%s" "$1" | tr -d '[:space:]'; }
 
-          ENV_IN="${{ inputs.env }}"
+          PLANE="${{ inputs.plane }}"
           PRODUCT="${{ inputs.product }}"
-
-          case "$ENV_IN" in
-            dev|qa)   PLANE="nonprod" ;;
-            uat|prod) PLANE="prod"    ;;
-            *) echo "Unknown env: $ENV_IN"; exit 1 ;;
-          esac
 
           if [ "$PRODUCT" = "hrz" ]; then
             CLOUD_ENV="AzureUSGovernment"; ARM_ENV="usgovernment"
@@ -95,20 +89,7 @@ jobs:
             STATE_SUB_RAW='${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}'
             CORE_SUB_RAW='${{ secrets.AZ_SUB_HRZ_CORE }}'
 
-            DEV_SUB_RAW='${{ secrets.AZ_SUB_HRZ_DEV }}'
-            QA_SUB_RAW='${{ secrets.AZ_SUB_HRZ_QA }}'
-            UAT_SUB_RAW='${{ secrets.AZ_SUB_HRZ_UAT }}'
-            PROD_SUB_RAW='${{ secrets.AZ_SUB_HRZ_PROD }}'
-
             TARGET_SUB_RAW=$([ "$PLANE" = "prod" ] && echo '${{ secrets.AZ_SUB_HRZ_PROD }}' || echo '${{ secrets.AZ_SUB_HRZ_NONPROD }}')
-
-            case "$ENV_IN" in
-              dev)  ENV_SUB_RAW="$DEV_SUB_RAW"  ;;
-              qa)   ENV_SUB_RAW="$QA_SUB_RAW"   ;;
-              uat)  ENV_SUB_RAW="$UAT_SUB_RAW"  ;;
-              prod) ENV_SUB_RAW="$PROD_SUB_RAW" ;;
-              *) echo "Unknown env for ENV_SUB mapping: $ENV_IN"; exit 1 ;;
-            esac
           else
             CLOUD_ENV="AzureCloud"; ARM_ENV="public"
             TENANT_RAW='${{ secrets.AZ_TENANT_PUB }}'
@@ -118,20 +99,7 @@ jobs:
             STATE_SUB_RAW='${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}'
             CORE_SUB_RAW='${{ secrets.AZ_SUB_PUB_CORE }}'
 
-            DEV_SUB_RAW='${{ secrets.AZ_SUB_PUB_DEV }}'
-            QA_SUB_RAW='${{ secrets.AZ_SUB_PUB_QA }}'
-            UAT_SUB_RAW='${{ secrets.AZ_SUB_PUB_UAT }}'
-            PROD_SUB_RAW='${{ secrets.AZ_SUB_PUB_PROD }}'
-
             TARGET_SUB_RAW=$([ "$PLANE" = "prod" ] && echo '${{ secrets.AZ_SUB_PUB_PROD }}' || echo '${{ secrets.AZ_SUB_PUB_NONPROD }}')
-
-            case "$ENV_IN" in
-              dev)  ENV_SUB_RAW="$DEV_SUB_RAW"  ;;
-              qa)   ENV_SUB_RAW="$QA_SUB_RAW"   ;;
-              uat)  ENV_SUB_RAW="$UAT_SUB_RAW"  ;;
-              prod) ENV_SUB_RAW="$PROD_SUB_RAW" ;;
-              *) echo "Unknown env for ENV_SUB mapping: $ENV_IN"; exit 1 ;;
-            esac
           fi
 
           TENANT=$(trim "$TENANT_RAW")
@@ -139,14 +107,7 @@ jobs:
           STATE_SUB=$(trim "$STATE_SUB_RAW")
           CORE_SUB=$(trim "$CORE_SUB_RAW")
           TARGET_SUB=$(trim "$TARGET_SUB_RAW")
-          ENV_SUB=$(trim "$ENV_SUB_RAW")
 
-          DEV_SUB=$(trim "$DEV_SUB_RAW")
-          QA_SUB=$(trim "$QA_SUB_RAW")
-          UAT_SUB=$(trim "$UAT_SUB_RAW")
-          PROD_SUB=$(trim "$PROD_SUB_RAW")
-
-          write_output ENV        "$ENV_IN"
           write_output PRODUCT    "$PRODUCT"
           write_output PLANE      "$PLANE"
           write_output CLOUD_ENV  "$CLOUD_ENV"
@@ -157,34 +118,19 @@ jobs:
           write_output STATE_SUB  "$STATE_SUB"
           write_output CORE_SUB   "$CORE_SUB"
           write_output TARGET_SUB "$TARGET_SUB"
-          write_output ENV_SUB    "$ENV_SUB"
 
           write_env ARM_ENVIRONMENT "$ARM_ENV"
           write_env ARM_TENANT_ID   "$TENANT"
           write_env ARM_CLIENT_ID   "$CLIENT_ID"
 
+          # These TF_VAR_* are optional if your providers don’t use them, but keeping them won’t hurt.
           write_env TF_VAR_core_tenant_id        "$TENANT"
           write_env TF_VAR_core_subscription_id  "$CORE_SUB"
-          write_env TF_VAR_env_tenant_id         "$TENANT"
-          write_env TF_VAR_env_subscription_id   "$ENV_SUB"
 
           write_env TF_VAR_subscription_id       "$TARGET_SUB"
           write_env TF_VAR_tenant_id             "$TENANT"
 
-          if [ "$PLANE" = "nonprod" ]; then
-            write_env TF_VAR_dev_subscription_id "$DEV_SUB"
-            write_env TF_VAR_dev_tenant_id       "$TENANT"
-            write_env TF_VAR_qa_subscription_id  "$QA_SUB"
-            write_env TF_VAR_qa_tenant_id        "$TENANT"
-          else
-            write_env TF_VAR_prod_subscription_id "$PROD_SUB"
-            write_env TF_VAR_prod_tenant_id       "$TENANT"
-            write_env TF_VAR_uat_subscription_id  "$UAT_SUB"
-            write_env TF_VAR_uat_tenant_id        "$TENANT"
-          fi
-
           write_env TF_VAR_product "$PRODUCT"
-          write_env TF_VAR_env     "$ENV_IN"
           write_env TF_VAR_plane   "$PLANE"
 
       - name: Debug - subscriptions (partial + hash)
@@ -194,28 +140,29 @@ jobs:
           maskless() { v="$(printf '%s' "$1" | tr -d '[:space:]')"; printf '%s…%s' "${v:0:8}" "${v: -6}"; }
           shortsha() { printf '%s' "$1" | tr -d '[:space:]' | shasum -a 256 | cut -c1-12; }
 
-          echo "BASE sub:  $(maskless "$TF_VAR_subscription_id")       (sha12: $(shortsha "$TF_VAR_subscription_id"))"
-          echo "ENV  sub:  $(maskless "$TF_VAR_env_subscription_id")   (sha12: $(shortsha "$TF_VAR_env_subscription_id"))"
-          echo "CORE sub:  $(maskless "$TF_VAR_core_subscription_id")  (sha12: $(shortsha "$TF_VAR_core_subscription_id"))"
-          echo "Tenant:    $(maskless "$TF_VAR_env_tenant_id")         (sha12: $(shortsha "$TF_VAR_env_tenant_id"))"
+          echo "TARGET sub: $(maskless "$TF_VAR_subscription_id")      (sha12: $(shortsha "$TF_VAR_subscription_id"))"
+          echo "CORE   sub: $(maskless "$TF_VAR_core_subscription_id") (sha12: $(shortsha "$TF_VAR_core_subscription_id"))"
+          echo "Tenant:     $(maskless "$TF_VAR_tenant_id")            (sha12: $(shortsha "$TF_VAR_tenant_id"))"
+          echo "Plane:      ${{ steps.sel.outputs.PLANE }}"
+          echo "Product:    ${{ steps.sel.outputs.PRODUCT }}"
 
-      - name: Resolve tfvars & backend key (env-based)
+      - name: Resolve tfvars & backend key (plane-based)
         id: paths
         shell: bash
         run: |
           set -euo pipefail
           write_output() { printf '%s<<__OUT__\n%s\n__OUT__\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
 
-          ENV="${{ steps.sel.outputs.ENV }}"
+          PLANE="${{ steps.sel.outputs.PLANE }}"
           PRODUCT="${{ steps.sel.outputs.PRODUCT }}"
 
           TFVARS_DIR="${GITHUB_WORKSPACE}/stacks/app-gateway-config/tfvars"
           echo "🔎 Listing $TFVARS_DIR:"; ls -la "$TFVARS_DIR" || true
 
           candidates=(
-            "${ENV}.${PRODUCT}.tfvars"
-            "${ENV}.tfvars"
-            "default.${ENV}.tfvars"
+            "${PLANE}.${PRODUCT}.tfvars"
+            "${PLANE}.tfvars"
+            "default.${PLANE}.tfvars"
             "default.tfvars"
           )
 
@@ -234,7 +181,7 @@ jobs:
           write_output STATE_RG        "rg-core-infra-state"
           write_output STATE_SA        "sacoretfstateinfra"
           write_output STATE_CONTAINER "tfstate"
-          write_output STATE_KEY       "app-gateway-config/${PRODUCT}/${ENV}/terraform.tfstate"
+          write_output STATE_KEY       "app-gateway-config/${PRODUCT}/${PLANE}/terraform.tfstate"
 
       - name: Export remote-state vars to Terraform
         shell: bash
@@ -258,7 +205,7 @@ jobs:
           environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
           audience:        ${{ steps.sel.outputs.AUDIENCE }}
 
-      - name: Terraform Init (backend in state/prod subscription)
+      - name: Terraform Init (backend)
         env:
           ARM_USE_CLI: true
           ARM_USE_AZUREAD: true
@@ -301,7 +248,7 @@ jobs:
           terraform plan -input=false -lock-timeout=5m \
             -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
             -var "product=${{ steps.sel.outputs.PRODUCT }}" \
-            -var "env=${{ steps.sel.outputs.ENV }}" \
+            -var "plane=${{ steps.sel.outputs.PLANE }}" \
             -detailed-exitcode -out=tfplan \
             2>&1 | tee plan-raw.txt
           ec=${PIPESTATUS[0]}
@@ -410,7 +357,6 @@ jobs:
         env:
           APPROVERS_CSV: ${{ env.APPROVERS_CSV }}
           PRODUCT:       ${{ steps.sel.outputs.PRODUCT }}
-          ENVIRONMENT:   ${{ steps.sel.outputs.ENV }}
           PLANE:         ${{ steps.sel.outputs.PLANE }}
           PLAN_SUMMARY:  ${{ steps.summary.outputs.summary }}
           STATE_KEY:     ${{ steps.paths.outputs.STATE_KEY }}
@@ -420,9 +366,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const product      = process.env.PRODUCT || '';
-            const envVal       = process.env.ENVIRONMENT || '';
             const plane        = process.env.PLANE || '';
-            const envLabel     = envVal || plane;
             const planSummary  = process.env.PLAN_SUMMARY || '';
             const stateKey     = process.env.STATE_KEY || '';
             const errorCount   = parseInt(process.env.ERROR_COUNT || '0', 10) || 0;
@@ -463,7 +407,7 @@ jobs:
             }
             const title =
               titlePrefix +
-              ' | ' + product + '-' + envLabel +
+              ' | ' + product + '-' + plane +
               ' | ' + branch +
               ' | #' + runNum +
               ' | run ' + runId +
@@ -475,7 +419,6 @@ jobs:
             **Plan ready (${statusTag})**
             - **Stack:** app-gateway-config
             - **Product:** ${product}
-            - **Env:** ${envVal}
             - **Plane:** ${plane}
             - **Branch:** ${branchRaw}
             - **Commit:** ${process.env.GITHUB_SHA}
@@ -489,7 +432,6 @@ jobs:
             ${hasErrors ? '> ⚠️ One or more steps in this workflow failed or errors were detected in the plan output. Do **not** approve until the errors are understood and resolved.\n' : ''}
 
             **Artifact:** \`app-gateway-config-plan-${runId}\`
-            **JSON:** \`plan.json\`
 
             **Approve by commenting:** \`/approve ${runId}\`
             **Reject by commenting:** \`/reject ${runId}\`
@@ -503,7 +445,6 @@ jobs:
               labels: [
                 'stack:app-gateway-config',
                 `product:${product}`,
-                `env:${envLabel}`,
                 `plane:${plane}`,
                 `branch:${branch}`
               ]
