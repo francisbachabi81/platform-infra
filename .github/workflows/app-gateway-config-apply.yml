@@ -16,6 +16,7 @@ env:
   TF_IN_AUTOMATION: true
   ARM_USE_CLI: true
   ARM_USE_AZUREAD: true
+  ARM_USE_MSI: false
 
 jobs:
   apply:
@@ -151,6 +152,21 @@ jobs:
             echo "TF_VAR_plane=$PLANE"
           } >> $GITHUB_ENV
 
+      # NEW: Export AZURE_* vars for AzAPI + set correct authority host (Gov vs Public)
+      - name: Export AZURE_* vars for azapi
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "AZURE_TENANT_ID=${{ steps.sel.outputs.TENANT }}" >> $GITHUB_ENV
+          echo "AZURE_CLIENT_ID=${{ steps.sel.outputs.CLIENT_ID }}" >> $GITHUB_ENV
+          echo "AZURE_SUBSCRIPTION_ID=${{ steps.sel.outputs.TARGET_SUB }}" >> $GITHUB_ENV
+
+          if [ "${{ steps.sel.outputs.CLOUD_ENV }}" = "AzureUSGovernment" ]; then
+            echo "AZURE_AUTHORITY_HOST=https://login.microsoftonline.us/" >> $GITHUB_ENV
+          else
+            echo "AZURE_AUTHORITY_HOST=https://login.microsoftonline.com/" >> $GITHUB_ENV
+          fi
+
       - name: Resolve backend key (env-based)
         id: paths
         shell: bash
@@ -177,10 +193,18 @@ jobs:
           environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
           audience:        ${{ steps.sel.outputs.AUDIENCE }}
 
+      # NEW: Force CLI token cache / sanity check for state context
+      - name: Azure CLI sanity (state)
+        shell: bash
+        run: |
+          set -euo pipefail
+          az account show --output table
+
       - name: Terraform Init (backend)
         env:
           ARM_USE_CLI: true
           ARM_USE_AZUREAD: true
+          ARM_USE_MSI: false
           ARM_CLIENT_ID:       ${{ steps.sel.outputs.CLIENT_ID }}
           ARM_TENANT_ID:       ${{ steps.sel.outputs.TENANT }}
           ARM_SUBSCRIPTION_ID: ${{ steps.sel.outputs.STATE_SUB }}
@@ -206,6 +230,13 @@ jobs:
           environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
           audience:        ${{ steps.sel.outputs.AUDIENCE }}
 
+      # NEW: Force CLI token cache / sanity check for target context
+      - name: Azure CLI sanity (target)
+        shell: bash
+        run: |
+          set -euo pipefail
+          az account show --output table
+
       - name: Download approved plan artifact
         uses: dawidd6/action-download-artifact@v6
         with:
@@ -227,6 +258,15 @@ jobs:
             ls -la || true
           fi
 
+      # NEW: Run apply with explicit ARM_* env to prevent any MSI probing / ambiguity
       - name: Terraform Apply (approved plan)
         if: ${{ steps.detect.outputs.has_tfplan == 'true' }}
+        env:
+          ARM_USE_CLI: "true"
+          ARM_USE_AZUREAD: "true"
+          ARM_USE_MSI: "false"
+          ARM_CLIENT_ID: ${{ steps.sel.outputs.CLIENT_ID }}
+          ARM_TENANT_ID: ${{ steps.sel.outputs.TENANT }}
+          ARM_SUBSCRIPTION_ID: ${{ steps.sel.outputs.TARGET_SUB }}
+          ARM_ENVIRONMENT: ${{ steps.sel.outputs.ARM_ENV }}
         run: terraform apply -parallelism=5 -input=false -auto-approve tfplan
