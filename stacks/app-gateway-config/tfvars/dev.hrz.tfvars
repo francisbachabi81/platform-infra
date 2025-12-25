@@ -16,6 +16,13 @@ shared_network_state = {
   key                  = "shared-network/hrz/usaz/np.tfstate"
 }
 
+core_state = {
+  resource_group_name  = "rg-core-infra-state"
+  storage_account_name = "sacoretfstateinfra"
+  container_name       = "tfstate"
+  key                  = "core/hrz/usaz/np.tfstate"
+}
+
 # SSL cert in Key Vault
 ssl_secret_name        = "appgw-gateway-cert-horizon-dev"   # secret name containing the PFX
 ssl_secret_version     = null                               # latest
