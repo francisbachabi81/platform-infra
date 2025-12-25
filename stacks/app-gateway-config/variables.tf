@@ -1,5 +1,10 @@
 variable "product" { type = string } # hrz | pub
-variable "env"     { type = string } # dev | qa | prod
+
+variable "env" {
+  type        = string
+  default     = null
+  description = "(Optional) used only for tagging/labels. Do NOT use for state selection."
+}
 
 variable "tags" { 
   type = map(string) 
@@ -51,7 +56,6 @@ variable "core_state" {
     key                  = string
     subscription_id      = optional(string)
   })
-  default = null
 }
 
 # -------------------------------------------------------------------

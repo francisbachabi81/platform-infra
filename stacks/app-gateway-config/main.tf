@@ -26,23 +26,8 @@ locals {
   env_norm   = var.env == null ? null : lower(var.env)
   plane_norm = var.plane == null ? null : lower(var.plane)
 
-  env_effective = coalesce(
-    local.env_norm,
-    local.plane_norm == "nonprod" ? "dev" :
-    local.plane_norm == "prod"    ? "prod" :
-    "dev"
-  )
-
-  plane_effective = coalesce(
-    local.plane_norm,
-    contains(["dev", "qa"], local.env_effective) ? "nonprod" : "prod"
-  )
-
-  plane_full = local.plane_effective
-  plane_code = local.plane_effective == "nonprod" ? "np" : "pr"
-
-  activity_alert_location = "Global"
-  ag_name_default         = "ag-obs-${var.product}-${local.env_effective}-${var.region}-01"
+  plane_full = local.plane_norm
+  plane_code = local.plane_norm == "nonprod" ? "np" : "pr"
 }
 
 # -------------------------------------------------------------------
@@ -54,8 +39,8 @@ data "terraform_remote_state" "shared_network" {
     resource_group_name  = var.shared_network_state.resource_group_name
     storage_account_name = var.shared_network_state.storage_account_name
     container_name       = var.shared_network_state.container_name
-    key                  = "shared-network/${var.product}/${local.plane_full}/terraform.tfstate"
-    use_azuread_auth     = true
+    key              = "shared-network/${var.product}/${local.plane_full}/terraform.tfstate"
+    use_azuread_auth = true
   }
 }
 
@@ -65,8 +50,8 @@ data "terraform_remote_state" "core" {
     resource_group_name  = var.core_state.resource_group_name
     storage_account_name = var.core_state.storage_account_name
     container_name       = var.core_state.container_name
-    key                  = "core/${var.product}/${local.plane_code}/terraform.tfstate"
-    use_azuread_auth     = true
+    key              = "core/${var.product}/${local.plane_code}/terraform.tfstate"
+    use_azuread_auth = true
   }
 }
 
