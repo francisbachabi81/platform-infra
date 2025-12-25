@@ -92,31 +92,16 @@ locals {
     null
   )
 
-  # KV output name can vary
-
-  shared_kv = (
-    lookup(local.shared_outputs, "appgw_ssl_key_vault", null) != null ? lookup(local.shared_outputs, "appgw_ssl_key_vault", null) :
-    lookup(local.shared_outputs, "ssl_key_vault", null)       != null ? lookup(local.shared_outputs, "ssl_key_vault", null) :
-    lookup(local.shared_outputs, "key_vault", null)           != null ? lookup(local.shared_outputs, "key_vault", null) :
-    null
-  )
-
   core_outputs   = try(data.terraform_remote_state.core.outputs, {})
 
   core_kv = (
     lookup(local.core_outputs, "core_key_vault", null) != null ? lookup(local.core_outputs, "core_key_vault", null) :
-    lookup(local.core_outputs, "key_vault", null)      != null ? lookup(local.core_outputs, "key_vault", null) :
+    lookup(local.core_outputs, "core_kvt", null)       != null ? lookup(local.core_outputs, "core_kvt", null) :
     null
   )
 
-  # ------------------------------------------------------------
-  # Safe "first non-null" selection (does NOT throw like coalesce())
-  # ------------------------------------------------------------
-  _kv_id_candidates  = compact([try(local.shared_kv.id, null), try(local.core_kv.id, null)])
-  _kv_uri_candidates = compact([try(local.shared_kv.vault_uri, null), try(local.core_kv.vault_uri, null)])
-
-  kv_id  = try(local._kv_id_candidates[0], null)
-  kv_uri = try(local._kv_uri_candidates[0], null)
+  kv_id  = try(local.core_kv.id, null)
+  kv_uri = try(local.core_kv.vault_uri, null)
 
   agw_id   = try(local.shared_appgw.id, null)
   agw_name = try(local.shared_appgw.name, null)
