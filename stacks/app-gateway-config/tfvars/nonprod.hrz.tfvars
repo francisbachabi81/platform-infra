@@ -13,7 +13,6 @@ shared_network_state = {
   resource_group_name  = "rg-core-infra-state"
   storage_account_name = "sacoretfstateinfra"
   container_name       = "tfstate"
-  # keep if you want, but main.tf uses the computed key; this field is unused in your snippet
   key                  = "shared-network/hrz/usaz/np.tfstate"
 }
 
@@ -24,10 +23,18 @@ core_state = {
   key                  = "core/hrz/usaz/np.tfstate"
 }
 
-# SSL cert in Key Vault (must be a SECRET that contains PFX)
-ssl_secret_name      = "appgw-gateway-cert-horizon-nonprod"
-ssl_secret_version   = null
-ssl_certificate_name = "appgw-gateway-cert-horizon-nonprod"
+
+ssl_certificates = {
+  appgw-gateway-cert-horizon-dev = {
+    secret_name    = "appgw-gateway-cert-horizon-dev"
+    secret_version = null
+  }
+
+  appgw-gateway-cert-horizon-qa = {
+    secret_name    = "appgw-gateway-cert-horizon-qa"
+    secret_version = null
+  }
+}
 
 frontend_ports = {
   feport-80  = 80
@@ -94,7 +101,7 @@ listeners = {
     frontend_port_name             = "feport-443"
     protocol                       = "Https"
     host_name                      = "dev.horizon.intterra.io"
-    ssl_certificate_name           = "appgw-gateway-cert-horizon-nonprod"
+    ssl_certificate_name           = "appgw-gateway-cert-horizon-dev"
     require_sni                    = true
     frontend_ip_configuration_name = "feip"
   }
@@ -109,7 +116,7 @@ listeners = {
     frontend_port_name             = "feport-443"
     protocol                       = "Https"
     host_name                      = "qa.horizon.intterra.io"
-    ssl_certificate_name           = "appgw-gateway-cert-horizon-nonprod"
+    ssl_certificate_name           = "appgw-gateway-cert-horizon-qa"
     require_sni                    = true
     frontend_ip_configuration_name = "feip"
   }

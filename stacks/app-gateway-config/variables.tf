@@ -1,4 +1,6 @@
-variable "product" { type = string } # hrz | pub
+variable "product" { 
+  type = string 
+  } # hrz | pub
 
 variable "env" {
   type        = string
@@ -31,9 +33,7 @@ variable "region" {
   type        = string
 }
 
-# -------------------------------------------------------------------
 # Remote state wiring
-# -------------------------------------------------------------------
 variable "shared_network_state" {
   description = "Remote state config for stacks/shared-network."
   type = object({
@@ -45,8 +45,6 @@ variable "shared_network_state" {
   })
 }
 
-# Optional: if shared-network does not provide Key Vault outputs yet,
-# you can also point this stack at core/platform-app state to look up the KV.
 variable "core_state" {
   description = "(Optional) Remote state config for stack that outputs key_vault (id, vault_uri)."
   type = object({
@@ -58,32 +56,7 @@ variable "core_state" {
   })
 }
 
-# -------------------------------------------------------------------
-# SSL certificate sourcing (Key Vault)
-# -------------------------------------------------------------------
-# Preferred: provide the full secret ID (URI with version)
-variable "ssl_key_vault_secret_id" {
-  description = "Full Key Vault Secret ID/URI (with version) used by Application Gateway sslCertificates[].keyVaultSecretId."
-  type        = string
-  default     = null
-}
-
-# Alternative: provide name (+ optionally version) and we will build the secret ID using vault_uri.
-variable "ssl_secret_name" {
-  description = "Key Vault secret name containing the PFX for Application Gateway (e.g. 'wildcard-contoso-com')."
-  type        = string
-  default     = null
-}
-
-variable "ssl_secret_version" {
-  description = "(Optional) Key Vault secret version. If null, the latest version is used (requires read access to secret metadata)."
-  type        = string
-  default     = null
-}
-
-# -------------------------------------------------------------------
 # Application Gateway runtime configuration (owned by this stack)
-# -------------------------------------------------------------------
 variable "frontend_ports" {
   description = "Map of frontend port name => port number."
   type        = map(number)
@@ -160,12 +133,6 @@ variable "routing_rules" {
   default = []
 }
 
-variable "ssl_certificate_name" {
-  description = "Name to assign to the Application Gateway sslCertificate object that references Key Vault. Listeners should reference this name when protocol=Https."
-  type        = string
-  default     = "kv-ssl"
-}
-
 variable "redirect_configurations" {
   description = "Map of redirect configuration name => redirect settings (commonly HTTP -> HTTPS)."
   type = map(object({
@@ -173,6 +140,16 @@ variable "redirect_configurations" {
     redirect_type          = optional(string, "Permanent") # Permanent|Found|SeeOther|Temporary
     include_path           = optional(bool, true)
     include_query_string   = optional(bool, true)
+  }))
+  default = {}
+}
+
+variable "ssl_certificates" {
+  description = "Map of AGW sslCertificate name => Key Vault secret reference."
+  type = map(object({
+    key_vault_secret_id = optional(string)  # full https://.../secrets/.../version
+    secret_name         = optional(string)  # if building from kv_uri
+    secret_version      = optional(string)  # optional
   }))
   default = {}
 }
