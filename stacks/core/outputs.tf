@@ -127,9 +127,9 @@ output "communication_services" {
 }
 
 output "core_key_vault" {
-  value = try({
-    id        = module.kv_core[0].id
-    name      = module.kv_core[0].name
-    vault_uri = module.kv_core[0].vault_uri
-  }, null)
+  value = {
+    id        = module.kv_core[*].id
+    name      = module.kv_core[*].name
+    vault_uri = module.kv_core[*].vault_uri
+  }
 }
