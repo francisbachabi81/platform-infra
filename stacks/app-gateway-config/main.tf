@@ -23,17 +23,20 @@ provider "azapi" {
 }
 
 locals {
-  env_norm   = var.env == null ? null : lower(var.env)
-  plane_norm = var.plane == null ? null : lower(var.plane)
+  # normalize
+  env_norm   = var.env   == null ? null : lower(trimspace(var.env))
+  plane_norm = var.plane == null ? null : lower(trimspace(var.plane))
 
-  # ✅ FIX: if plane isn't provided, derive it from env
+  env_is_nonprod = local.env_norm != null && contains(["dev", "qa"], local.env_norm)
+
   plane_full = coalesce(
     local.plane_norm,
-    contains(["dev", "qa"], local.env_norm) ? "nonprod" : "prod"
+    local.env_is_nonprod ? "nonprod" : "prod"
   )
 
   plane_code = local.plane_full == "nonprod" ? "np" : "pr"
 }
+
 
 # Remote state
 data "terraform_remote_state" "shared_network" {
