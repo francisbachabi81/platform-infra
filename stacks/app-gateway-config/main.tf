@@ -78,18 +78,18 @@ locals {
   # Output-compat helpers
   shared_outputs = try(data.terraform_remote_state.shared_network.outputs, {})
 
-  shared_appgw = coalesce(
+  _shared_appgw_candidates = [
     try(local.shared_outputs.app_gateway, null),
     try(local.shared_outputs.application_gateway, null),
-    null
-  )
+  ]
+  shared_appgw = try([for x in local._shared_appgw_candidates : x if x != null][0], null)
 
-  shared_uami = coalesce(
+  _shared_uami_candidates = [
     try(local.shared_outputs.appgw_uami, null),
     try(local.shared_outputs.uami_appgw, null),
     try(local.shared_outputs.uami, null),
-    null
-  )
+  ]
+  shared_uami = try([for x in local._shared_uami_candidates : x if x != null][0], null)
 
   core_outputs = try(data.terraform_remote_state.core.outputs, {})
 
