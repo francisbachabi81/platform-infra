@@ -37,7 +37,6 @@ locals {
   plane_code = local.plane_full == "nonprod" ? "np" : "pr"
 }
 
-
 # Remote state
 data "terraform_remote_state" "shared_network" {
   backend = "azurerm"
@@ -45,14 +44,7 @@ data "terraform_remote_state" "shared_network" {
     resource_group_name  = var.shared_network_state.resource_group_name
     storage_account_name = var.shared_network_state.storage_account_name
     container_name       = var.shared_network_state.container_name
-
-    # ✅ FIX: do not hardcode the key format here unless that is truly your structure
-    # If your shared_network_state already includes key, prefer it:
-    key = coalesce(
-      try(var.shared_network_state.key, null),
-      "shared-network/${var.product}/${local.plane_full}/terraform.tfstate"
-    )
-
+    key = "shared-network/${var.product}/${local.plane_full}/terraform.tfstate"
     use_azuread_auth = true
   }
 }
@@ -63,35 +55,29 @@ data "terraform_remote_state" "core" {
     resource_group_name  = var.core_state.resource_group_name
     storage_account_name = var.core_state.storage_account_name
     container_name       = var.core_state.container_name
-
-    # ✅ FIX: same pattern as above: prefer provided key
-    key = coalesce(
-      try(var.core_state.key, null),
-      "core/${var.product}/${local.plane_code}/terraform.tfstate"
-    )
-
+    key = "core/${var.product}/${local.plane_code}/terraform.tfstate"
     use_azuread_auth = true
   }
 }
 
 locals {
-  # Output-compat helpers
   shared_outputs = try(data.terraform_remote_state.shared_network.outputs, {})
 
-  _shared_appgw_candidates = [
+  # AppGW output might be "app_gateway" or "application_gateway" depending on the shared stack
+  shared_appgw = coalesce(
     try(local.shared_outputs.app_gateway, null),
     try(local.shared_outputs.application_gateway, null),
-  ]
-  shared_appgw = try([for x in local._shared_appgw_candidates : x if x != null][0], null)
+    null
+  )
 
-  _shared_uami_candidates = [
+  shared_uami = coalesce(
     try(local.shared_outputs.appgw_uami, null),
     try(local.shared_outputs.uami_appgw, null),
     try(local.shared_outputs.uami, null),
-  ]
-  shared_uami = try([for x in local._shared_uami_candidates : x if x != null][0], null)
+    null
+  )
 
-  core_outputs = try(data.terraform_remote_state.core.outputs, {})
+  core_outputs   = try(data.terraform_remote_state.core.outputs, {})
 
   core_kv = (
     lookup(local.core_outputs, "core_key_vault", null) != null ? lookup(local.core_outputs, "core_key_vault", null) :
