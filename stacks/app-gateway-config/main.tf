@@ -16,6 +16,10 @@ provider "azurerm" {
   features {}
 }
 
+provider "azapi" {
+  use_cli = true
+}
+
 locals {
   env_norm   = var.env == null ? null : lower(var.env)
   plane_norm = var.plane == null ? null : lower(var.plane)
