@@ -225,7 +225,7 @@ locals {
           hostName                    = try(l.host_name, null)
           requireServerNameIndication = try(l.require_sni, false)
         },
-        try(l.waf_policy_key, null) != null ? {
+        (try(l.waf_policy_key, null) != null && l.protocol == "Https") ? {
           firewallPolicy = { id = local.waf_policy_ids[l.waf_policy_key] }
         } : {},
         l.protocol == "Https" ? {
