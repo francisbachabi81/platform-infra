@@ -23,6 +23,19 @@ core_state = {
   key                  = "core/hrz/usaz/np.tfstate"
 }
 
+waf_policies = {
+  dev = {
+    mode             = "Prevention"
+    vpn_cidrs        = ["192.168.1.0/24"]
+    restricted_paths = ["/admin"]
+  }
+  # qa = {
+  #   mode             = "Prevention"
+  #   vpn_cidrs        = ["192.168.1.0/24"]
+  #   restricted_paths = ["/admin", "/ops"]
+  # }
+}
+
 # only one sslCertificates[] element, but multiple HTTPS listeners can reference it
 # ssl_certificates = {
 #   appgw-gateway-cert-horizon-dev = {
@@ -104,6 +117,7 @@ listeners = {
     protocol                       = "Http"
     host_name                      = "dev.horizon.intterra.io"
     frontend_ip_configuration_name = "feip"
+    waf_policy_key = "dev"
   }
   listener-dev-https = {
     frontend_port_name             = "feport-443"
@@ -112,6 +126,7 @@ listeners = {
     ssl_certificate_name           = "appgw-gateway-cert-horizon-dev"
     require_sni                    = true
     frontend_ip_configuration_name = "feip"
+    waf_policy_key = "dev"
   }
 
   # listener-qa-http = {

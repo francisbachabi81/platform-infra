@@ -153,3 +153,16 @@ variable "ssl_certificates" {
   }))
   default = {}
 }
+
+variable "waf_policies" {
+  type = map(object({
+    mode               = optional(string, "Prevention") # Detection|Prevention
+    vpn_cidrs          = list(string)                   # e.g. ["192.168.1.0/24"]
+    restricted_paths   = list(string)                   # e.g. ["/admin"]
+    managed_rule_set   = optional(object({
+      type    = string
+      version = string
+    }), { type = "OWASP", version = "3.2" })
+  }))
+  default = {}
+}

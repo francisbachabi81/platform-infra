@@ -48,6 +48,15 @@ output "debug_appgw_config" {
   }
 }
 
+output "waf" {
+  value = {
+    policies = {
+      for k, p in azurerm_web_application_firewall_policy.this :
+      k => { id = p.id, name = p.name }
+    }
+  }
+}
+
 # output "application_gateway" {
 #   value = {
 #     id   = local.agw_id

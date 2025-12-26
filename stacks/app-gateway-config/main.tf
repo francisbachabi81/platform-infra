@@ -59,6 +59,11 @@ data "terraform_remote_state" "core" {
 }
 
 locals {
+  waf_policy_ids = {
+    for k, p in azurerm_web_application_firewall_policy.this :
+    k => p.id
+  }
+
   shared_outputs = try(data.terraform_remote_state.shared_network.outputs, {})
 
   shared_appgw = coalesce(
@@ -91,6 +96,9 @@ locals {
   uami_principal_id = try(local.shared_uami.principal_id, null)
 
   agw_ready = local.agw_id != null && trimspace(local.agw_id) != ""
+
+  shared_resource_groups = try(local.shared_outputs.resource_groups, {})
+  hub_rg_name = try(local.shared_resource_groups.hub.name, null)
 
   # SSL: cert_name => Key Vault secret URI
   ssl_cert_secret_ids = {
@@ -217,6 +225,9 @@ locals {
           hostName                    = try(l.host_name, null)
           requireServerNameIndication = try(l.require_sni, false)
         },
+        try(l.waf_policy_key, null) != null ? {
+          firewallPolicy = { id = local.waf_policy_ids[l.waf_policy_key] }
+        } : {},
         l.protocol == "Https" ? {
           sslCertificate = {
             id = "${local.agw_id}/sslCertificates/${l.ssl_certificate_name}"
@@ -351,4 +362,48 @@ resource "azapi_update_resource" "agw_config" {
   depends_on = [
     azurerm_role_assignment.uami_kv_secrets_user
   ]
+}
+
+resource "azurerm_web_application_firewall_policy" "this" {
+  for_each            = var.waf_policies
+  name = "waf-${var.product}-${local.plane_code}-${var.region}-${each.key}-01"
+  resource_group_name = local.hub_rg_name
+  location            = var.location
+
+  policy_settings {
+    enabled = true
+    mode    = each.value.mode
+  }
+
+  managed_rules {
+    managed_rule_set {
+      type    = each.value.managed_rule_set.type
+      version = each.value.managed_rule_set.version
+    }
+  }
+
+  # Block non-VPN traffic when URI matches restricted paths
+  custom_rules {
+    name      = "block-nonvpn-restricted-paths"
+    priority  = 10
+    rule_type = "MatchRule"
+    action    = "Block"
+
+    match_conditions {
+      match_variables {
+        variable_name = "RequestUri"
+      }
+      operator = "BeginsWith"
+      match_values = each.value.restricted_paths
+    }
+
+    match_conditions {
+      match_variables {
+        variable_name = "RemoteAddr"
+      }
+      operator           = "IPMatch"
+      match_values       = each.value.vpn_cidrs
+      negation_condition = true # NOT in VPN range
+    }
+  }
 }
