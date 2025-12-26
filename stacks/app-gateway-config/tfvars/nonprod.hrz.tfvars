@@ -125,7 +125,7 @@ listeners = {
     ssl_certificate_name           = "appgw-gateway-cert-horizon-dev"
     require_sni                    = true
     frontend_ip_configuration_name = "feip"
-    waf_policy_key = "dev"
+    waf_policy_key                 = "dev"
   }
 
   # listener-qa-http = {

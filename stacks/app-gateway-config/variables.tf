@@ -113,6 +113,7 @@ variable "listeners" {
     ssl_certificate_name           = optional(string)
     require_sni                    = optional(bool, false)
     frontend_ip_configuration_name = optional(string, "feip")
+    waf_policy_key                 = optional(string)
   }))
   default = {}
 }
