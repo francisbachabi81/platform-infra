@@ -117,7 +117,6 @@ listeners = {
     protocol                       = "Http"
     host_name                      = "dev.horizon.intterra.io"
     frontend_ip_configuration_name = "feip"
-    waf_policy_key = "dev"
   }
   listener-dev-https = {
     frontend_port_name             = "feport-443"
