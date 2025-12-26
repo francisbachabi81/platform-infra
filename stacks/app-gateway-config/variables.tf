@@ -161,6 +161,7 @@ variable "waf_policies" {
     mode               = optional(string, "Prevention") # Detection|Prevention
     vpn_cidrs          = list(string)                   # e.g. ["192.168.1.0/24"]
     restricted_paths   = list(string)                   # e.g. ["/admin"]
+    blocked_countries  = optional(list(string), [])     # e.g. ["CN","RU"]
     managed_rule_set   = optional(object({
       type    = string
       version = string

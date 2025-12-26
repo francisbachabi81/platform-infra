@@ -28,6 +28,7 @@ waf_policies = {
     mode             = "Prevention"
     vpn_cidrs        = ["192.168.1.0/24"]
     restricted_paths = ["/admin"]
+    blocked_countries = ["CN", "RU", "IR"]
   }
   # qa = {
   #   mode             = "Prevention"

@@ -398,6 +398,26 @@ resource "azurerm_web_application_firewall_policy" "this" {
     }
   }
 
+  # Block traffic from configured countries (evaluated first)
+  dynamic "custom_rules" {
+    for_each = length(try(each.value.blocked_countries, [])) > 0 ? [1] : []
+    content {
+      name      = "blockCountries"
+      priority  = 5
+      rule_type = "MatchRule"
+      action    = "Block"
+
+      match_conditions {
+        match_variables {
+          variable_name = "RequestHeader"
+          selector      = "GeoLocation"
+        }
+        operator     = "Equal"
+        match_values = each.value.blocked_countries
+      }
+    }
+  }
+
   # Block non-VPN traffic when URI matches restricted paths
   custom_rules {
     name      = "blockNonvpnRestrictedPaths"
