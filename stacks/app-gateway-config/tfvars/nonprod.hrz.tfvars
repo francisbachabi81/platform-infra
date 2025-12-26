@@ -25,7 +25,7 @@ core_state = {
 
 # only one sslCertificates[] element, but multiple HTTPS listeners can reference it
 ssl_certificates = {
-  wildcard-horizon = {
+  appgw-gateway-cert-horizon-dev = {
     secret_name    = "appgw-gateway-cert-horizon-dev" # or whatever your wildcard secret is - wildcard-horizon-intterra-io
     # secret_version = null
   }
