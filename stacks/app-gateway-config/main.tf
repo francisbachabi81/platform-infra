@@ -411,6 +411,7 @@ resource "azurerm_web_application_firewall_policy" "this" {
       }
       operator = "BeginsWith"
       match_values = each.value.restricted_paths
+      transforms = ["Lowercase"]
     }
 
     match_conditions {
