@@ -256,7 +256,17 @@ The typical end-to-end order is:
    - Stack: `stacks/core/`
    - Inputs: `product` (`hrz` or `pub`), `plane` (`np` or `pr` → nonprod/prod)
 
-3. **Application Gateway Config (Plane Level)** 
+3. **Platform App (Environment Level)**
+   - Workflows: `platform-plan.yml` / `platform-apply.yml`
+   - Stack: `stacks/platform-app/`
+   - Inputs: `product` (`hrz` or `pub`), `env` (`dev`, `qa`, `uat`, `prod`)
+
+4. **Observability (Environment Level)**
+   - Workflows: `observability-plan.yml` / `observability-apply.yml`
+   - Stack: `stacks/observability/`
+   - Inputs: `product` (`hrz` or `pub`), `env` (`dev`, `qa`, `uat`, `prod`)
+
+5. **Application Gateway Config (Plane Level)** 
    - Stack: `stacks/app-gateway-config`
    - Creates:
      - Backend pools
@@ -265,16 +275,6 @@ The typical end-to-end order is:
      - HTTP / HTTPS listeners
      - Per-listener SSL cert bindings (Key Vault)
      - Routing & redirect rules
-
-4. **Platform App (Environment Level)**
-   - Workflows: `platform-plan.yml` / `platform-apply.yml`
-   - Stack: `stacks/platform-app/`
-   - Inputs: `product` (`hrz` or `pub`), `env` (`dev`, `qa`, `uat`, `prod`)
-
-5. **Observability (Environment Level)**
-   - Workflows: `observability-plan.yml` / `observability-apply.yml`
-   - Stack: `stacks/observability/`
-   - Inputs: `product` (`hrz` or `pub`), `env` (`dev`, `qa`, `uat`, `prod`)
 
 6. **Bootstrap Secrets**
    - Workflow: `infra-secrets-provision.yml`
