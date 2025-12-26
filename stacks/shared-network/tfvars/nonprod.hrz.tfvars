@@ -7,6 +7,8 @@ seq      = "01"                     # sequence in names
 
 # Private DNS zones (Azure Government)
 private_zones = [
+  "dev.horizon.intterra.io",
+  "qa.horizon.intterra.io",
   # Storage
   "privatelink.blob.core.usgovcloudapi.net",
   "privatelink.file.core.usgovcloudapi.net",

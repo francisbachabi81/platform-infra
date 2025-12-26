@@ -157,6 +157,8 @@ locals {
 
   short_zone_map = {
     # Commercial
+    "dev.horizon.intterra.io"                 = "hrzdev"
+    "qa.horizon.intterra.io"                  = "hrzqa"
     "privatelink.blob.core.windows.net"       = "plb"
     "privatelink.file.core.windows.net"       = "plf"
     "privatelink.queue.core.windows.net"      = "plq"
@@ -174,6 +176,8 @@ locals {
     "privatelink.centralus.azmk8s.io"         = "azmk8scus"
 
     # Gov
+    "dev.horizon.intterra.io"                         = "hrzdev"
+    "qa.horizon.intterra.io"                         = "hrzqa"
     "privatelink.blob.core.usgovcloudapi.net"         = "plb"
     "privatelink.file.core.usgovcloudapi.net"         = "plf"
     "privatelink.queue.core.usgovcloudapi.net"        = "plq"
@@ -896,6 +900,23 @@ locals {
 
   # Bootstrap listener must reference a frontend config that exists.
   bootstrap_feip_name = (var.appgw_public_ip_enabled ? local.appgw_public_feip_name : local.appgw_private_feip_name)
+
+  bootstrap_http_listeners = merge(
+    (var.appgw_public_ip_enabled ? {
+      public = {
+        name     = "bootstrap-listener-http-public"
+        feip     = local.appgw_public_feip_name
+        priority = 1
+      }
+    } : {}),
+    (var.appgw_private_frontend_enabled ? {
+      private = {
+        name     = "bootstrap-listener-http-private"
+        feip     = local.appgw_private_feip_name
+        priority = (var.appgw_public_ip_enabled ? 2 : 1)
+      }
+    } : {})
+  )
 }
 
 resource "azurerm_application_gateway" "appgw" {
@@ -966,21 +987,43 @@ resource "azurerm_application_gateway" "appgw" {
     cookie_based_affinity = var.appgw_cookie_based_affinity
   }
 
-  http_listener {
-    name                           = "bootstrap-listener-http"
-    frontend_ip_configuration_name = "feip"
-    frontend_port_name             = "bootstrap-feport-80"
-    protocol                       = "Http"
+    dynamic "http_listener" {
+    for_each = local.bootstrap_http_listeners
+    content {
+      name                           = http_listener.value.name
+      frontend_ip_configuration_name = http_listener.value.feip
+      frontend_port_name             = "bootstrap-feport-80"
+      protocol                       = "Http"
+    }
   }
 
-  request_routing_rule {
-    name                       = "bootstrap-rule-http"
-    rule_type                  = "Basic"
-    http_listener_name         = "bootstrap-listener-http"
-    backend_address_pool_name  = "bootstrap-bepool"
-    backend_http_settings_name = "bootstrap-bhs-http"
-    priority                   = 1
+  dynamic "request_routing_rule" {
+    for_each = local.bootstrap_http_listeners
+    content {
+      name                       = "bootstrap-rule-http-${request_routing_rule.key}"
+      rule_type                  = "Basic"
+      http_listener_name         = request_routing_rule.value.name
+      backend_address_pool_name  = "bootstrap-bepool"
+      backend_http_settings_name = "bootstrap-bhs-http"
+      priority                   = request_routing_rule.value.priority
+    }
   }
+
+  # http_listener {
+  #   name                           = "bootstrap-listener-http"
+  #   frontend_ip_configuration_name = "feip"
+  #   frontend_port_name             = "bootstrap-feport-80"
+  #   protocol                       = "Http"
+  # }
+
+  # request_routing_rule {
+  #   name                       = "bootstrap-rule-http"
+  #   rule_type                  = "Basic"
+  #   http_listener_name         = "bootstrap-listener-http"
+  #   backend_address_pool_name  = "bootstrap-bepool"
+  #   backend_http_settings_name = "bootstrap-bhs-http"
+  #   priority                   = 1
+  # }
 
   # Attach UAMI for future Key Vault access
   identity {
