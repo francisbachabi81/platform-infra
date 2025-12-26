@@ -292,6 +292,7 @@ appgw_sku_name              = "WAF_v2"
 appgw_sku_tier              = "WAF_v2"
 appgw_capacity              = 1
 appgw_cookie_based_affinity = "Disabled"
+appgw_private_frontend_ip = "10.10.40.4"
 
 # DNS Private Resolver – optional static inbound IP & forwarding rules
 dnsr_inbound_static_ip = "10.10.50.4"

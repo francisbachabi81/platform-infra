@@ -890,6 +890,12 @@ resource "azurerm_public_ip" "appgw" {
 
 locals {
   appgw_public_ip_id = (local.appgw_enabled && var.appgw_public_ip_enabled) ? azurerm_public_ip.appgw[0].id : null
+
+  appgw_public_feip_name  = "feip-public"
+  appgw_private_feip_name = "feip-private"
+
+  # Bootstrap listener must reference a frontend config that exists.
+  bootstrap_feip_name = (var.appgw_public_ip_enabled ? local.appgw_public_feip_name : local.appgw_private_feip_name)
 }
 
 resource "azurerm_application_gateway" "appgw" {
@@ -915,11 +921,31 @@ resource "azurerm_application_gateway" "appgw" {
   # Frontend IP:
   # - Public when appgw_public_ip_enabled = true
   # - Private (dynamic) when false (can be made static later by app-gateway-config)
-  frontend_ip_configuration {
-    name                          = "feip"
-    public_ip_address_id          = local.appgw_public_ip_id
-    private_ip_address_allocation = var.appgw_public_ip_enabled ? null : "Dynamic"
-    subnet_id                     = var.appgw_public_ip_enabled ? null : local.appgw_subnet_id
+  # frontend_ip_configuration {
+  #   name                          = "feip"
+  #   public_ip_address_id          = local.appgw_public_ip_id
+  #   private_ip_address_allocation = var.appgw_public_ip_enabled ? null : "Dynamic"
+  #   subnet_id                     = var.appgw_public_ip_enabled ? null : local.appgw_subnet_id
+  # }
+
+  dynamic "frontend_ip_configuration" {
+    for_each = (var.appgw_public_ip_enabled ? [1] : [])
+    content {
+      name                 = local.appgw_public_feip_name
+      public_ip_address_id = local.appgw_public_ip_id
+      # NOTE: subnet_id/private_ip_* must be unset for public FEIP
+    }
+  }
+
+  dynamic "frontend_ip_configuration" {
+    for_each = (var.appgw_private_frontend_enabled ? [1] : [])
+    content {
+      name      = local.appgw_private_feip_name
+      subnet_id = local.appgw_subnet_id
+
+      private_ip_address_allocation = (var.appgw_private_frontend_ip != null && trimspace(var.appgw_private_frontend_ip) != "") ? "Static" : "Dynamic"
+      private_ip_address            = (var.appgw_private_frontend_ip != null && trimspace(var.appgw_private_frontend_ip) != "") ? var.appgw_private_frontend_ip : null
+    }
   }
 
   # ---- Placeholder configuration (ignored for drift) ----

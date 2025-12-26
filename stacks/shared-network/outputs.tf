@@ -71,12 +71,30 @@ output "app_gateway" {
     name           = azurerm_application_gateway.appgw[0].name
     resource_group = local.appgw_hub_rg
     public_ip      = try(azurerm_public_ip.appgw[0].ip_address, null)
-    subnet_id      = local.appgw_subnet_id
+
     sku_name       = var.appgw_sku_name
     sku_tier       = var.appgw_sku_tier
     capacity       = var.appgw_capacity
+
     waf_policy_id  = try(module.waf[0].id, null)
     nsg_id         = try(azurerm_network_security_group.appgw_nsg[0].id, null)
+
+    subnet_id      = local.appgw_subnet_id
+
+    frontends = {
+      public = {
+        enabled      = local.appgw_enabled && var.appgw_public_ip_enabled
+        feip_name    = "feip-public"
+        public_ip_id = try(azurerm_public_ip.appgw[0].id, null)
+        public_ip    = (local.appgw_enabled && var.appgw_public_ip_enabled) ? try(azurerm_public_ip.appgw[0].ip_address, null) : null
+      }
+
+      private = {
+        enabled   = local.appgw_enabled
+        feip_name = "feip-private"
+        private_ip = try(var.appgw_private_frontend_ip, null)
+      }
+    }
   }, null)
 }
 

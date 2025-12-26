@@ -441,3 +441,15 @@ variable "baseline_allowed_service_tags" {
     # "AzureActiveDirectory",
   ]
 }
+
+variable "appgw_private_frontend_enabled" {
+  type        = bool
+  description = "Enable an additional private frontend IP configuration on the App Gateway."
+  default     = true
+}
+
+variable "appgw_private_frontend_ip" {
+  type        = string
+  description = "Optional static private IP for the App Gateway private frontend. If null, Dynamic allocation is used."
+  default     = null
+}
