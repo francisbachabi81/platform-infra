@@ -225,9 +225,12 @@ locals {
           hostName                    = try(l.host_name, null)
           requireServerNameIndication = try(l.require_sni, false)
         },
-        (try(l.waf_policy_key, null) != null && l.protocol == "Https") ? {
+        try(l.waf_policy_key, null) != null ? {
           firewallPolicy = { id = local.waf_policy_ids[l.waf_policy_key] }
         } : {},
+        # (try(l.waf_policy_key, null) != null && l.protocol == "Https") ? {
+        #   firewallPolicy = { id = local.waf_policy_ids[l.waf_policy_key] }
+        # } : {},
         l.protocol == "Https" ? {
           sslCertificate = {
             id = "${local.agw_id}/sslCertificates/${l.ssl_certificate_name}"
