@@ -165,7 +165,7 @@ jobs:
               inputs = { product, env: third, plan_run_id: planRunId };
             } else if (stack === "app-gateway-config") {
               workflow_id = "app-gateway-config-apply.yml";
-              inputs = { product, env: third, plan_run_id: planRunId };
+              inputs = { product, plane: third, plan_run_id: planRunId };
             } else {
               core.setFailed(`Unknown stack in issue title: ${stack}`);
               return;
