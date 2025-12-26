@@ -28,27 +28,20 @@ waf_policies = {
     mode             = "Prevention"
     vpn_cidrs        = ["192.168.1.0/24"]
     restricted_paths = ["/admin"]
-    blocked_countries = ["CN", "RU", "IR"] #https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/web-application-firewall/ag/geomatch-custom-rules.md
+    blocked_countries = ["CN", "RU", "IR"]    # https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/web-application-firewall/ag/geomatch-custom-rules.md
   }
   # qa = {
   #   mode             = "Prevention"
   #   vpn_cidrs        = ["192.168.1.0/24"]
-  #   restricted_paths = ["/admin", "/ops"]
+  #   restricted_paths = ["/admin"]           # ["/admin", "/ops"]
+  #   blocked_countries = ["CN", "RU", "IR"]  # https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/web-application-firewall/ag/geomatch-custom-rules.md
   # }
 }
 
-# only one sslCertificates[] element, but multiple HTTPS listeners can reference it
-# ssl_certificates = {
-#   appgw-gateway-cert-horizon-dev = {
-#     secret_name    = "appgw-gateway-cert-horizon-dev" # or whatever your wildcard secret is - wildcard-horizon-intterra-io
-#     # secret_version = null
-#   }
-# }
-
-# (Distinct cert per listener): Use different Key Vault secrets
+# Distinct cert per listener but if multiple listeners use same cert, they can reference same sslCertificate element
 ssl_certificates = {
   appgw-gateway-cert-horizon-dev = {
-    secret_name    = "appgw-gateway-cert-horizon-dev"
+    secret_name    = "appgw-gateway-cert-horizon-dev" # or whatever your wildcard secret is - wildcard-horizon-intterra-io
     secret_version = null
   }
 
@@ -151,19 +144,42 @@ listeners = {
     waf_policy_key                 = "dev"
   }
 
-  # listener-qa-http = {
+  # PUBLIC
+  # listener-qa-http-public = {
   #   frontend_port_name             = "feport-80"
   #   protocol                       = "Http"
   #   host_name                      = "qa.horizon.intterra.io"
-  #   frontend_ip_configuration_name = "feip"
+  #   frontend                       = "public"
+  #   waf_policy_key                 = "qa"
   # }
-  # listener-qa-https = {
+
+  # listener-qa-https-public = {
   #   frontend_port_name             = "feport-443"
   #   protocol                       = "Https"
   #   host_name                      = "qa.horizon.intterra.io"
-  #   ssl_certificate_name           = "appgw-gateway-cert-horizon-dev"
+  #   ssl_certificate_name           = "appgw-gateway-cert-horizon-qa"
   #   require_sni                    = true
-  #   frontend_ip_configuration_name = "feip"
+  #   frontend                       = "public"
+  #   waf_policy_key                 = "qa"
+  # }
+
+  # # PRIVATE
+  # listener-qa-http-private = {
+  #   frontend_port_name             = "feport-80"
+  #   protocol                       = "Http"
+  #   host_name                      = "qa.horizon.intterra.io"
+  #   frontend                       = "private"
+  #   waf_policy_key                 = "qa"
+  # }
+
+  # listener-qa-https-private = {
+  #   frontend_port_name             = "feport-443"
+  #   protocol                       = "Https"
+  #   host_name                      = "qa.horizon.intterra.io"
+  #   ssl_certificate_name           = "appgw-gateway-cert-horizon-qa"
+  #   require_sni                    = true
+  #   frontend                       = "private"
+  #   waf_policy_key                 = "qa"
   # }
 }
 
@@ -182,8 +198,15 @@ redirect_configurations = {
     include_query_string = true
   }
 
-  # redir-qa-http-to-https = {
-  #   target_listener_name = "listener-qa-https"
+  # redir-qa-http-to-https-public = {
+  #   target_listener_name = "listener-qa-https-public"
+  #   redirect_type        = "Permanent"
+  #   include_path         = true
+  #   include_query_string = true
+  # }
+
+  # redir-qa-http-to-https-private = {
+  #   target_listener_name = "listener-qa-https-private"
   #   redirect_type        = "Permanent"
   #   include_path         = true
   #   include_query_string = true
@@ -220,19 +243,34 @@ routing_rules = [
     http_listener_name         = "listener-dev-https-private"
     backend_address_pool_name  = "bepool-dev"
     backend_http_settings_name = "bhs-dev-https"
-  },
-
+  }
   # qa
+  # PUBLIC
   # {
-  #   name                        = "rule-qa-http-redirect"
-  #   priority                    = 190
-  #   http_listener_name          = "listener-qa-http"
-  #   redirect_configuration_name = "redir-qa-http-to-https"
+  #   name                        = "rule-qa-http-redirect-public"
+  #   priority                    = 90
+  #   http_listener_name          = "listener-qa-http-public"
+  #   redirect_configuration_name = "redir-qa-http-to-https-public"
   # },
   # {
-  #   name                       = "rule-qa-https"
+  #   name                       = "rule-qa-https-public"
+  #   priority                   = 100
+  #   http_listener_name         = "listener-qa-https-public"
+  #   backend_address_pool_name  = "bepool-qa"
+  #   backend_http_settings_name = "bhs-qa-https"
+  # },
+
+  # # PRIVATE
+  # {
+  #   name                        = "rule-qa-http-redirect-private"
+  #   priority                    = 190
+  #   http_listener_name          = "listener-qa-http-private"
+  #   redirect_configuration_name = "redir-qa-http-to-https-private"
+  # },
+  # {
+  #   name                       = "rule-qa-https-private"
   #   priority                   = 200
-  #   http_listener_name         = "listener-qa-https"
+  #   http_listener_name         = "listener-qa-https-private"
   #   backend_address_pool_name  = "bepool-qa"
   #   backend_http_settings_name = "bhs-qa-https"
   # }

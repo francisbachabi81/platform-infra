@@ -13,7 +13,6 @@ shared_network_state = {
   resource_group_name  = "rg-core-infra-state"
   storage_account_name = "sacoretfstateinfra"
   container_name       = "tfstate"
-  # keep if you want, but main.tf uses the computed key; this field is unused in your snippet
   key                  = "shared-network/pub/usaz/np.tfstate"
 }
 
@@ -24,10 +23,33 @@ core_state = {
   key                  = "core/pub/usaz/np.tfstate"
 }
 
-# SSL cert in Key Vault (must be a SECRET that contains PFX)
-ssl_secret_name      = "appgw-gateway-cert-public-nonprod"
-ssl_secret_version   = null
-ssl_certificate_name = "appgw-gateway-cert-public-nonprod"
+waf_policies = {
+  dev = {
+    mode             = "Prevention"
+    vpn_cidrs        = ["192.168.1.0/24"]
+    restricted_paths = ["/admin"]
+    blocked_countries = ["CN", "RU", "IR"]    # https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/web-application-firewall/ag/geomatch-custom-rules.md
+  }
+  # qa = {
+  #   mode             = "Prevention"
+  #   vpn_cidrs        = ["192.168.1.0/24"]
+  #   restricted_paths = ["/admin"]           # ["/admin", "/ops"]
+  #   blocked_countries = ["CN", "RU", "IR"]  # https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/web-application-firewall/ag/geomatch-custom-rules.md
+  # }
+}
+
+# Distinct cert per listener but if multiple listeners use same cert, they can reference same sslCertificate element
+ssl_certificates = {
+  appgw-gateway-cert-public-dev = {
+    secret_name    = "appgw-gateway-cert-public-dev" # or whatever your wildcard secret is - wildcard-public-intterra-io
+    secret_version = null
+  }
+
+  # appgw-gateway-cert-public-qa = {
+  #   secret_name    = "appgw-gateway-cert-public-dev"
+  #   secret_version = null
+  # }
+}
 
 frontend_ports = {
   feport-80  = 80
@@ -84,47 +106,107 @@ backend_http_settings = {
 }
 
 listeners = {
-  listener-dev-http = {
+  # PUBLIC
+  listener-dev-http-public = {
     frontend_port_name             = "feport-80"
     protocol                       = "Http"
     host_name                      = "dev.public.intterra.io"
-    frontend_ip_configuration_name = "feip"
+    frontend                       = "public"
+    waf_policy_key                 = "dev"
   }
-  listener-dev-https = {
+
+  listener-dev-https-public = {
     frontend_port_name             = "feport-443"
     protocol                       = "Https"
     host_name                      = "dev.public.intterra.io"
-    ssl_certificate_name           = "appgw-gateway-cert-public-nonprod"
+    ssl_certificate_name           = "appgw-gateway-cert-public-dev"
     require_sni                    = true
-    frontend_ip_configuration_name = "feip"
+    frontend                       = "public"
+    waf_policy_key                 = "dev"
   }
 
-  # listener-qa-http = {
+  # PRIVATE
+  listener-dev-http-private = {
+    frontend_port_name             = "feport-80"
+    protocol                       = "Http"
+    host_name                      = "dev.public.intterra.io"
+    frontend                       = "private"
+    waf_policy_key                 = "dev"
+  }
+
+  listener-dev-https-private = {
+    frontend_port_name             = "feport-443"
+    protocol                       = "Https"
+    host_name                      = "dev.public.intterra.io"
+    ssl_certificate_name           = "appgw-gateway-cert-public-dev"
+    require_sni                    = true
+    frontend                       = "private"
+    waf_policy_key                 = "dev"
+  }
+
+  # PUBLIC
+  # listener-qa-http-public = {
   #   frontend_port_name             = "feport-80"
   #   protocol                       = "Http"
   #   host_name                      = "qa.public.intterra.io"
-  #   frontend_ip_configuration_name = "feip"
+  #   frontend                       = "public"
+  #   waf_policy_key                 = "qa"
   # }
-  # listener-qa-https = {
+
+  # listener-qa-https-public = {
   #   frontend_port_name             = "feport-443"
   #   protocol                       = "Https"
   #   host_name                      = "qa.public.intterra.io"
-  #   ssl_certificate_name           = "appgw-gateway-cert-public-nonprod"
+  #   ssl_certificate_name           = "appgw-gateway-cert-public-qa"
   #   require_sni                    = true
-  #   frontend_ip_configuration_name = "feip"
+  #   frontend                       = "public"
+  #   waf_policy_key                 = "qa"
+  # }
+
+  # # PRIVATE
+  # listener-qa-http-private = {
+  #   frontend_port_name             = "feport-80"
+  #   protocol                       = "Http"
+  #   host_name                      = "qa.public.intterra.io"
+  #   frontend                       = "private"
+  #   waf_policy_key                 = "qa"
+  # }
+
+  # listener-qa-https-private = {
+  #   frontend_port_name             = "feport-443"
+  #   protocol                       = "Https"
+  #   host_name                      = "qa.public.intterra.io"
+  #   ssl_certificate_name           = "appgw-gateway-cert-public-qa"
+  #   require_sni                    = true
+  #   frontend                       = "private"
+  #   waf_policy_key                 = "qa"
   # }
 }
 
 redirect_configurations = {
-  redir-dev-http-to-https = {
-    target_listener_name = "listener-dev-https"
+  redir-dev-http-to-https-public = {
+    target_listener_name = "listener-dev-https-public"
     redirect_type        = "Permanent"
     include_path         = true
     include_query_string = true
   }
 
-  # redir-qa-http-to-https = {
-  #   target_listener_name = "listener-qa-https"
+  redir-dev-http-to-https-private = {
+    target_listener_name = "listener-dev-https-private"
+    redirect_type        = "Permanent"
+    include_path         = true
+    include_query_string = true
+  }
+
+  # redir-qa-http-to-https-public = {
+  #   target_listener_name = "listener-qa-https-public"
+  #   redirect_type        = "Permanent"
+  #   include_path         = true
+  #   include_query_string = true
+  # }
+
+  # redir-qa-http-to-https-private = {
+  #   target_listener_name = "listener-qa-https-private"
   #   redirect_type        = "Permanent"
   #   include_path         = true
   #   include_query_string = true
@@ -133,31 +215,62 @@ redirect_configurations = {
 
 routing_rules = [
   # dev
+  # PUBLIC
   {
-    name                        = "rule-dev-http-redirect"
+    name                        = "rule-dev-http-redirect-public"
     priority                    = 90
-    http_listener_name          = "listener-dev-http"
-    redirect_configuration_name = "redir-dev-http-to-https"
+    http_listener_name          = "listener-dev-http-public"
+    redirect_configuration_name = "redir-dev-http-to-https-public"
   },
   {
-    name                       = "rule-dev-https"
+    name                       = "rule-dev-https-public"
     priority                   = 100
-    http_listener_name         = "listener-dev-https"
+    http_listener_name         = "listener-dev-https-public"
     backend_address_pool_name  = "bepool-dev"
     backend_http_settings_name = "bhs-dev-https"
   },
 
+  # PRIVATE
+  {
+    name                        = "rule-dev-http-redirect-private"
+    priority                    = 190
+    http_listener_name          = "listener-dev-http-private"
+    redirect_configuration_name = "redir-dev-http-to-https-private"
+  },
+  {
+    name                       = "rule-dev-https-private"
+    priority                   = 200
+    http_listener_name         = "listener-dev-https-private"
+    backend_address_pool_name  = "bepool-dev"
+    backend_http_settings_name = "bhs-dev-https"
+  }
   # qa
+  # PUBLIC
   # {
-  #   name                        = "rule-qa-http-redirect"
-  #   priority                    = 190
-  #   http_listener_name          = "listener-qa-http"
-  #   redirect_configuration_name = "redir-qa-http-to-https"
+  #   name                        = "rule-qa-http-redirect-public"
+  #   priority                    = 90
+  #   http_listener_name          = "listener-qa-http-public"
+  #   redirect_configuration_name = "redir-qa-http-to-https-public"
   # },
   # {
-  #   name                       = "rule-qa-https"
+  #   name                       = "rule-qa-https-public"
+  #   priority                   = 100
+  #   http_listener_name         = "listener-qa-https-public"
+  #   backend_address_pool_name  = "bepool-qa"
+  #   backend_http_settings_name = "bhs-qa-https"
+  # },
+
+  # # PRIVATE
+  # {
+  #   name                        = "rule-qa-http-redirect-private"
+  #   priority                    = 190
+  #   http_listener_name          = "listener-qa-http-private"
+  #   redirect_configuration_name = "redir-qa-http-to-https-private"
+  # },
+  # {
+  #   name                       = "rule-qa-https-private"
   #   priority                   = 200
-  #   http_listener_name         = "listener-qa-https"
+  #   http_listener_name         = "listener-qa-https-private"
   #   backend_address_pool_name  = "bepool-qa"
   #   backend_http_settings_name = "bhs-qa-https"
   # }
