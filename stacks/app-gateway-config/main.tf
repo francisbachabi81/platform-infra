@@ -409,7 +409,7 @@ resource "azurerm_web_application_firewall_policy" "this" {
 
       match_conditions {
         match_variables {
-          variable_name = "RequestHeader"
+          variable_name = "RequestHeaders"
           selector      = "GeoLocation"
         }
         operator     = "Equal"
