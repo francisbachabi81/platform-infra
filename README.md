@@ -29,6 +29,11 @@ Each stack has its own `README.md` with purpose, inputs, dependencies, and relat
 - **Core** – plane-level shared/core services  
   → [`stacks/core/README.md`](stacks/core/README.md)
 
+- **Application Gateway Config** – env-level AGW runtime config (listeners, certs, routing)  
+  → [`stacks/app-gateway-config/README.md`](stacks/app-gateway-config/README.md)
+   > All Application Gateway runtime changes (listeners, certs, routing rules) must now be made **only** in `app-gateway-config`.  
+   > Do **not** reintroduce runtime config into `shared-network`.
+
 - **Platform App** – env-level application infrastructure  
   → [`stacks/platform-app/README.md`](stacks/platform-app/README.md)
 
@@ -241,34 +246,44 @@ The **infra-secrets-provision.yml** workflow automatically hydrates Azure Key Va
 
 The typical end-to-end order is:
 
-1. **Bootstrap Secrets**
-   - Workflow: `infra-secrets-provision.yml`
-   - Uses `stacks/provision-secrets/*.secrets.schema.json`
-
-2. **Shared Network (Plane Level)**
+1. **Shared Network (Plane Level)**
    - Workflows: `network-plan.yml` / `network-apply.yml`
    - Stack: `stacks/shared-network/`
    - Inputs: `product` (`hrz` or `pub`), `plane` (`nonprod` or `prod`)
 
-3. **Core (Plane Level)**
+2. **Core (Plane Level)**
    - Workflows: `core-plan.yml` / `core-apply.yml`
    - Stack: `stacks/core/`
    - Inputs: `product` (`hrz` or `pub`), `plane` (`np` or `pr` → nonprod/prod)
 
-4. **Platform Registry (Gov Only, Shared)**
-   - Workflows: `registry-plan.yml` / `registry-apply.yml`
-   - Stack: `stacks/platform-registry/`
-   - Inputs: `subscription_id`, `tenant_id`, `location`, `registry_name`, `tags`
+3. **Application Gateway Config (Plane Level)** 
+   - Stack: `stacks/app-gateway-config`
+   - Creates:
+     - Backend pools
+     - Probes
+     - Frontend ports
+     - HTTP / HTTPS listeners
+     - Per-listener SSL cert bindings (Key Vault)
+     - Routing & redirect rules
 
-5. **Platform App (Environment Level)**
+4. **Platform App (Environment Level)**
    - Workflows: `platform-plan.yml` / `platform-apply.yml`
    - Stack: `stacks/platform-app/`
    - Inputs: `product` (`hrz` or `pub`), `env` (`dev`, `qa`, `uat`, `prod`)
 
-6. **Observability (Environment Level)**
+5. **Observability (Environment Level)**
    - Workflows: `observability-plan.yml` / `observability-apply.yml`
    - Stack: `stacks/observability/`
    - Inputs: `product` (`hrz` or `pub`), `env` (`dev`, `qa`, `uat`, `prod`)
+
+6. **Bootstrap Secrets**
+   - Workflow: `infra-secrets-provision.yml`
+   - Uses `stacks/provision-secrets/*.secrets.schema.json`
+
+7. **Platform Registry (Gov Only, Shared)**
+   - Workflows: `registry-plan.yml` / `registry-apply.yml`
+   - Stack: `stacks/platform-registry/`
+   - Inputs: `subscription_id`, `tenant_id`, `location`, `registry_name`, `tags`
 
 > Governance workflow `govern-approval.yml` runs alongside this flow to enforce approvals for apply steps.
 

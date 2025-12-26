@@ -17,13 +17,11 @@ provider "azurerm" {
 }
 
 provider "azapi" {
-  # Force azapi to NOT attempt MSI on GitHub runners
   use_msi = false
   use_cli = true
 }
 
 locals {
-  # normalize
   env_norm   = var.env   == null ? null : lower(trimspace(var.env))
   plane_norm = var.plane == null ? null : lower(trimspace(var.plane))
 
@@ -63,7 +61,6 @@ data "terraform_remote_state" "core" {
 locals {
   shared_outputs = try(data.terraform_remote_state.shared_network.outputs, {})
 
-  # AppGW output might be "app_gateway" or "application_gateway" depending on the shared stack
   shared_appgw = coalesce(
     try(local.shared_outputs.app_gateway, null),
     try(local.shared_outputs.application_gateway, null),
@@ -112,7 +109,7 @@ locals {
     )
   }
 
-  # Build sslCertificates objects (only non-empty resolved secret IDs)
+  # Build sslCertificates objects
   _ssl_certs = [
     for cert_name, sid in local.ssl_cert_secret_ids : {
       name       = cert_name
@@ -121,7 +118,6 @@ locals {
     if local.agw_ready && sid != null && trimspace(sid) != ""
   ]
 
-  # "Do we intend to configure anything?"
   wants_config = (
     length(var.backend_pools) > 0 ||
     length(var.probes) > 0 ||
@@ -192,8 +188,6 @@ locals {
     }
   ]
 
-  # ✅ FIX: Listener must reference a cert name that actually exists in _ssl_certs
-  # We keep your logic but it will now be guarded by a check below.
   _listeners = [
     for name, l in (local.agw_ready ? var.listeners : tomap({})) : {
       name = name
@@ -245,8 +239,6 @@ locals {
     }
   ]
 
-  # ✅ SAFETY: Only include properties you are actually managing to avoid wiping unrelated config.
-  # This prevents "deploy qa deletes dev" style surprises.
   azapi_body = local.agw_ready ? {
     properties = merge(
       length(local._backend_pools) > 0 ? { backendAddressPools = local._backend_pools } : {},
@@ -315,7 +307,7 @@ check "https_listeners_reference_existing_ssl_certs" {
   }
 }
 
-# RBAC: allow the AGW UAMI to GET secrets from the Key Vault (RBAC vault)
+# allow the AGW UAMI to GET secrets from the Key Vault (RBAC vault)
 resource "azurerm_role_assignment" "uami_kv_secrets_user" {
   count                = (local.kv_id != null && local.uami_principal_id != null) ? 1 : 0
   scope                = local.kv_id
@@ -323,7 +315,7 @@ resource "azurerm_role_assignment" "uami_kv_secrets_user" {
   principal_id         = local.uami_principal_id
 }
 
-# Application Gateway runtime configuration via AzAPI PATCH
+# Application Gateway runtime configuration via AzAPI
 resource "azapi_update_resource" "agw_config" {
   count       = local.agw_ready && local.wants_config ? 1 : 0
   type        = "Microsoft.Network/applicationGateways@2023-09-01"
@@ -331,7 +323,6 @@ resource "azapi_update_resource" "agw_config" {
 
   body = jsonencode(local.azapi_body)
 
-  # ✅ Ensure RBAC is first (and avoid race)
   depends_on = [
     azurerm_role_assignment.uami_kv_secrets_user
   ]

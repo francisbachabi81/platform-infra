@@ -30,10 +30,10 @@ ssl_certificates = {
     secret_version = null
   }
 
-  # appgw-gateway-cert-horizon-qa = {
-  #   secret_name    = "appgw-gateway-cert-horizon-qa"
-  #   secret_version = null
-  # }
+  appgw-gateway-cert-horizon-qa = {
+    secret_name    = "appgw-gateway-cert-horizon-dev"
+    secret_version = null
+  }
 }
 
 frontend_ports = {
@@ -43,7 +43,7 @@ frontend_ports = {
 
 backend_pools = {
   bepool-dev = { ip_addresses = ["62.10.212.49"] }
-  # bepool-qa  = { ip_addresses = ["62.10.212.50"] }
+  bepool-qa  = { ip_addresses = ["62.10.212.50"] }
 }
 
 probes = {
@@ -57,15 +57,15 @@ probes = {
     match_status_codes  = ["200-399"]
   }
 
-  # probe-qa = {
-  #   protocol            = "Https"
-  #   host                = "qa.horizon.intterra.io"
-  #   path                = "/api/identity/health/ready"
-  #   interval            = 30
-  #   timeout             = 30
-  #   unhealthy_threshold = 3
-  #   match_status_codes  = ["200-399"]
-  # }
+  probe-qa = {
+    protocol            = "Https"
+    host                = "qa.horizon.intterra.io"
+    path                = "/api/identity/health/ready"
+    interval            = 30
+    timeout             = 30
+    unhealthy_threshold = 3
+    match_status_codes  = ["200-399"]
+  }
 }
 
 backend_http_settings = {
@@ -79,15 +79,15 @@ backend_http_settings = {
     pick_host_name_from_backend_address = false
   }
 
-  # bhs-qa-https = {
-  #   port                = 443
-  #   protocol            = "Https"
-  #   request_timeout     = 20
-  #   cookie_based_affinity = "Disabled"
-  #   probe_name          = "probe-qa"
-  #   host_name           = "qa.horizon.intterra.io"
-  #   pick_host_name_from_backend_address = false
-  # }
+  bhs-qa-https = {
+    port                = 443
+    protocol            = "Https"
+    request_timeout     = 20
+    cookie_based_affinity = "Disabled"
+    probe_name          = "probe-qa"
+    host_name           = "qa.horizon.intterra.io"
+    pick_host_name_from_backend_address = false
+  }
 }
 
 listeners = {
@@ -106,20 +106,20 @@ listeners = {
     frontend_ip_configuration_name = "feip"
   }
 
-  # listener-qa-http = {
-  #   frontend_port_name             = "feport-80"
-  #   protocol                       = "Http"
-  #   host_name                      = "qa.horizon.intterra.io"
-  #   frontend_ip_configuration_name = "feip"
-  # }
-  # listener-qa-https = {
-  #   frontend_port_name             = "feport-443"
-  #   protocol                       = "Https"
-  #   host_name                      = "qa.horizon.intterra.io"
-  #   ssl_certificate_name           = "appgw-gateway-cert-horizon-qa"
-  #   require_sni                    = true
-  #   frontend_ip_configuration_name = "feip"
-  # }
+  listener-qa-http = {
+    frontend_port_name             = "feport-80"
+    protocol                       = "Http"
+    host_name                      = "qa.horizon.intterra.io"
+    frontend_ip_configuration_name = "feip"
+  }
+  listener-qa-https = {
+    frontend_port_name             = "feport-443"
+    protocol                       = "Https"
+    host_name                      = "qa.horizon.intterra.io"
+    ssl_certificate_name           = "appgw-gateway-cert-horizon-qa"
+    require_sni                    = true
+    frontend_ip_configuration_name = "feip"
+  }
 }
 
 redirect_configurations = {
@@ -130,12 +130,12 @@ redirect_configurations = {
     include_query_string = true
   }
 
-  # redir-qa-http-to-https = {
-  #   target_listener_name = "listener-qa-https"
-  #   redirect_type        = "Permanent"
-  #   include_path         = true
-  #   include_query_string = true
-  # }
+  redir-qa-http-to-https = {
+    target_listener_name = "listener-qa-https"
+    redirect_type        = "Permanent"
+    include_path         = true
+    include_query_string = true
+  }
 }
 
 routing_rules = [
@@ -155,17 +155,17 @@ routing_rules = [
   },
 
   # qa
-  # {
-  #   name                        = "rule-qa-http-redirect"
-  #   priority                    = 190
-  #   http_listener_name          = "listener-qa-http"
-  #   redirect_configuration_name = "redir-qa-http-to-https"
-  # },
-  # {
-  #   name                       = "rule-qa-https"
-  #   priority                   = 200
-  #   http_listener_name         = "listener-qa-https"
-  #   backend_address_pool_name  = "bepool-qa"
-  #   backend_http_settings_name = "bhs-qa-https"
-  # }
+  {
+    name                        = "rule-qa-http-redirect"
+    priority                    = 190
+    http_listener_name          = "listener-qa-http"
+    redirect_configuration_name = "redir-qa-http-to-https"
+  },
+  {
+    name                       = "rule-qa-https"
+    priority                   = 200
+    http_listener_name         = "listener-qa-https"
+    backend_address_pool_name  = "bepool-qa"
+    backend_http_settings_name = "bhs-qa-https"
+  }
 ]

@@ -1,115 +1,214 @@
 # App Gateway Config Stack
 
-This stack manages **all runtime configuration** of the shared Application Gateway (AGW):
+This stack manages **all runtime configuration** of a shared Azure Application Gateway (AGW) **without owning the gateway resource itself**.
 
-- Backend pools
-- Probes
-- Backend HTTP settings
-- Frontend ports
-- Listeners (HTTP/HTTPS)
-- Request routing rules
-- SSL cert binding from Key Vault
+It is designed to work alongside the `shared-network` stack, which creates the *base* Application Gateway, subnet, public IP, and User Assigned Managed Identity (UAMI).
 
-The **Application Gateway resource itself** (plus subnet/public IP and its User Assigned Managed Identity) is created by **stacks/shared-network**.
+---
+
+## What this stack owns
+
+This stack manages **only runtime configuration**, applied in-place using **AzAPI PATCH**:
+
+- Backend address pools  
+- Health probes  
+- Backend HTTP settings  
+- Frontend ports  
+- HTTP and HTTPS listeners  
+- Redirect configurations  
+- Request routing rules  
+- SSL certificates sourced from **Azure Key Vault**  
+- Key Vault RBAC for the AGW UAMI (Key Vault Secrets User)
+
+The Application Gateway **resource**, subnet, public IP, and UAMI are **owned by `shared-network`**.
+
+---
 
 ## Why this split works
 
-Terraform cannot safely split ownership of nested AGW configuration blocks across two stacks using `azurerm_application_gateway`.
-To prevent drift:
+Terraform cannot safely split ownership of nested Application Gateway configuration blocks across multiple stacks using `azurerm_application_gateway`.
 
-- `shared-network` creates the AGW with **placeholder** config and sets `lifecycle.ignore_changes` on all runtime blocks.
-- This stack uses **AzAPI PATCH** to update the AGW configuration in-place, while `shared-network` ignores those changes.
+To avoid drift and resource contention:
 
-> Result: the stacks stay distinct, and `shared-network` runs do not fight `app-gateway-config`.
+- **`shared-network`**
+  - Creates the Application Gateway shell
+  - Sets `lifecycle.ignore_changes` on all runtime configuration blocks
 
-## Remote state inputs
+- **`app-gateway-config` (this stack)**
+  - Applies runtime configuration using **AzAPI PATCH**
+  - Never recreates or replaces the gateway
 
-This stack reads:
+✅ Result:  
+Both stacks remain independent and can be deployed safely without fighting each other.
 
-- `app_gateway` output from `shared-network` (AGW id/name)
-- `appgw_uami` output from `shared-network` (UAMI principalId)
-- `appgw_ssl_key_vault` output from `shared-network` (Key Vault id/URI), **or** `key_vault` from `core_state` if you wire that instead
+---
 
-In your `.tfvars`, set:
+## Environment & plane resolution
+
+This stack supports both **explicit plane selection** and **automatic plane derivation**:
+
+- `env = dev | qa` → `plane = nonprod`
+- `env = uat | prod` → `plane = prod`
+- If `plane` is explicitly provided, it takes precedence
+
+This logic ensures the correct remote state is read for each environment.
+
+---
+
+## Remote state dependencies
+
+### Required: shared-network
+
+This stack reads from `shared-network` to obtain:
+
+- Application Gateway ID & name  
+- Application Gateway UAMI (principal_id)
+
+Expected outputs (names are auto-detected):
+
+- `app_gateway` **or** `application_gateway`
+- `appgw_uami` **or** `uami_appgw` **or** `uami`
+
+Example in tfvars:
 
 ```hcl
 shared_network_state = {
-  resource_group_name  = "rg-STATE"
-  storage_account_name = "stterraformstate"
+  resource_group_name  = "rg-core-infra-state"
+  storage_account_name = "sacoretfstateinfra"
   container_name       = "tfstate"
-  key                  = "shared-network/dev.hrz.tfstate"
+  key                  = "shared-network/hrz/nonprod/terraform.tfstate"
 }
-
-# Optional fallback (if shared-network does not output appgw_ssl_key_vault yet)
-# core_state = {
-#   resource_group_name  = "rg-STATE"
-#   storage_account_name = "stterraformstate"
-#   container_name       = "tfstate"
-#   key                  = "platform-app/dev.hrz.tfstate"  # or your core stack
-# }
 ```
 
-## SSL certificate from Key Vault
+---
 
-This stack grants the AGW UAMI **Key Vault Secrets User** on the Key Vault scope (RBAC mode).
+### Required for SSL: core stack (Key Vault)
 
-You can provide the SSL secret in one of two ways:
+SSL certificates are sourced from **Azure Key Vault**, which is expected to be created by the `core` stack.
 
-1) **Preferred:** full secret id (includes version)
+This stack reads:
+
+- `core_key_vault.id`
+- `core_key_vault.vault_uri`
+
+Example in tfvars:
 
 ```hcl
-ssl_key_vault_secret_id = "https://<kv>.vault.azure.net/secrets/<name>/<version>"
-ssl_certificate_name    = "kv-ssl"
+core_state = {
+  resource_group_name  = "rg-core-infra-state"
+  storage_account_name = "sacoretfstateinfra"
+  container_name       = "tfstate"
+  key                  = "core/hrz/np/terraform.tfstate"
+}
 ```
 
-2) Provide secret name (+ optional version) and the stack will build the URI using the Key Vault `vault_uri`:
+---
+
+## SSL certificates (multiple supported)
+
+Each HTTPS listener can have **its own certificate**.
+
+Certificates are defined as a map, keyed by certificate name:
 
 ```hcl
-ssl_secret_name      = "agw-dev-cert"
-ssl_secret_version   = null  # latest
-ssl_certificate_name = "kv-ssl"
+ssl_certificates = {
+  appgw-gateway-cert-horizon-dev = {
+    secret_name    = "appgw-gateway-cert-horizon-dev"
+    secret_version = null  # use latest
+  }
+}
 ```
 
-> If you omit `ssl_secret_version`, Key Vault will always serve the **latest** version. That’s convenient for rotation.
+### Alternative: explicit secret IDs (bypasses vault_uri lookup)
 
-## Deploy
+```hcl
+ssl_certificates = {
+  appgw-gateway-cert-horizon-dev = {
+    key_vault_secret_id = "https://<kv>.vault.usgovcloudapi.net/secrets/appgw-gateway-cert-horizon-dev/<version>"
+  }
+}
+```
 
-Example (dev):
+> Using `secret_version = null` allows seamless certificate rotation.
+
+---
+
+## HTTPS listeners must reference existing certs
+
+Each HTTPS listener **must reference a certificate key** defined in `ssl_certificates`:
+
+```hcl
+listeners = {
+  listener-dev-https = {
+    protocol             = "Https"
+    frontend_port_name   = "feport-443"
+    frontend_ip_configuration_name = "feip"
+    host_name            = "dev.example.com"
+    ssl_certificate_name = "appgw-gateway-cert-horizon-dev"
+    require_sni          = true
+  }
+}
+```
+
+Guardrails will fail the plan if a listener references a non-existent cert.
+
+---
+
+## Deployment
 
 ```bash
 cd stacks/app-gateway-config
 terraform init
-terraform plan  -var-file=tfvars/dev.tfvars
-terraform apply -var-file=tfvars/dev.tfvars
+terraform plan  -var-file=tfvars/nonprod.hrz.tfvars
+terraform apply -var-file=tfvars/nonprod.hrz.tfvars
 ```
 
-Repeat for `qa.tfvars` and `prod.tfvars`.
+Repeat per environment (`nonprod`, `prod`) using environment-specific tfvars.
 
-## Add a backend + listener
+---
 
-1. Add/adjust a backend pool under `backend_pools`.
-2. Add/update a probe under `probes`.
-3. Add an http setting under `backend_http_settings`.
-4. Add a listener under `listeners`.
-5. Add a routing rule under `routing_rules`.
+## Adding a new app / listener
 
-All are declared in `.tfvars` so per-environment overrides are simple.
+1. Add a backend pool
+2. Add a probe
+3. Add backend HTTP settings
+4. Add frontend port (if needed)
+5. Add HTTP/HTTPS listener
+6. Add routing rule
+7. (Optional) Add redirect configuration
+8. (HTTPS) Add SSL certificate entry
+
+All configuration is **environment-scoped via tfvars**.
+
+---
 
 ## Certificate rotation
 
 Recommended approach:
 
-- Update the Key Vault secret with a **new version** (same secret name).
-- Keep `ssl_secret_version = null` so AGW always pulls latest.
-- Run `terraform apply` in this stack.
+1. Upload a new version of the certificate to Key Vault (same secret name)
+2. Keep `secret_version = null`
+3. Run `terraform apply`
 
-If you pin versions:
+Application Gateway will pick up the latest version automatically.
 
-- Set `ssl_secret_version` to the new version and apply.
+---
 
-## Drift avoidance rules
+## Ownership rules (important)
 
-- Do **not** add listeners/pools/rules back into `shared-network`.
-- `shared-network` should only own: subnet, PIP, AGW shell, UAMI.
-- `app-gateway-config` owns all runtime configuration and KV RBAC for SSL.
+- ❌ Do **not** add runtime config back into `shared-network`
+- ❌ Do **not** manage SSL certs directly on the AGW
+- ✅ `shared-network` owns infrastructure
+- ✅ `app-gateway-config` owns runtime behavior
 
+---
+
+## Summary
+
+This stack provides:
+
+- Safe multi-environment AGW runtime configuration
+- Independent deployments per env
+- Clean separation of concerns
+- Zero drift with shared-network
+- First-class Key Vault–backed SSL support

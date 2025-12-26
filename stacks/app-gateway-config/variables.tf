@@ -56,7 +56,7 @@ variable "core_state" {
   })
 }
 
-# Application Gateway runtime configuration (owned by this stack)
+# Application Gateway runtime configuration
 variable "frontend_ports" {
   description = "Map of frontend port name => port number."
   type        = map(number)
@@ -149,7 +149,7 @@ variable "ssl_certificates" {
   type = map(object({
     key_vault_secret_id = optional(string)  # full https://.../secrets/.../version
     secret_name         = optional(string)  # if building from kv_uri
-    secret_version      = optional(string)  # optional
+    secret_version      = optional(string)
   }))
   default = {}
 }
