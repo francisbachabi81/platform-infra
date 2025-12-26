@@ -109,13 +109,31 @@ locals {
     )
   }
 
+  ssl_secret_to_cert_name = {
+    for sid in distinct([
+      for _, sid in local.ssl_cert_secret_ids :
+      sid if sid != null && trimspace(sid) != ""
+    ]) :
+    sid => (
+      # first cert_name that maps to this sid
+      [for cert_name, s in local.ssl_cert_secret_ids : cert_name if s == sid][0]
+    )
+  }
+
   # Build sslCertificates objects
+  # _ssl_certs = [
+  #   for cert_name, sid in local.ssl_cert_secret_ids : {
+  #     name       = cert_name
+  #     properties = { keyVaultSecretId = sid }
+  #   }
+  #   if local.agw_ready && sid != null && trimspace(sid) != ""
+  # ]
   _ssl_certs = [
-    for cert_name, sid in local.ssl_cert_secret_ids : {
+    for sid, cert_name in local.ssl_secret_to_cert_name : {
       name       = cert_name
       properties = { keyVaultSecretId = sid }
     }
-    if local.agw_ready && sid != null && trimspace(sid) != ""
+    if local.agw_ready
   ]
 
   wants_config = (
@@ -265,6 +283,13 @@ check "shared_network_has_agw" {
   assert {
     condition     = !(local.wants_config && !local.agw_ready)
     error_message = "app-gateway-config wants to apply runtime config, but shared-network remote state did not provide an Application Gateway id. Verify shared-network outputs and shared_network_state.key."
+  }
+}
+
+check "no_duplicate_ssl_cert_secrets" {
+  assert {
+    condition = length(values(local.ssl_secret_to_cert_name)) == length(distinct(values(local.ssl_cert_secret_ids)))
+    error_message = "Duplicate SSL cert detected: multiple ssl_certificates entries resolve to the same Key Vault secret. Define the cert once and reuse its ssl_certificate_name across listeners (wildcard/shared), or use different secrets for distinct certs."
   }
 }
 

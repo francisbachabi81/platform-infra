@@ -23,18 +23,26 @@ core_state = {
   key                  = "core/hrz/usaz/np.tfstate"
 }
 
-
+# only one sslCertificates[] element, but multiple HTTPS listeners can reference it
 ssl_certificates = {
-  appgw-gateway-cert-horizon-dev = {
-    secret_name    = "appgw-gateway-cert-horizon-dev"
-    secret_version = null
-  }
-
-  appgw-gateway-cert-horizon-qa = {
-    secret_name    = "appgw-gateway-cert-horizon-dev"
-    secret_version = null
+  wildcard-horizon = {
+    secret_name    = "appgw-gateway-cert-horizon-dev" # or whatever your wildcard secret is - wildcard-horizon-intterra-io
+    # secret_version = null
   }
 }
+
+# (Distinct cert per listener): Use different Key Vault secrets
+# ssl_certificates = {
+#   appgw-gateway-cert-horizon-dev = {
+#     secret_name    = "appgw-gateway-cert-horizon-dev"
+#     secret_version = null
+#   }
+
+#   appgw-gateway-cert-horizon-qa = {
+#     secret_name    = "appgw-gateway-cert-horizon-dev"
+#     secret_version = null
+#   }
+# }
 
 frontend_ports = {
   feport-80  = 80
@@ -116,7 +124,7 @@ listeners = {
     frontend_port_name             = "feport-443"
     protocol                       = "Https"
     host_name                      = "qa.horizon.intterra.io"
-    ssl_certificate_name           = "appgw-gateway-cert-horizon-qa"
+    ssl_certificate_name           = "appgw-gateway-cert-horizon-dev"
     require_sni                    = true
     frontend_ip_configuration_name = "feip"
   }
