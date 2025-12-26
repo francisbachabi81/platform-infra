@@ -384,7 +384,7 @@ resource "azurerm_web_application_firewall_policy" "this" {
 
   # Block non-VPN traffic when URI matches restricted paths
   custom_rules {
-    name      = "block-nonvpn-restricted-paths"
+    name      = "blockNonvpnRestrictedPaths"
     priority  = 10
     rule_type = "MatchRule"
     action    = "Block"
