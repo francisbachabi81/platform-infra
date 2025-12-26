@@ -100,6 +100,14 @@ locals {
   shared_resource_groups = try(local.shared_outputs.resource_groups, {})
   hub_rg_name = try(local.shared_resource_groups.hub.name, null)
 
+  shared_frontends = try(local.shared_appgw.frontends, {})
+
+  feip_public_name  = try(local.shared_frontends.public.feip_name, "feip-public")
+  feip_private_name = try(local.shared_frontends.private.feip_name, "feip-private")
+
+  feip_public_enabled  = try(local.shared_frontends.public.enabled, false)
+  feip_private_enabled = try(local.shared_frontends.private.enabled, false)
+
   # SSL: cert_name => Key Vault secret URI
   ssl_cert_secret_ids = {
     for cert_name, c in var.ssl_certificates :
@@ -220,7 +228,12 @@ locals {
       properties = merge(
         {
           protocol                    = l.protocol
-          frontendIPConfiguration      = { id = "${local.agw_id}/frontendIPConfigurations/${l.frontend_ip_configuration_name}" }
+          frontendIPConfiguration = {
+            id = "${local.agw_id}/frontendIPConfigurations/${
+              (try(l.frontend, "public") == "private") ? local.feip_private_name : local.feip_public_name
+            }"
+          }
+          # frontendIPConfiguration      = { id = "${local.agw_id}/frontendIPConfigurations/${l.frontend_ip_configuration_name}" }
           frontendPort                = { id = "${local.agw_id}/frontendPorts/${l.frontend_port_name}" }
           hostName                    = try(l.host_name, null)
           requireServerNameIndication = try(l.require_sni, false)

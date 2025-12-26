@@ -112,20 +112,41 @@ backend_http_settings = {
 }
 
 listeners = {
-  listener-dev-http = {
+  # PUBLIC
+  listener-dev-http-public = {
     frontend_port_name             = "feport-80"
     protocol                       = "Http"
     host_name                      = "dev.horizon.intterra.io"
-    frontend_ip_configuration_name = "feip"
+    frontend                       = "public"
     waf_policy_key                 = "dev"
   }
-  listener-dev-https = {
+
+  listener-dev-https-public = {
     frontend_port_name             = "feport-443"
     protocol                       = "Https"
     host_name                      = "dev.horizon.intterra.io"
     ssl_certificate_name           = "appgw-gateway-cert-horizon-dev"
     require_sni                    = true
-    frontend_ip_configuration_name = "feip"
+    frontend                       = "public"
+    waf_policy_key                 = "dev"
+  }
+
+  # PRIVATE
+  listener-dev-http-private = {
+    frontend_port_name             = "feport-80"
+    protocol                       = "Http"
+    host_name                      = "dev.horizon.intterra.io"
+    frontend                       = "private"
+    waf_policy_key                 = "dev"
+  }
+
+  listener-dev-https-private = {
+    frontend_port_name             = "feport-443"
+    protocol                       = "Https"
+    host_name                      = "dev.horizon.intterra.io"
+    ssl_certificate_name           = "appgw-gateway-cert-horizon-dev"
+    require_sni                    = true
+    frontend                       = "private"
     waf_policy_key                 = "dev"
   }
 
@@ -146,8 +167,15 @@ listeners = {
 }
 
 redirect_configurations = {
-  redir-dev-http-to-https = {
-    target_listener_name = "listener-dev-https"
+  redir-dev-http-to-https-public = {
+    target_listener_name = "listener-dev-https-public"
+    redirect_type        = "Permanent"
+    include_path         = true
+    include_query_string = true
+  }
+
+  redir-dev-http-to-https-private = {
+    target_listener_name = "listener-dev-https-private"
     redirect_type        = "Permanent"
     include_path         = true
     include_query_string = true
@@ -163,16 +191,32 @@ redirect_configurations = {
 
 routing_rules = [
   # dev
+  # PUBLIC
   {
-    name                        = "rule-dev-http-redirect"
+    name                        = "rule-dev-http-redirect-public"
     priority                    = 90
-    http_listener_name          = "listener-dev-http"
-    redirect_configuration_name = "redir-dev-http-to-https"
+    http_listener_name          = "listener-dev-http-public"
+    redirect_configuration_name = "redir-dev-http-to-https-public"
   },
   {
-    name                       = "rule-dev-https"
+    name                       = "rule-dev-https-public"
     priority                   = 100
-    http_listener_name         = "listener-dev-https"
+    http_listener_name         = "listener-dev-https-public"
+    backend_address_pool_name  = "bepool-dev"
+    backend_http_settings_name = "bhs-dev-https"
+  },
+
+  # PRIVATE
+  {
+    name                        = "rule-dev-http-redirect-private"
+    priority                    = 190
+    http_listener_name          = "listener-dev-http-private"
+    redirect_configuration_name = "redir-dev-http-to-https-private"
+  },
+  {
+    name                       = "rule-dev-https-private"
+    priority                   = 200
+    http_listener_name         = "listener-dev-https-private"
     backend_address_pool_name  = "bepool-dev"
     backend_http_settings_name = "bhs-dev-https"
   },
