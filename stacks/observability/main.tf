@@ -2667,7 +2667,12 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
 
 resource "azapi_resource" "apr_suppress_core_excluded_resources" {
   provider = azapi.core
-  count    = local.excluded_flowlogs_sa_id != null && trimspace(local.excluded_flowlogs_sa_id) != "" ? 1 : 0
+  count = (
+    contains(["dev", "prod"], local.env_effective) &&
+    local.excluded_flowlogs_sa_id != null &&
+    trimspace(local.excluded_flowlogs_sa_id) != "" &&
+    local.rg_core_name_resolved != null
+  ) ? 1 : 0
 
   type      = "Microsoft.AlertsManagement/actionRules@2021-08-08"
   name      = "apr-${var.product}-${local.plane_code}-${var.region}-core-saobs"
