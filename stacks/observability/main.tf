@@ -290,31 +290,9 @@ locals {
 }
 
 locals {
-  # Final exclusions list (extendable)
-  alert_excluded_resource_ids_effective = distinct(compact(concat(
-    [try(local.nsg_flow_logs_storage.id, null)],
-    var.alert_excluded_resource_ids
-  )))
-
-  # Extract subscription id safely from a resource id.
-  excluded_sub_by_id = {
-    for rid in local.alert_excluded_resource_ids_effective :
-    rid => (can(regex("^/subscriptions/[^/]+", rid)) ? regex("^/subscriptions/([^/]+)", rid) : null)
-  }
-
-  # Only valid full resource IDs (helps avoid split/index issues)
-  excluded_valid_ids = [
-    for rid in local.alert_excluded_resource_ids_effective :
-    rid if local.excluded_sub_by_id[rid] != null
-  ]
-
-  # Split exclusions by owning subscription
-  excl_ids_core = [
-    for rid in local.excluded_valid_ids :
-    rid if local.excluded_sub_by_id[rid] == local.core_sub
-  ]
+  # single resource id (or null if platform stack didn't create it)
+  excluded_flowlogs_sa_id = try(data.terraform_remote_state.platform.outputs.nsg_flow_logs_storage.id, null)
 }
-
 
 # Diagnostic categories (data sources)
 data "azurerm_monitor_diagnostic_categories" "kv" {
@@ -2688,32 +2666,30 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
 }
 
 resource "azapi_resource" "apr_suppress_core_excluded_resources" {
-  provider  = azapi.core
-  count     = length(local.excl_ids_core) > 0 ? 1 : 0
+  provider = azapi.core
+  count    = local.excluded_flowlogs_sa_id != null && trimspace(local.excluded_flowlogs_sa_id) != "" ? 1 : 0
 
   type      = "Microsoft.AlertsManagement/actionRules@2021-08-08"
-  name      = "apr-sup-${var.product}-${local.plane_code}-${var.region}-core-excluded"
+  name      = "apr-${var.product}-${local.plane_code}-${var.region}-core-saobs"
   parent_id = "/subscriptions/${local.core_sub}/resourceGroups/${local.rg_core_name_resolved}"
   location  = "global"
 
   body = {
     properties = {
       enabled     = true
-      description = "Suppress alert notifications for excluded resources (core subscription)."
+      description = "Suppress alert notifications for the flow logs storage account (core subscription)."
       scopes      = ["/subscriptions/${local.core_sub}"]
 
       conditions = [
         {
           field    = "TargetResource"
           operator = "Equals"
-          values   = local.excl_ids_core
+          values   = [local.excluded_flowlogs_sa_id]
         }
       ]
 
       actions = [
-        {
-          actionType = "RemoveAllActionGroups"
-        }
+        { actionType = "RemoveAllActionGroups" }
       ]
     }
   }

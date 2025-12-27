@@ -616,9 +616,3 @@ variable "enable_rsv_metrics" {
   description = "Enable diagnostic metrics for Recovery Services Vault diagnostic settings."
   default     = true
 }
-
-variable "alert_excluded_resource_ids" {
-  description = "Resource IDs to suppress notifications for via Alert Processing Rules (in addition to discovered ones like flow logs SA)."
-  type        = list(string)
-  default     = []
-}
