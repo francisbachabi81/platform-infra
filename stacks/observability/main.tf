@@ -290,8 +290,6 @@ locals {
 }
 
 locals {
-  flow_logs_sa_id = try(local.nsg_flow_logs_storage.id, null)
-
   # Final exclusions list (extendable)
   alert_excluded_resource_ids_effective = distinct(compact(concat(
     [local.flow_logs_sa_id],
