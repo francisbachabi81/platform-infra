@@ -289,6 +289,21 @@ locals {
   existing_exports_sa_id   = coalesce(var.nsg_flow_logs_storage_account_id_override, try(local.nsg_flow_logs_storage.id, null))
 }
 
+locals {
+  flow_logs_sa_id = try(local.nsg_flow_logs_storage.id, null)
+
+  # Final exclusions list (extendable)
+  alert_excluded_resource_ids_effective = distinct(compact(concat(
+    [local.flow_logs_sa_id],
+    var.alert_excluded_resource_ids
+  )))
+
+  excl_ids_core = [
+    for id in local.alert_excluded_resource_ids_effective :
+    id if split(id, "/")[2] == local.core_sub
+  ]
+}
+
 # Diagnostic categories (data sources)
 data "azurerm_monitor_diagnostic_categories" "kv" {
   for_each    = local.kv_map
@@ -2656,6 +2671,38 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
     precondition {
       condition     = var.enable_cost_exports ? local.existing_exports_sa_id != null : true
       error_message = "Cost exports enabled but destination storage account ID not resolved."
+    }
+  }
+}
+
+resource "azapi_resource" "apr_suppress_core_excluded_resources" {
+  provider  = azapi.core
+  count     = length(local.excl_ids_core) > 0 ? 1 : 0
+
+  type      = "Microsoft.AlertsManagement/actionRules@2021-08-08"
+  name      = "apr-sup-${var.product}-${local.plane_code}-${var.region}-core-excluded"
+  parent_id = "/subscriptions/${local.core_sub}/resourceGroups/${local.rg_core_name_resolved}"
+  location  = "global"
+
+  body = {
+    properties = {
+      enabled     = true
+      description = "Suppress alert notifications for excluded resources (core subscription)."
+      scopes      = ["/subscriptions/${local.core_sub}"]
+
+      conditions = [
+        {
+          field    = "TargetResource"
+          operator = "Equals"
+          values   = local.excl_ids_core
+        }
+      ]
+
+      actions = [
+        {
+          actionType = "RemoveAllActionGroups"
+        }
+      ]
     }
   }
 }
