@@ -292,15 +292,29 @@ locals {
 locals {
   # Final exclusions list (extendable)
   alert_excluded_resource_ids_effective = distinct(compact(concat(
-    [local.flow_logs_sa_id],
+    [try(local.nsg_flow_logs_storage.id, null)],
     var.alert_excluded_resource_ids
   )))
 
+  # Extract subscription id safely from a resource id.
+  excluded_sub_by_id = {
+    for rid in local.alert_excluded_resource_ids_effective :
+    rid => (can(regex("^/subscriptions/[^/]+", rid)) ? regex("^/subscriptions/([^/]+)", rid) : null)
+  }
+
+  # Only valid full resource IDs (helps avoid split/index issues)
+  excluded_valid_ids = [
+    for rid in local.alert_excluded_resource_ids_effective :
+    rid if local.excluded_sub_by_id[rid] != null
+  ]
+
+  # Split exclusions by owning subscription
   excl_ids_core = [
-    for id in local.alert_excluded_resource_ids_effective :
-    id if split(id, "/")[2] == local.core_sub
+    for rid in local.excluded_valid_ids :
+    rid if local.excluded_sub_by_id[rid] == local.core_sub
   ]
 }
+
 
 # Diagnostic categories (data sources)
 data "azurerm_monitor_diagnostic_categories" "kv" {
