@@ -2710,6 +2710,7 @@ resource "azapi_resource" "dcr_container_insights_nonprod" {
   body = {
     properties = {
       description = "Azure Monitor Container Insights for AKS (nonprod) -> LAW"
+
       destinations = {
         logAnalytics = [
           {
@@ -2721,15 +2722,9 @@ resource "azapi_resource" "dcr_container_insights_nonprod" {
 
       dataFlows = [
         {
+          # This stream group already covers the container insights payload,
+          # including Perf/InsightsMetrics as applicable.
           streams      = ["Microsoft-ContainerInsights-Group-Default"]
-          destinations = ["law"]
-        },
-        {
-          streams      = ["Microsoft-Perf"]
-          destinations = ["law"]
-        },
-        {
-          streams      = ["Microsoft-InsightsMetrics"]
           destinations = ["law"]
         }
       ]
@@ -2737,9 +2732,10 @@ resource "azapi_resource" "dcr_container_insights_nonprod" {
       dataSources = {
         extensions = [
           {
-            name           = "ContainerInsightsExtension"
-            extensionName  = "ContainerInsights"
-            streams        = ["Microsoft-ContainerInsights-Group-Default"]
+            name              = "ContainerInsightsExtension"
+            extensionName     = "ContainerInsights"
+            streams           = ["Microsoft-ContainerInsights-Group-Default"]
+
             extensionSettings = {
               dataCollectionSettings = {
                 interval = "1m"
@@ -2787,6 +2783,7 @@ resource "azapi_resource" "dcr_container_insights_prod" {
   body = {
     properties = {
       description = "Azure Monitor Container Insights for AKS (prod) -> LAW"
+
       destinations = {
         logAnalytics = [
           {
@@ -2798,15 +2795,9 @@ resource "azapi_resource" "dcr_container_insights_prod" {
 
       dataFlows = [
         {
+          # This stream group already covers the container insights payload,
+          # including Perf/InsightsMetrics as applicable.
           streams      = ["Microsoft-ContainerInsights-Group-Default"]
-          destinations = ["law"]
-        },
-        {
-          streams      = ["Microsoft-Perf"]
-          destinations = ["law"]
-        },
-        {
-          streams      = ["Microsoft-InsightsMetrics"]
           destinations = ["law"]
         }
       ]
@@ -2814,9 +2805,10 @@ resource "azapi_resource" "dcr_container_insights_prod" {
       dataSources = {
         extensions = [
           {
-            name           = "ContainerInsightsExtension"
-            extensionName  = "ContainerInsights"
-            streams        = ["Microsoft-ContainerInsights-Group-Default"]
+            name              = "ContainerInsightsExtension"
+            extensionName     = "ContainerInsights"
+            streams           = ["Microsoft-ContainerInsights-Group-Default"]
+
             extensionSettings = {
               dataCollectionSettings = {
                 interval = "1m"
