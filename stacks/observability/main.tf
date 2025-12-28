@@ -2700,7 +2700,7 @@ resource "azapi_resource" "apr_suppress_core_excluded_resources" {
   }
 }
 
-resource "azapi_resource" "dcr_container_insights_dev" {
+resource "azapi_resource" "dcr_container_insights_nonprod" {
   provider                  = azapi.core
   count                     = (local.env_effective == "dev" && local.aks_env_enabled) ? 1 : 0
   type                      = "Microsoft.Insights/dataCollectionRules@2022-06-01"
@@ -2711,7 +2711,7 @@ resource "azapi_resource" "dcr_container_insights_dev" {
 
   body = {
     properties = {
-      description = "Azure Monitor Container Insights for AKS (dev) -> LAW"
+      description = "Azure Monitor Container Insights for AKS (nonprod) -> LAW"
       destinations = {
         logAnalytics = [
           {
@@ -2753,7 +2753,7 @@ resource "azapi_resource" "dcr_container_insights_dev" {
   }
 }
 
-resource "azapi_resource" "dcr_assoc_container_insights_dev" {
+resource "azapi_resource" "dcr_assoc_container_insights_nonprod" {
   provider                  = azapi.core
   for_each                  = (local.env_effective == "dev" && local.aks_env_enabled) ? local.aks_map : {}
   type                      = "Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01"
@@ -2764,7 +2764,7 @@ resource "azapi_resource" "dcr_assoc_container_insights_dev" {
   body = {
     properties = {
       description         = "Associate Container Insights DCR"
-      dataCollectionRuleId = azapi_resource.dcr_container_insights_dev[0].id
+      dataCollectionRuleId = azapi_resource.dcr_container_insights_nonprod[0].id
     }
   }
 }
