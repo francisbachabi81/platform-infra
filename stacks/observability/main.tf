@@ -2710,9 +2710,7 @@ locals {
   # - Cost-optimized defaults are typically ContainerLogV2 + KubeEvents + KubePodInventory
   # - If you truly want "all", you can still add the group stream, but keep ContainerLogV2 explicit.
   aks_ci_streams = distinct(compact(concat(
-    local.aks_ci_collect_all_logs
-      ? ["Microsoft-ContainerInsights-Group-Default", "Microsoft-ContainerLogV2"]
-      : ["Microsoft-ContainerLogV2", "Microsoft-KubeEvents", "Microsoft-KubePodInventory"],
+    local.aks_ci_collect_all_logs ? ["Microsoft-ContainerInsights-Group-Default"] : ["Microsoft-ContainerLogV2", "Microsoft-KubeEvents", "Microsoft-KubePodInventory"],
     local.aks_ci_collect_perf ? ["Microsoft-Perf"] : []
   )))
 }
@@ -2832,11 +2830,11 @@ resource "azapi_resource" "dcr_container_insights_prod" {
 
             extensionSettings = {
               dataCollectionSettings = {
-                  interval               = "5m"
-                  namespaceFilteringMode = local.aks_ci_namespace_filtering_mode
-                  namespaces             = local.aks_ci_namespaces_excluded
-                  enableContainerLogV2   = true
-                  streams                = local.aks_ci_streams
+                interval               = "5m"
+                namespaceFilteringMode = local.aks_ci_namespace_filtering_mode
+                namespaces             = local.aks_ci_namespaces_excluded
+                enableContainerLogV2   = true
+                streams                = local.aks_ci_streams
               }
             }
           }
