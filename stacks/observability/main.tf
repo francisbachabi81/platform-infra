@@ -2723,7 +2723,7 @@ resource "azapi_resource" "dcr_container_insights_nonprod" {
 
       dataFlows = [
         {
-          streams      = ["Microsoft-ContainerInsights"]
+          streams      = ["Microsoft-ContainerInsights-Group-Default"]
           destinations = ["law"]
         }
       ]
@@ -2733,7 +2733,7 @@ resource "azapi_resource" "dcr_container_insights_nonprod" {
           {
             name           = "ContainerInsightsExtension"
             extensionName  = "ContainerInsights"
-            streams        = ["Microsoft-ContainerInsights"]
+            streams        = ["Microsoft-ContainerInsights-Group-Default"]
             extensionSettings = {
               dataCollectionSettings = {
                 interval = "1m"
@@ -2792,7 +2792,7 @@ resource "azapi_resource" "dcr_container_insights_prod" {
 
       dataFlows = [
         {
-          streams      = ["Microsoft-ContainerInsights"]
+          streams      = ["Microsoft-ContainerInsights-Group-Default"]
           destinations = ["law"]
         }
       ]
@@ -2802,7 +2802,7 @@ resource "azapi_resource" "dcr_container_insights_prod" {
           {
             name           = "ContainerInsightsExtension"
             extensionName  = "ContainerInsights"
-            streams        = ["Microsoft-ContainerInsights"]
+            streams        = ["Microsoft-ContainerInsights-Group-Default"]
             extensionSettings = {
               dataCollectionSettings = {
                 interval = "1m"
