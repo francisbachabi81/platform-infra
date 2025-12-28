@@ -2699,20 +2699,21 @@ resource "azapi_resource" "apr_suppress_core_excluded_resources" {
 }
 
 locals {
-  aks_prometheus_enabled = coalesce(var.enable_aks_managed_prometheus, false)
-  aks_ci_collect_perf = coalesce(var.aks_collect_performance, false)
-  aks_ci_collect_all_logs = coalesce(var.aks_collect_all_logs, true)
+  # Exclude these namespaces from collection
+  aks_ci_namespace_filtering_mode = "Exclude"
+  aks_ci_namespaces_excluded      = ["kube-system", "gatekeeper-system", "azure-arc"]
 
-  # Streams:
-  # - If you want "Collected data: All" in the portal, use the stream group.
-  # - Add Perf only when requested.
-  #
-  # Notes:
-  # - Microsoft-ContainerInsights-Group-Default is the built-in "all logs" set.
-  # - Microsoft-Perf is what flips the Portal "Performance" toggle.
+  aks_ci_collect_perf        = coalesce(var.aks_collect_performance, false)
+  aks_ci_collect_all_logs    = coalesce(var.aks_collect_all_logs, true)
+
+  # IMPORTANT:
+  # - Cost-optimized defaults are typically ContainerLogV2 + KubeEvents + KubePodInventory
+  # - If you truly want "all", you can still add the group stream, but keep ContainerLogV2 explicit.
   aks_ci_streams = distinct(compact(concat(
-    local.aks_ci_collect_all_logs ? ["Microsoft-ContainerInsights-Group-Default"] : ["Microsoft-ContainerLogV2"],
-    local.aks_ci_collect_perf     ? ["Microsoft-Perf"] : []
+    local.aks_ci_collect_all_logs
+      ? ["Microsoft-ContainerInsights-Group-Default", "Microsoft-ContainerLogV2"]
+      : ["Microsoft-ContainerLogV2", "Microsoft-KubeEvents", "Microsoft-KubePodInventory"],
+    local.aks_ci_collect_perf ? ["Microsoft-Perf"] : []
   )))
 }
 
@@ -2753,8 +2754,14 @@ resource "azapi_resource" "dcr_container_insights_nonprod" {
             streams       = local.aks_ci_streams
 
             extensionSettings = {
-              dataCollectionSettings = {
-                interval = "5m"
+              extensionSettings = {
+                dataCollectionSettings = {
+                  interval               = "5m"
+                  namespaceFilteringMode = local.aks_ci_namespace_filtering_mode
+                  namespaces             = local.aks_ci_namespaces_excluded
+                  enableContainerLogV2   = true
+                  streams                = local.aks_ci_streams
+                }
               }
             }
           }
@@ -2825,7 +2832,11 @@ resource "azapi_resource" "dcr_container_insights_prod" {
 
             extensionSettings = {
               dataCollectionSettings = {
-                interval = "5m"
+                  interval               = "5m"
+                  namespaceFilteringMode = local.aks_ci_namespace_filtering_mode
+                  namespaces             = local.aks_ci_namespaces_excluded
+                  enableContainerLogV2   = true
+                  streams                = local.aks_ci_streams
               }
             }
           }
