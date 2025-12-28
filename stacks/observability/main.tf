@@ -2698,6 +2698,22 @@ resource "azapi_resource" "apr_suppress_core_excluded_resources" {
   }
 }
 
+# AKS / Container Insights knobs
+locals {
+  # Prometheus: turn OFF unless explicitly enabled
+  aks_prometheus_enabled = coalesce(var.enable_aks_managed_prometheus, false)
+
+  # Container Insights: allow perf explicitly
+  aks_ci_collect_perf = coalesce(var.aks_collect_performance, true)
+
+  # Use explicit streams (recommended) so the Portal "Performance" switch reflects reality
+  # If perf disabled, Microsoft-Perf is removed.
+  aks_ci_streams = distinct(compact(concat(
+    ["Microsoft-ContainerLogV2"],
+    local.aks_ci_collect_perf ? ["Microsoft-Perf", "Microsoft-InsightsMetrics"] : ["Microsoft-InsightsMetrics"]
+  )))
+}
+
 resource "azapi_resource" "dcr_container_insights_nonprod" {
   provider                  = azapi.core
   count                     = (local.env_effective == "dev" && local.aks_env_enabled) ? 1 : 0
@@ -2720,11 +2736,10 @@ resource "azapi_resource" "dcr_container_insights_nonprod" {
         ]
       }
 
+      # ✅ Explicit streams only (no stream group)
       dataFlows = [
         {
-          # This stream group already covers the container insights payload,
-          # including Perf/InsightsMetrics as applicable.
-          streams      = ["Microsoft-ContainerInsights-Group-Default"]
+          streams      = local.aks_ci_streams
           destinations = ["law"]
         }
       ]
@@ -2732,13 +2747,16 @@ resource "azapi_resource" "dcr_container_insights_nonprod" {
       dataSources = {
         extensions = [
           {
-            name              = "ContainerInsightsExtension"
-            extensionName     = "ContainerInsights"
-            streams           = ["Microsoft-ContainerInsights-Group-Default"]
+            name          = "ContainerInsightsExtension"
+            extensionName = "ContainerInsights"
+
+            # ✅ Explicit streams only (must match dataFlows)
+            streams = local.aks_ci_streams
 
             extensionSettings = {
               dataCollectionSettings = {
                 interval = "1m"
+                # optional: you can add collection toggles here later if needed
               }
             }
           }
@@ -2793,11 +2811,10 @@ resource "azapi_resource" "dcr_container_insights_prod" {
         ]
       }
 
+      # ✅ Explicit streams only (no stream group)
       dataFlows = [
         {
-          # This stream group already covers the container insights payload,
-          # including Perf/InsightsMetrics as applicable.
-          streams      = ["Microsoft-ContainerInsights-Group-Default"]
+          streams      = local.aks_ci_streams
           destinations = ["law"]
         }
       ]
@@ -2805,9 +2822,9 @@ resource "azapi_resource" "dcr_container_insights_prod" {
       dataSources = {
         extensions = [
           {
-            name              = "ContainerInsightsExtension"
-            extensionName     = "ContainerInsights"
-            streams           = ["Microsoft-ContainerInsights-Group-Default"]
+            name          = "ContainerInsightsExtension"
+            extensionName = "ContainerInsights"
+            streams       = local.aks_ci_streams
 
             extensionSettings = {
               dataCollectionSettings = {

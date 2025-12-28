@@ -617,8 +617,14 @@ variable "enable_rsv_metrics" {
   default     = true
 }
 
-variable "aks_resource_ids_override" {
-  type        = list(string)
-  description = "Optional explicit AKS resource IDs to alert on."
-  default     = []
+variable "enable_aks_managed_prometheus" {
+  type        = bool
+  description = "Enable managed Prometheus (Azure Monitor Workspace) for AKS. Default false."
+  default     = false
+}
+
+variable "aks_collect_performance" {
+  type        = bool
+  description = "Collect Perf stream for Container Insights (Microsoft-Perf). Controls Portal 'Performance' toggle."
+  default     = true
 }
