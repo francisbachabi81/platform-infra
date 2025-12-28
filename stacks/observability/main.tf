@@ -2706,13 +2706,10 @@ locals {
   aks_ci_collect_perf        = coalesce(var.aks_collect_performance, false)
   aks_ci_collect_all_logs    = coalesce(var.aks_collect_all_logs, true)
 
-  # IMPORTANT:
-  # - Cost-optimized defaults are typically ContainerLogV2 + KubeEvents + KubePodInventory
-  # - If you truly want "all", you can still add the group stream, but keep ContainerLogV2 explicit.
-  aks_ci_streams = distinct(compact(concat(
-    local.aks_ci_collect_all_logs ? ["Microsoft-ContainerInsights-Group-Default"] : ["Microsoft-ContainerLogV2", "Microsoft-KubeEvents", "Microsoft-KubePodInventory"],
-    local.aks_ci_collect_perf ? ["Microsoft-Perf"] : []
-  )))
+  aks_ci_streams = local.aks_ci_collect_all_logs ? ["Microsoft-ContainerInsights-Group-Default"] : compact(concat(
+        ["Microsoft-ContainerLogV2", "Microsoft-KubeEvents", "Microsoft-KubePodInventory"],
+        local.aks_ci_collect_perf ? ["Microsoft-Perf"] : []
+      ))
 }
 
 resource "azapi_resource" "dcr_container_insights_nonprod" {
@@ -2752,14 +2749,13 @@ resource "azapi_resource" "dcr_container_insights_nonprod" {
             streams       = local.aks_ci_streams
 
             extensionSettings = {
-              extensionSettings = {
-                dataCollectionSettings = {
-                  interval               = "5m"
-                  namespaceFilteringMode = local.aks_ci_namespace_filtering_mode
-                  namespaces             = local.aks_ci_namespaces_excluded
-                  enableContainerLogV2   = true
-                  streams                = local.aks_ci_streams
-                }
+              dataCollectionSettings = {
+                interval               = "5m"
+                namespaceFilteringMode = local.aks_ci_namespace_filtering_mode
+                namespaces             = local.aks_ci_namespaces_excluded
+
+                # Only meaningful when you’re using ContainerLogV2 (which you are in the non-group preset case).
+                enableContainerLogV2 = true
               }
             }
           }
@@ -2833,8 +2829,9 @@ resource "azapi_resource" "dcr_container_insights_prod" {
                 interval               = "5m"
                 namespaceFilteringMode = local.aks_ci_namespace_filtering_mode
                 namespaces             = local.aks_ci_namespaces_excluded
-                enableContainerLogV2   = true
-                streams                = local.aks_ci_streams
+
+                # Only meaningful when you’re using ContainerLogV2 (which you are in the non-group preset case).
+                enableContainerLogV2 = true
               }
             }
           }
