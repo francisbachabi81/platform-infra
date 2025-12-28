@@ -616,15 +616,3 @@ variable "enable_rsv_metrics" {
   description = "Enable diagnostic metrics for Recovery Services Vault diagnostic settings."
   default     = true
 }
-
-variable "enable_aks_managed_prometheus" {
-  type        = bool
-  description = "Enable managed Prometheus (Azure Monitor Workspace) for AKS. Default false."
-  default     = false
-}
-
-variable "aks_collect_performance" {
-  type        = bool
-  description = "Collect Perf stream for Container Insights (Microsoft-Perf). Controls Portal 'Performance' toggle."
-  default     = true
-}
