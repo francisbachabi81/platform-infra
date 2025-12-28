@@ -2700,29 +2700,6 @@ resource "azapi_resource" "apr_suppress_core_excluded_resources" {
   }
 }
 
-locals {
-  aks_ids_effective = toset(distinct(compact(concat(
-    # platform stack outputs (AKS in env subscription)
-    [
-      try(data.terraform_remote_state.platform.outputs.ids.aks,       null),
-      try(data.terraform_remote_state.platform.outputs.aks_id,        null),
-      try(data.terraform_remote_state.platform.outputs.kubernetes.id, null),
-    ],
-    # core stack outputs (needed for dev when AKS is in nonprod core)
-    [
-      try(data.terraform_remote_state.core.outputs.ids.aks,           null),
-      try(data.terraform_remote_state.core.outputs.aks_id,            null),
-      try(data.terraform_remote_state.core.outputs.kubernetes.id,     null),
-    ],
-    # manual override
-    var.aks_resource_ids_override
-  ))))
-
-  aks_map = { for id in local.aks_ids_effective : id => id }
-
-  aks_env_enabled = contains(["dev", "uat", "prod"], local.env_effective)
-}
-
 resource "azapi_resource" "dcr_container_insights_dev" {
   provider                  = azapi.core
   count                     = (local.env_effective == "dev" && local.aks_env_enabled) ? 1 : 0
