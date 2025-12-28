@@ -616,3 +616,9 @@ variable "enable_rsv_metrics" {
   description = "Enable diagnostic metrics for Recovery Services Vault diagnostic settings."
   default     = true
 }
+
+variable "aks_resource_ids_override" {
+  type        = list(string)
+  description = "Optional explicit AKS resource IDs to alert on."
+  default     = []
+}

@@ -2699,3 +2699,173 @@ resource "azapi_resource" "apr_suppress_core_excluded_resources" {
     }
   }
 }
+
+# locals {
+#   aks_ids_effective = toset(distinct(compact(concat(
+#     # platform stack outputs (works when AKS is in the env subscription)
+#     [
+#       try(data.terraform_remote_state.platform.outputs.ids.aks,       null),
+#       try(data.terraform_remote_state.platform.outputs.aks_id,        null),
+#       try(data.terraform_remote_state.platform.outputs.kubernetes.id, null),
+#     ],
+#     # core stack outputs (needed for dev when AKS is in nonprod core)
+#     [
+#       try(data.terraform_remote_state.core.outputs.ids.aks,           null),
+#       try(data.terraform_remote_state.core.outputs.aks_id,            null),
+#       try(data.terraform_remote_state.core.outputs.kubernetes.id,     null),
+#     ],
+#     # manual override
+#     var.aks_resource_ids_override
+#   ))))
+
+#   aks_map = { for id in local.aks_ids_effective : id => id }
+# }
+
+# locals {
+#   aks_alert_window    = "PT15M"
+#   aks_alert_frequency = "PT5M"
+#   aks_cpu_threshold   = 80
+# }
+
+# # alerts in CORE subscription (AKS is in nonprod core)
+# resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_cpu_high_dev" {
+#   provider = azurerm.core
+#   for_each = (local.env_effective == "dev") ? local.aks_map : {}
+
+#   name                = "al-${var.product}-dev-${var.region}-aks-cpu-high"
+#   resource_group_name = local.rg_core_name_resolved
+#   location            = var.location
+#   scopes              = [each.key]
+#   severity            = 2
+
+#   evaluation_frequency = local.aks_alert_frequency
+#   window_duration      = local.aks_alert_window
+
+#   criteria {
+#     query = <<-KQL
+#       let window = ago(15m);
+#       Perf
+#       | where TimeGenerated >= window
+#       | where ObjectName == "K8SNode"
+#       | where CounterName in ("cpuUsageNanoCores","cpuCapacityNanoCores")
+#       | summarize AvgVal = avg(CounterValue) by bin(TimeGenerated, 5m), Computer, CounterName
+#       | evaluate pivot(CounterName, sum(AvgVal))
+#       | extend CpuPct = 100.0 * todouble(cpuUsageNanoCores) / todouble(cpuCapacityNanoCores)
+#       | summarize MetricValue = max(CpuPct)
+#     KQL
+
+#     time_aggregation_method = "Maximum"
+#     threshold               = local.aks_cpu_threshold
+#     operator                = "GreaterThan"
+#     metric_measure_column   = "MetricValue"
+#   }
+
+#   action { action_groups = [local.ag_id_core] }
+# }
+
+# # alerts in PROD subscription (AKS is in prod)
+# resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_cpu_high_prod" {
+#   provider = azurerm.prod
+#   for_each = (local.env_effective == "prod") ? local.aks_map : {}
+
+#   name                = "al-${var.product}-prod-${var.region}-aks-cpu-high"
+#   resource_group_name = local.rg_env_name_resolved
+#   location            = var.location
+#   scopes              = [each.key]
+#   severity            = 2
+
+#   evaluation_frequency = local.aks_alert_frequency
+#   window_duration      = local.aks_alert_window
+
+#   criteria {
+#     query = azurerm_monitor_scheduled_query_rules_alert_v2.aks_cpu_high_dev[each.key].criteria[0].query
+#     time_aggregation_method = "Maximum"
+#     threshold               = local.aks_cpu_threshold
+#     operator                = "GreaterThan"
+#     metric_measure_column   = "MetricValue"
+#   }
+
+#   action { action_groups = [local.ag_id_env] }
+# }
+
+# locals {
+#   aks_mem_threshold   = 80
+#   aks_alert_window    = "PT15M"
+#   aks_alert_frequency = "PT5M"
+# }
+
+# resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_mem_high_dev" {
+#   provider = azurerm.core
+#   for_each = (local.env_effective == "dev") ? local.aks_map : {}
+
+#   name                = "al-${var.product}-dev-${var.region}-aks-mem-high"
+#   resource_group_name = local.rg_core_name_resolved
+#   location            = var.location
+#   scopes              = [each.key]
+#   severity            = 2
+
+#   evaluation_frequency = local.aks_alert_frequency
+#   window_duration      = local.aks_alert_window
+
+#   criteria {
+#     query = <<-KQL
+#       let window = ago(15m);
+#       InsightsMetrics
+#       | where TimeGenerated >= window
+#       | where Namespace == "container.azm.ms"
+#       | where Name in ("node_memory_working_set_bytes", "node_memory_capacity_bytes")
+#       | summarize AvgVal = avg(Val) by bin(TimeGenerated, 5m), Tags, Name
+#       | extend Node = tostring(parse_json(Tags)["node"])
+#       | summarize UsedBytes = maxif(AvgVal, Name == "node_memory_working_set_bytes"),
+#                   CapBytes  = maxif(AvgVal, Name == "node_memory_capacity_bytes")
+#                 by Node
+#       | extend MemPct = 100.0 * todouble(UsedBytes) / todouble(CapBytes)
+#       | summarize MetricValue = max(MemPct)
+#     KQL
+
+#     time_aggregation_method = "Maximum"
+#     threshold               = local.aks_mem_threshold
+#     operator                = "GreaterThan"
+#     metric_measure_column   = "MetricValue"
+#   }
+
+#   action { action_groups = [local.ag_id_core] }
+# }
+
+# resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_mem_high_prod" {
+#   provider = azurerm.prod
+#   for_each = (local.env_effective == "prod") ? local.aks_map : {}
+
+#   name                = "al-${var.product}-prod-${var.region}-aks-mem-high"
+#   resource_group_name = local.rg_env_name_resolved
+#   location            = var.location
+#   scopes              = [each.key]
+#   severity            = 2
+
+#   evaluation_frequency = local.aks_alert_frequency
+#   window_duration      = local.aks_alert_window
+
+#   criteria {
+#     query = <<-KQL
+#       let window = ago(15m);
+#       InsightsMetrics
+#       | where TimeGenerated >= window
+#       | where Namespace == "container.azm.ms"
+#       | where Name in ("node_memory_working_set_bytes", "node_memory_capacity_bytes")
+#       | summarize AvgVal = avg(Val) by bin(TimeGenerated, 5m), Tags, Name
+#       | extend Node = tostring(parse_json(Tags)["node"])
+#       | summarize UsedBytes = maxif(AvgVal, Name == "node_memory_working_set_bytes"),
+#                   CapBytes  = maxif(AvgVal, Name == "node_memory_capacity_bytes")
+#                 by Node
+#       | extend MemPct = 100.0 * todouble(UsedBytes) / todouble(CapBytes)
+#       | summarize MetricValue = max(MemPct)
+#     KQL
+
+#     time_aggregation_method = "Maximum"
+#     threshold               = local.aks_mem_threshold
+#     operator                = "GreaterThan"
+#     metric_measure_column   = "MetricValue"
+#   }
+
+#   action { action_groups = [local.ag_id_env] }
+# }
