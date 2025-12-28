@@ -2698,6 +2698,169 @@ resource "azapi_resource" "apr_suppress_core_excluded_resources" {
   }
 }
 
+locals {
+  aks_prometheus_enabled = coalesce(var.enable_aks_managed_prometheus, false)
+  aks_ci_collect_perf = coalesce(var.aks_collect_performance, false)
+  aks_ci_collect_all_logs = coalesce(var.aks_collect_all_logs, true)
+
+  # Streams:
+  # - If you want "Collected data: All" in the portal, use the stream group.
+  # - Add Perf only when requested.
+  #
+  # Notes:
+  # - Microsoft-ContainerInsights-Group-Default is the built-in "all logs" set.
+  # - Microsoft-Perf is what flips the Portal "Performance" toggle.
+  aks_ci_streams = distinct(compact(concat(
+    local.aks_ci_collect_all_logs ? ["Microsoft-ContainerInsights-Group-Default"] : ["Microsoft-ContainerLogV2"],
+    local.aks_ci_collect_perf     ? ["Microsoft-Perf"] : []
+  )))
+}
+
+resource "azapi_resource" "dcr_container_insights_nonprod" {
+  provider                  = azapi.core
+  count                     = (local.env_effective == "dev" && local.aks_env_enabled) ? 1 : 0
+  type                      = "Microsoft.Insights/dataCollectionRules@2022-06-01"
+  name                      = "dcr-${var.product}-dev-${var.region}-aks-containers"
+  parent_id                 = "/subscriptions/${local.core_sub}/resourceGroups/${local.rg_core_name_resolved}"
+  location                  = var.location
+  schema_validation_enabled = false
+
+  body = {
+    properties = {
+      description = "Azure Monitor Container Insights for AKS (nonprod) -> LAW (cost-optimized defaults)"
+
+      destinations = {
+        logAnalytics = [
+          {
+            name                = "law"
+            workspaceResourceId = local.law_id
+          }
+        ]
+      }
+
+      dataFlows = [
+        {
+          streams      = local.aks_ci_streams
+          destinations = ["law"]
+        }
+      ]
+
+      dataSources = {
+        extensions = [
+          {
+            name          = "ContainerInsightsExtension"
+            extensionName = "ContainerInsights"
+            streams       = local.aks_ci_streams
+
+            extensionSettings = {
+              dataCollectionSettings = {
+                interval = "5m"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null && local.rg_core_name_resolved != null
+      error_message = "LAW workspace ID or core RG not resolved; cannot enable Container Insights DCR."
+    }
+  }
+}
+
+resource "azapi_resource" "dcr_assoc_container_insights_nonprod" {
+  provider                  = azapi.core
+  for_each                  = (local.env_effective == "dev" && local.aks_env_enabled) ? local.aks_map : {}
+  type                      = "Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01"
+  name                      = "dcrassoc-containers"
+  parent_id                 = each.key
+  schema_validation_enabled = false
+
+  body = {
+    properties = {
+      description         = "Associate Container Insights DCR"
+      dataCollectionRuleId = azapi_resource.dcr_container_insights_nonprod[0].id
+    }
+  }
+}
+
+resource "azapi_resource" "dcr_container_insights_prod" {
+  provider                  = azapi.prod
+  count                     = (local.env_effective == "prod" && local.aks_env_enabled) ? 1 : 0
+  type                      = "Microsoft.Insights/dataCollectionRules@2022-06-01"
+  name                      = "dcr-${var.product}-prod-${var.region}-aks-containers"
+  parent_id                 = "/subscriptions/${local.prod_sub}/resourceGroups/${local.rg_env_name_resolved}"
+  location                  = var.location
+  schema_validation_enabled = false
+
+  body = {
+    properties = {
+      description = "Azure Monitor Container Insights for AKS (prod) -> LAW (cost-optimized defaults)"
+
+      destinations = {
+        logAnalytics = [
+          {
+            name                = "law"
+            workspaceResourceId = local.law_id
+          }
+        ]
+      }
+
+      dataFlows = [
+        {
+          streams      = local.aks_ci_streams
+          destinations = ["law"]
+        }
+      ]
+
+      dataSources = {
+        extensions = [
+          {
+            name          = "ContainerInsightsExtension"
+            extensionName = "ContainerInsights"
+            streams       = local.aks_ci_streams
+
+            extensionSettings = {
+              dataCollectionSettings = {
+                interval = "5m"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null && local.rg_env_name_resolved != null
+      error_message = "LAW workspace ID or env RG not resolved; cannot enable Container Insights DCR."
+    }
+  }
+}
+
+resource "azapi_resource" "dcr_assoc_container_insights_prod" {
+  provider                  = azapi.prod
+  for_each                  = (local.env_effective == "prod" && local.aks_env_enabled) ? local.aks_map : {}
+  type                      = "Microsoft.Insights/dataCollectionRuleAssociations@2022-06-01"
+  name                      = "dcrassoc-containers"
+  parent_id                 = each.key
+  schema_validation_enabled = false
+
+  body = {
+    properties = {
+      description         = "Associate Container Insights DCR"
+      dataCollectionRuleId = azapi_resource.dcr_container_insights_prod[0].id
+    }
+  }
+}
+
+######################################################
+
+
 # locals {
 #   aks_ids_effective = toset(distinct(compact(concat(
 #     # platform stack outputs (works when AKS is in the env subscription)

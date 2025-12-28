@@ -616,3 +616,21 @@ variable "enable_rsv_metrics" {
   description = "Enable diagnostic metrics for Recovery Services Vault diagnostic settings."
   default     = true
 }
+
+variable "aks_collect_all_logs" {
+  type        = bool
+  description = "Collect all Container Insights logs (portal-style 'Collected data: All')."
+  default     = true
+}
+
+variable "aks_collect_performance" {
+  type        = bool
+  description = "Collect node/perf counters (Microsoft-Perf). High cost. Default off for cost optimization."
+  default     = false
+}
+
+variable "enable_aks_managed_prometheus" {
+  type        = bool
+  description = "Enable managed Prometheus (separate cost). Default off."
+  default     = false
+}
