@@ -2901,20 +2901,17 @@ locals {
   aks_cpu_query  = <<-KQL
     let threshold = ${local.aks_cpu_threshold};
     let lookback  = 5m;
-
     let usage =
     Perf
     | where TimeGenerated > ago(lookback)
     | where ObjectName == "K8SNode" and CounterName == "cpuUsageNanoCores"
     | summarize Usage = avg(CounterValue), UsageTs = max(TimeGenerated) by Computer;
-
     let alloc =
     Perf
     | where TimeGenerated > ago(lookback)
     | where ObjectName == "K8SNode" and CounterName == "cpuAllocatableNanoCores"
     | summarize arg_max(TimeGenerated, CounterValue) by Computer
     | project Computer, Alloc = CounterValue, AllocTs = TimeGenerated;
-
     usage
     | join kind=inner alloc on Computer
     | where Alloc > 0
@@ -2994,20 +2991,17 @@ locals {
   aks_mem_query  = <<-KQL
     let threshold = ${local.aks_mem_threshold};
     let lookback  = 5m;
-
     let used =
     Perf
     | where TimeGenerated > ago(lookback)
     | where ObjectName == "K8SNode" and CounterName == "memoryWorkingSetBytes"
     | summarize Used = avg(CounterValue), UsedTs = max(TimeGenerated) by Computer;
-
     let alloc =
     Perf
     | where TimeGenerated > ago(lookback)
     | where ObjectName == "K8SNode" and CounterName == "memoryAllocatableBytes"
     | summarize arg_max(TimeGenerated, CounterValue) by Computer
     | project Computer, Alloc = CounterValue, AllocTs = TimeGenerated;
-
     used
     | join kind=inner alloc on Computer
     | where Alloc > 0
@@ -3085,7 +3079,6 @@ locals {
   aks_disk_query  = <<-KQL
     let threshold = ${local.aks_disk_threshold};
     let lookback  = 10m;
-
     InsightsMetrics
     | where TimeGenerated > ago(lookback)
     | where Namespace == "container.azm.ms/disk"
