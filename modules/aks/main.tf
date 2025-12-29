@@ -82,5 +82,11 @@ resource "azurerm_kubernetes_cluster" "aks" {
     }
   }
 
+  lifecycle {
+    ignore_changes = [
+      oms_agent
+    ]
+  }
+
   tags = var.tags
 }
