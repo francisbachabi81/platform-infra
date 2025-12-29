@@ -2880,7 +2880,7 @@ locals {
     var.aks_resource_ids_override
   ))))
 
-  aks_map = { for id in local.aks_ids_effective : id => id }
+  # aks_map = { for id in local.aks_ids_effective : id => id }
 
   # Enable AKS alerting only where we want it
   aks_alerts_enabled_for_env = contains(["dev", "prod"], local.env_effective)
