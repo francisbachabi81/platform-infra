@@ -634,3 +634,9 @@ variable "enable_aks_managed_prometheus" {
   description = "Enable managed Prometheus (separate cost). Default off."
   default     = false
 }
+
+variable "aks_resource_ids_override" {
+  type        = list(string)
+  description = "Optional: explicit AKS resource IDs to alert on (used when remote state does not expose AKS IDs)."
+  default     = []
+}
