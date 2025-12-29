@@ -142,7 +142,7 @@ pg_zone    = null   # no explicit AZ in Gov for this SKU
 pg_ha_zone = null   # ignored while HA is off and no explicit AZ
 
 pg_firewall_rules = []
-pg_databases      = ["appdb","citus"]
+pg_databases      = ["appdb"] #["appdb","citus"]
 
 pg_enable_postgis = true
 # pg_admin_password via TF_VAR_pg_admin_password
