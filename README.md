@@ -43,8 +43,8 @@ Each stack has its own `README.md` with purpose, inputs, dependencies, and relat
 - **Observability** – env-level diagnostics and monitoring  
   → [`stacks/observability/README.md`](stacks/observability/README.md)
 
-- **Provision-Secrets** – JSON schemas describing required secrets  
-  → [`stacks/provision-secrets/README.md`](stacks/provision-secrets/README.md)
+- **Provision-Secrets** – Secrets are managed by updating a **source “core” Key Vault** and then running a **GitHub Actions workflow** that copies the right secrets into the **destination environment Key Vault**.
+  → [`docs/README_provision-secrets.md`](docs/README_provision-secrets.md)
 
 ---
 
@@ -278,7 +278,7 @@ The typical end-to-end order is:
 
 6. **Bootstrap Secrets**
    - Workflow: `infra-secrets-provision.yml`
-   - Uses `stacks/provision-secrets/*.secrets.schema.json`
+   - Secrets are managed by updating a **source “core” Key Vault** and then running a **GitHub Actions workflow** that copies the right secrets into the **destination environment Key Vault**.
 
 7. **Platform Registry (Gov Only, Shared)**
    - Workflows: `registry-plan.yml` / `registry-apply.yml`
