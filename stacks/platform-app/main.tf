@@ -229,6 +229,14 @@ locals {
   }
 }
 
+locals {
+  core_kv_id       = try(local.core_outputs.storage_cmk.key_vault_id, null)
+  cmk_key_name     = try(local.core_outputs.storage_cmk.key_name, null)
+  cmk_key_version  = try(local.core_outputs.storage_cmk.key_version, null)
+
+  storage_cmk_enabled = core_kv_id != null && cmk_key_name != null
+}
+
 # Resource Groups per env + env RG lookup
 module "rg_dev" {
   count    = local.is_dev ? 1 : 0
@@ -404,6 +412,15 @@ module "sa1" {
 
   pe_subnet_id         = local.pe_subnet_id_effective
   private_dns_zone_ids = local.zone_ids_effective
+
+  # --- compliance ---
+  restrict_network_access = true
+
+  cmk_enabled          = local.storage_cmk_enabled
+  cmk_key_vault_id     = local.core_kv_id
+  cmk_key_name         = local.cmk_key_name
+  cmk_key_version      = null # or local.core_cmk_key_version if you want to pin
+  cmk_identity_name    = "uai-${var.product}-${var.env}-${var.region}-sa1-cmk-01"
 
   pe_blob_name         = "pep-${local.sa1_name_cleaned}-blob"
   psc_blob_name        = "psc-${local.sa1_name_cleaned}-blob"
@@ -1146,6 +1163,15 @@ module "sa_nsg_flowlogs" {
 
   pe_subnet_id         = local.hub_privatelink_subnet_id
   private_dns_zone_ids = local.hub_private_dns_zone_ids
+
+  # --- compliance ---
+  restrict_network_access = true
+
+  cmk_enabled          = local.storage_cmk_enabled
+  cmk_key_vault_id     = local.core_kv_id
+  cmk_key_name         = local.cmk_key_name
+  cmk_key_version      = null # or local.core_cmk_key_version if you want to pin
+  cmk_identity_name    = "uai-${var.product}-${local.plane_code}-${var.region}-sa-flow-cmk-01"
 
   pe_blob_name         = "pep-${local.sa_nsg_flowlogs_name_cleaned}-blob"
   psc_blob_name        = "psc-${local.sa_nsg_flowlogs_name_cleaned}-blob"

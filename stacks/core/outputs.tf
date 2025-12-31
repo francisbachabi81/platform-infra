@@ -142,3 +142,12 @@ output "core_key_vault" {
     )
   }
 }
+
+output "storage_cmk" {
+  value = {
+    key_vault_id  = try(module.kv_core[0].id, null)
+    key_id        = try(azurerm_key_vault_key.storage_cmk[0].id, null)
+    key_name      = try(azurerm_key_vault_key.storage_cmk[0].name, null)
+    key_version   = try(azurerm_key_vault_key.storage_cmk[0].version, null)
+  }
+}

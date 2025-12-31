@@ -86,3 +86,33 @@ variable "file_zone_group_name" {
   default     = null
   description = "Custom DNS zone group name for file (null = default)."
 }
+
+variable "restrict_network_access" {
+  type    = bool
+  default = true
+}
+
+variable "cmk_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "cmk_key_vault_id" {
+  type    = string
+  default = null
+}
+
+variable "cmk_identity_name" {
+  type    = string
+  default = null
+}
+
+variable "cmk_key_name" {
+  type    = string
+  default = null
+}
+
+variable "cmk_key_version" {
+  type    = string
+  default = null
+}

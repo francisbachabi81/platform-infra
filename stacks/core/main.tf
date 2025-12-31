@@ -513,6 +513,32 @@ module "kv_core" {
   depends_on = [module.rg_core_platform]
 }
 
+# ------------------------------------------------------------
+# Storage CMK key (in core key vault)
+# ------------------------------------------------------------
+resource "azurerm_key_vault_key" "storage_cmk" {
+  count        = (var.create_core_key_vault && local.create_scope_both) ? 1 : 0
+  name         = "cmk-storage-${var.product}-${local.plane_code}-${var.region}-01"
+  key_vault_id = module.kv_core[0].id
+  key_type     = "RSA"
+  key_size     = 2048
+
+  # Storage needs wrap/unwrap/get
+  key_opts = ["unwrapKey", "wrapKey", "get"]
+
+  depends_on = [module.kv_core]
+}
+
+output "keyvault" {
+  value = {
+    core = {
+      id                 = try(module.kv_core[0].id, null)
+      name               = try(module.kv_core[0].name, null)
+      storage_cmk_key_id = try(azurerm_key_vault_key.storage_cmk[0].id, null)
+    }
+  }
+}
+
 # RBAC: allow core UAMI to read secrets from core KV
 # resource "azurerm_role_assignment" "core_kv_secrets_user" {
 #   count = (
