@@ -524,7 +524,7 @@ resource "azurerm_key_vault_key" "storage_cmk" {
   key_size     = 2048
 
   # Storage needs wrap/unwrap/get
-  key_opts = ["unwrapKey", "wrapKey", "get"]
+  key_opts = ["unwrapKey", "wrapKey"]
 
   depends_on = [module.kv_core]
 }
