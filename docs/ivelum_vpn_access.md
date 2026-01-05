@@ -48,10 +48,11 @@ After the VPN is connected:
 C:\Windows\System32\drivers\etc\hosts
 ```
 
-3. Add this entry at the bottom:
+3. Add these entries at the bottom:
 
 ```
 10.11.3.4 pgflex-hrz-dev-usaz-01.postgres.database.usgovcloudapi.net
+10.10.2.4 aks-hrz-np-usaz-01-dns-90wwrukv.privatelink.usgovarizona.cx.aks.containerservice.azure.us
 ```
 
 4. Save and close Notepad.

@@ -18,6 +18,10 @@
         <destination>10.11.3.4</destination>
         <mask>32</mask>
       </route>
+      <route>
+        <destination>10.10.2.4</destination>
+        <mask>32</mask>
+      </route>
     </includeroutes>
     <excluderoutes>
       <route>
