@@ -295,7 +295,7 @@ variable "create_core_key_vault" {
 variable "core_key_vault_soft_delete_retention_days" {
   description = "Soft delete retention days for Key Vault."
   type        = number
-  default     = 90
+  default     = 7
   validation {
     condition     = var.core_key_vault_soft_delete_retention_days >= 7 && var.core_key_vault_soft_delete_retention_days <= 90
     error_message = "core_key_vault_soft_delete_retention_days must be between 7 and 90."
