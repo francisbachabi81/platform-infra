@@ -1163,122 +1163,181 @@ locals {
 
         "else" = {
           "actions" = {
-            "If_NonCompliant" = {
+            # inside local.logicapp_definition "actions" -> If_SubscriptionValidation -> else -> actions
+            "If_HasEvents" = {
               "type"       = "If"
-              "expression" = "@equals(first(triggerBody())?['data']?['complianceState'], 'NonCompliant')"
-
+              "expression" = "@greater(length(triggerBody()), 0)"
               "actions" = {
-                "Compose_SubjectRaw" = {
-                  "type"   = "Compose"
-                  "inputs" = "@first(triggerBody())?['subject']"
-                },
-                "Compose_SubscriptionId" = {
-                  "type"   = "Compose"
-                  "inputs" = "@first(triggerBody())?['data']?['subscriptionId']"
-                  "runAfter" = {
-                    "Compose_SubjectRaw" = ["Succeeded"]
-                  }
-                },
-                "Compose_ResourceGroup" = {
-                  "type"   = "Compose"
-                  "inputs" = "@split(outputs('Compose_SubjectRaw'), '/')[4]"
-                  "runAfter" = {
-                    "Compose_SubscriptionId" = ["Succeeded"]
-                  }
-                },
-                "Compose_ProviderNamespace" = {
-                  "type"   = "Compose"
-                  "inputs" = "@split(outputs('Compose_SubjectRaw'), '/')[6]"
-                  "runAfter" = {
-                    "Compose_ResourceGroup" = ["Succeeded"]
-                  }
-                },
-                "Compose_ResourceType" = {
-                  "type"   = "Compose"
-                  "inputs" = "@split(outputs('Compose_SubjectRaw'), '/')[7]"
-                  "runAfter" = {
-                    "Compose_ProviderNamespace" = ["Succeeded"]
-                  }
-                },
-                "Compose_ResourceName" = {
-                  "type"   = "Compose"
-                  "inputs" = "@last(split(outputs('Compose_SubjectRaw'), '/'))"
-                  "runAfter" = {
-                    "Compose_ResourceType" = ["Succeeded"]
-                  }
-                },
+                "For_each_event" = {
+                  "type"    = "Foreach"
+                  "foreach" = "@triggerBody()"
+                  "actions" = {
+                    "If_NonCompliant" = {
+                      "type"       = "If"
+                      "expression" = "@equals(items('For_each_event')?['data']?['complianceState'], 'NonCompliant')"
+                      "actions" = {
+                        # ---- Core event fields ----
+                        "Compose_SubscriptionId" = {
+                          "type"   = "Compose"
+                          "inputs" = "@items('For_each_event')?['data']?['subscriptionId']"
+                        },
+                        "Compose_ResourceId" = {
+                          "type"   = "Compose"
+                          "inputs" = "@coalesce(items('For_each_event')?['data']?['resourceId'], items('For_each_event')?['subject'])"
+                          "runAfter" = { "Compose_SubscriptionId" = ["Succeeded"] }
+                        },
+                        "Compose_ResourceGroup" = {
+                          "type"   = "Compose"
+                          "inputs" = "@coalesce(items('For_each_event')?['data']?['resourceGroup'], split(outputs('Compose_ResourceId'), '/')[4])"
+                          "runAfter" = { "Compose_ResourceId" = ["Succeeded"] }
+                        },
+                        "Compose_ResourceType" = {
+                          "type"   = "Compose"
+                          "inputs" = "@coalesce(items('For_each_event')?['data']?['resourceType'], concat(split(outputs('Compose_ResourceId'), '/')[6], '/', split(outputs('Compose_ResourceId'), '/')[7]))"
+                          "runAfter" = { "Compose_ResourceGroup" = ["Succeeded"] }
+                        },
+                        "Compose_ResourceName" = {
+                          "type"   = "Compose"
+                          "inputs" = "@last(split(outputs('Compose_ResourceId'), '/'))"
+                          "runAfter" = { "Compose_ResourceType" = ["Succeeded"] }
+                        },
 
-                "Send_Email" = {
-                  "type" = "ApiConnection"
-                  "runAfter" = {
-                    "Compose_ResourceName" = ["Succeeded"]
-                  }
-                  "inputs" = {
-                    "host" = {
-                      "connection" = {
-                        "name" = "@parameters('$connections')['office365']['connectionId']"
+                        # ---- Enrichment: Policy Definition ----
+                        "HTTP_PolicyDefinition" = {
+                          "type" = "Http"
+                          "inputs" = {
+                            "method" = "GET"
+                            "uri"    = "@concat('https://management.usgovcloudapi.net', items('For_each_event')?['data']?['policyDefinitionId'], '?api-version=2021-06-01')"
+                            "headers" = { "Content-Type" = "application/json" }
+                            "authentication" = {
+                              "type"     = "ManagedServiceIdentity"
+                              "audience" = "https://management.usgovcloudapi.net"
+                            }
+                          }
+                          "runAfter" = { "Compose_ResourceName" = ["Succeeded"] }
+                        },
+
+                        # ---- Enrichment: Policy Assignment ----
+                        "HTTP_PolicyAssignment" = {
+                          "type" = "Http"
+                          "inputs" = {
+                            "method" = "GET"
+                            "uri"    = "@concat('https://management.usgovcloudapi.net', items('For_each_event')?['data']?['policyAssignmentId'], '?api-version=2023-04-01')"
+                            "headers" = { "Content-Type" = "application/json" }
+                            "authentication" = {
+                              "type"     = "ManagedServiceIdentity"
+                              "audience" = "https://management.usgovcloudapi.net"
+                            }
+                          }
+                          "runAfter" = { "HTTP_PolicyDefinition" = ["Succeeded"] }
+                        },
+
+                        # ---- Friendly fields ----
+                        "Compose_PolicyDisplayName" = {
+                          "type"   = "Compose"
+                          "inputs" = "@coalesce(body('HTTP_PolicyDefinition')?['properties']?['displayName'], items('For_each_event')?['data']?['policyDefinitionId'])"
+                          "runAfter" = { "HTTP_PolicyAssignment" = ["Succeeded"] }
+                        },
+                        "Compose_AssignmentDisplayName" = {
+                          "type"   = "Compose"
+                          "inputs" = "@coalesce(body('HTTP_PolicyAssignment')?['properties']?['displayName'], items('For_each_event')?['data']?['policyAssignmentId'])"
+                          "runAfter" = { "Compose_PolicyDisplayName" = ["Succeeded"] }
+                        },
+                        "Compose_NonComplianceMessage" = {
+                          "type"   = "Compose"
+                          "inputs" = "@if(empty(coalesce(body('HTTP_PolicyAssignment')?['properties']?['nonComplianceMessages'], json('[]'))), null, first(coalesce(body('HTTP_PolicyAssignment')?['properties']?['nonComplianceMessages'], json('[]')))?['message'])"
+                          "runAfter" = { "Compose_AssignmentDisplayName" = ["Succeeded"] }
+                        },
+
+                        # ---- Portal links (Gov) ----
+                        # Resource blade link
+                        "Compose_ResourcePortalUrl" = {
+                          "type"   = "Compose"
+                          "inputs" = "@concat('https://portal.azure.us/#@/resource', outputs('Compose_ResourceId'))"
+                          "runAfter" = { "Compose_NonComplianceMessage" = ["Succeeded"] }
+                        },
+                        # Assignment blade link
+                        "Compose_AssignmentPortalUrl" = {
+                          "type"   = "Compose"
+                          "inputs" = "@concat('https://portal.azure.us/#@/resource', items('For_each_event')?['data']?['policyAssignmentId'])"
+                          "runAfter" = { "Compose_ResourcePortalUrl" = ["Succeeded"] }
+                        },
+                        # Definition blade link
+                        "Compose_DefinitionPortalUrl" = {
+                          "type"   = "Compose"
+                          "inputs" = "@concat('https://portal.azure.us/#@/resource', items('For_each_event')?['data']?['policyDefinitionId'])"
+                          "runAfter" = { "Compose_AssignmentPortalUrl" = ["Succeeded"] }
+                        },
+
+                        # ---- Email ----
+                        "Send_Email" = {
+                          "type" = "ApiConnection"
+                          "runAfter" = { "Compose_DefinitionPortalUrl" = ["Succeeded"] }
+                          "inputs" = {
+                            "host" = {
+                              "connection" = {
+                                "name" = "@parameters('$connections')['office365']['connectionId']"
+                              }
+                            }
+                            "method" = "post"
+                            "path"   = "/v2/Mail"
+                            "body" = {
+                              "To"   = var.policy_alert_email
+                              "From" = "noreply-alerts@intterragroup.com"
+                              "Subject" = "@{concat('Non-Compliance: ', outputs('Compose_ResourceName'), ' | ', outputs('Compose_PolicyDisplayName'))}"
+                              "Body" = <<-HTML
+                                <p><strong>Azure Policy Non-Compliance detected.</strong></p>
+
+                                <h3>What failed</h3>
+                                <p><strong>Policy:</strong> @{outputs('Compose_PolicyDisplayName')}<br/>
+                                  <strong>Assignment:</strong> @{outputs('Compose_AssignmentDisplayName')}</p>
+
+                                <p><strong>Noncompliance guidance:</strong><br/>
+                                  @{coalesce(outputs('Compose_NonComplianceMessage'), body('HTTP_PolicyDefinition')?['properties']?['description'], 'No description provided.')}
+                                </p>
+
+                                <h3>Affected resource</h3>
+                                <p>
+                                  <strong>Name:</strong> @{outputs('Compose_ResourceName')}<br/>
+                                  <strong>Type:</strong> @{outputs('Compose_ResourceType')}<br/>
+                                  <strong>Resource Group:</strong> @{outputs('Compose_ResourceGroup')}<br/>
+                                  <strong>Subscription:</strong> @{outputs('Compose_SubscriptionId')}<br/>
+                                  <strong>Resource ID:</strong><br/>@{outputs('Compose_ResourceId')}
+                                </p>
+
+                                <p>
+                                  <a href="@{outputs('Compose_ResourcePortalUrl')}">Open Resource (Azure Gov Portal)</a><br/>
+                                  <a href="@{outputs('Compose_AssignmentPortalUrl')}">Open Policy Assignment</a><br/>
+                                  <a href="@{outputs('Compose_DefinitionPortalUrl')}">Open Policy Definition</a>
+                                </p>
+
+                                <h3>Evaluation</h3>
+                                <p>
+                                  <strong>Compliance state:</strong> @{items('For_each_event')?['data']?['complianceState']}<br/>
+                                  <strong>Policy evaluation time:</strong> @{items('For_each_event')?['data']?['timestamp']}<br/>
+                                  <strong>Event time:</strong> @{items('For_each_event')?['eventTime']}<br/>
+                                  <strong>Effect (definition):</strong> @{body('HTTP_PolicyDefinition')?['properties']?['policyRule']?['then']?['effect']}<br/>
+                                  <strong>Enforcement mode (assignment):</strong> @{body('HTTP_PolicyAssignment')?['properties']?['enforcementMode']}
+                                </p>
+
+                                <p>
+                                  <strong>Next steps:</strong><br/>
+                                  1) Open the resource link and validate the configuration.<br/>
+                                  2) Open the assignment to confirm scope/notScopes and any noncompliance message.<br/>
+                                  3) Remediate to the FedRAMP Moderate baseline (or move workload out of boundary).
+                                </p>
+                              HTML
+                              "BodyContentType" = "HTML"
+                            }
+                          }
+                        }
                       }
-                    }
-                    "method" = "post"
-                    "path"   = "/v2/Mail"
-                    "body" = {
-                      "To"   = var.policy_alert_email
-                      "From" = "noreply-alerts@intterragroup.com"
-                      "Subject" = "@{concat('FedRAMP Non-Compliant: ', outputs('Compose_ResourceName'), ' (', outputs('Compose_ResourceType'), ') in RG ', outputs('Compose_ResourceGroup'), ' [', outputs('Compose_SubscriptionId'), ']')}"
-                      "Body" = <<-HTML
-                        <p><strong>FedRAMP Moderate non-compliant resource detected.</strong></p>
-
-                        <h3>Resource Context</h3>
-                        <p><strong>Resource ID:</strong><br />
-                          @{outputs('Compose_SubjectRaw')}
-                        </p>
-                        <p><strong>Subscription:</strong><br />
-                          @{outputs('Compose_SubscriptionId')}
-                        </p>
-                        <p><strong>Resource Group:</strong><br />
-                          @{outputs('Compose_ResourceGroup')}
-                        </p>
-                        <p><strong>Provider Namespace:</strong><br />
-                          @{outputs('Compose_ProviderNamespace')}
-                        </p>
-                        <p><strong>Resource Type:</strong><br />
-                          @{outputs('Compose_ResourceType')}
-                        </p>
-                        <p><strong>Resource Name:</strong><br />
-                          @{outputs('Compose_ResourceName')}
-                        </p>
-
-                        <h3>Policy Context</h3>
-                        <p><strong>Policy Assignment:</strong><br />
-                          @{first(triggerBody())?['data']?['policyAssignmentId']}
-                        </p>
-                        <p><strong>Policy Definition:</strong><br />
-                          @{first(triggerBody())?['data']?['policyDefinitionId']}
-                        </p>
-                        <p><strong>Compliance State:</strong><br />
-                          @{first(triggerBody())?['data']?['complianceState']}
-                        </p>
-
-                        <h3>Timestamps</h3>
-                        <p><strong>Evaluation Time (Policy Scan):</strong><br />
-                          @{first(triggerBody())?['data']?['timestamp']}
-                        </p>
-                        <p><strong>Event Time (Event Grid):</strong><br />
-                          @{first(triggerBody())?['eventTime']}
-                        </p>
-
-                        <p>
-                          Please remediate according to the FedRAMP Moderate baseline or move
-                          this workload out of the FedRAMP boundary.
-                        </p>
-                      HTML
-                      "BodyContentType" = "HTML"
+                      "else" = { "actions" = {} }
                     }
                   }
                 }
               }
-
-              "else" = {}
+              "else" = { "actions" = {} }
             }
           }
         }
@@ -1315,6 +1374,9 @@ resource "azurerm_resource_group_template_deployment" "logicapp" {
       "apiVersion": "2019-05-01",
       "name": "la-${var.product}-${local.plane_code}-${var.region}-policy-alerts-01",
       "location": "${data.azurerm_resource_group.core_rg[0].location}",
+      "identity": {
+        "type": "SystemAssigned"
+      },
       "properties": {
         "definition": ${jsonencode(local.logicapp_definition)},
         "parameters": ${jsonencode(local.logicapp_parameters)}
