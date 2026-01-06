@@ -1233,20 +1233,20 @@ resource "azuread_service_principal_password" "env_sp_secret" {
 resource "azurerm_key_vault_secret" "azure_client_id" {
   count        = local.create_sp ? 1 : 0
   key_vault_id = local.core_kv_id
-  name         = "AZURE_CLIENT_ID"
+  name         = "DEV--AZURE--CLIENT--ID"
   value        = azuread_application.env_sp_app[0].client_id
 }
 
 resource "azurerm_key_vault_secret" "azure_client_secret" {
   count        = local.create_sp ? 1 : 0
   key_vault_id = local.core_kv_id
-  name         = "AZURE_CLIENT_SECRET"
+  name         = "DEV--AZURE--CLIENT--SECRET"
   value        = azuread_service_principal_password.env_sp_secret[0].value
 }
 
 resource "azurerm_key_vault_secret" "azure_tenant_id" {
   count        = local.create_sp ? 1 : 0
   key_vault_id = local.core_kv_id
-  name         = "AZURE_TENANT_ID"
+  name         = "DEV--AZURE--TENANT--ID"
   value        = var.tenant_id
 }
