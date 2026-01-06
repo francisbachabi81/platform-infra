@@ -29,12 +29,22 @@ waf_policies = {
     vpn_cidrs        = ["192.168.1.0/24"]
     restricted_paths = ["/admin"]
     blocked_countries = ["CN", "RU", "IR"]    # https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/web-application-firewall/ag/geomatch-custom-rules.md
+    # Disable managed rules by rule group + IDs
+    disabled_rules_by_group = {
+      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260","942340", "942370"]
+      # "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300"]
+    }
   }
   # qa = {
   #   mode             = "Prevention"
   #   vpn_cidrs        = ["192.168.1.0/24"]
   #   restricted_paths = ["/admin"]           # ["/admin", "/ops"]
   #   blocked_countries = ["CN", "RU", "IR"]  # https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/web-application-firewall/ag/geomatch-custom-rules.md
+  # Disable managed rules by rule group + IDs
+    # disabled_rules_by_group = {
+    #   "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260","942340", "942370"]
+    #   # "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300"]
+    # }
   # }
 }
 

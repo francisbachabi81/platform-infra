@@ -395,6 +395,22 @@ resource "azurerm_web_application_firewall_policy" "this" {
     managed_rule_set {
       type    = each.value.managed_rule_set.type
       version = each.value.managed_rule_set.version
+
+      dynamic "rule_group_override" {
+        for_each = try(each.value.disabled_rules_by_group, {})
+
+        content {
+          rule_group_name = rule_group_override.key
+
+          dynamic "rule" {
+            for_each = toset(rule_group_override.value)
+            content {
+              id      = rule.value
+              enabled = false
+            }
+          }
+        }
+      }
     }
   }
 
