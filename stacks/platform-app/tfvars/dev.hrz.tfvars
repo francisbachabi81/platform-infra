@@ -152,6 +152,7 @@ pg_extensions = [
   "PGCRYPTO",
   "PG_STAT_STATEMENTS",
   "UUID-OSSP",
+  "BTREE_GIN"
 ]
 
 # Cosmos DB (NoSQL) (env)
