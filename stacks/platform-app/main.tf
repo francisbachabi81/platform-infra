@@ -234,7 +234,7 @@ locals {
   cmk_key_name     = try(local.core_outputs.storage_cmk.key_name, null)
   cmk_key_version  = try(local.core_outputs.storage_cmk.key_version, null)
 
-  storage_cmk_enabled = core_kv_id != null && cmk_key_name != null
+  storage_cmk_enabled = local.core_kv_id != null && local.cmk_key_name != null
 }
 
 # Resource Groups per env + env RG lookup

@@ -529,16 +529,6 @@ resource "azurerm_key_vault_key" "storage_cmk" {
   depends_on = [module.kv_core]
 }
 
-output "keyvault" {
-  value = {
-    core = {
-      id                 = try(module.kv_core[0].id, null)
-      name               = try(module.kv_core[0].name, null)
-      storage_cmk_key_id = try(azurerm_key_vault_key.storage_cmk[0].id, null)
-    }
-  }
-}
-
 # RBAC: allow core UAMI to read secrets from core KV
 # resource "azurerm_role_assignment" "core_kv_secrets_user" {
 #   count = (
