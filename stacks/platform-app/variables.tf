@@ -557,3 +557,15 @@ variable "servicebus_authorization_rules_override" {
   description = "Optional override/additional SB namespace authorization rules."
   default     = {}
 }
+
+variable "spa_redirect_uris" {
+  description = "Redirect URIs for the SPA (e.g., https://gov-app.example.us/auth/callback)"
+  type        = list(string)
+  default     = []
+}
+
+variable "spa_multi_tenant" {
+  description = "If true, allow other orgs to sign in; if false, only this tenant."
+  type        = bool
+  default     = false
+}

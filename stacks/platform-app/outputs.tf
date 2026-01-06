@@ -262,18 +262,31 @@ output "nsg_flow_logs_storage" {
   }
 }
 
-output "env_sp" {
-  description = "Env service principal (client credentials are stored in core_kv as AZURE_CLIENT_ID/SECRET/TENANT_ID)."
+output "spa" {
+  description = "SPA app registration (public client, no secret)."
   value = local.create_sp ? {
-    name       = local.sp_name
-    client_id  = try(azuread_application.env_sp_app[0].client_id, null)
-    object_id  = try(azuread_service_principal.env_sp[0].object_id, null)
-    tenant_id  = var.tenant_id
+    name              = local.spa_app_name
+    client_id         = try(azuread_application.spa_app[0].client_id, null)
+    object_id         = try(azuread_service_principal.spa_sp[0].object_id, null)
+    sign_in_audience  = local.spa_sign_in_audience
+    redirect_uris     = var.spa_redirect_uris
+    tenant_id         = var.tenant_id
+  } : null
+}
+
+output "env_sp" {
+  description = "Env service principal (confidential). Client credentials are stored in core Key Vault with env prefix."
+  value = local.create_sp ? {
+    name        = local.env_sp_app_name
+    client_id   = try(azuread_application.env_sp_app[0].client_id, null)
+    object_id   = try(azuread_service_principal.env_sp[0].object_id, null)
+    tenant_id   = var.tenant_id
+
     key_vault_id = local.core_kv_id
     key_vault_secret_names = [
-      "AZURE_CLIENT_ID",
-      "AZURE_CLIENT_SECRET",
-      "AZURE_TENANT_ID",
+      local.kv_secret_client_id_name,
+      local.kv_secret_client_secret_name,
+      local.kv_secret_tenant_id_name,
     ]
   } : null
 }

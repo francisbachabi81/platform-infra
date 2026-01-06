@@ -75,10 +75,6 @@ locals {
   plane      = contains(["dev", "qa"], var.env) ? "nonprod" : "prod"
   plane_code = local.plane == "nonprod" ? "np" : "pr"
 
-  # Create for BOTH pub + hrz
-  create_sp = contains(["hrz", "pub"], lower(var.product))
-  sp_name = "sp-${var.product}-${var.env}-${var.region}-01" # "sp-${var.product}-${local.plane_code}-${var.region}-core-01"
-
   vnet_key = (
     var.env == "dev"  ? "dev_spoke"  :
     var.env == "qa"   ? "qa_spoke"   :
@@ -1211,9 +1207,53 @@ module "sa_nsg_flowlogs" {
   ]
 }
 
+locals {
+  # Create for BOTH pub + hrz
+  create_sp = contains(["hrz", "pub"], lower(var.product))
+
+  spa_app_name = "spa-${var.product}-${var.env}-${var.region}-01"
+
+  # Single-tenant vs Multi-tenant:
+  # - AzureADMyOrg         = single tenant
+  # - AzureADMultipleOrgs  = multi tenant
+  spa_sign_in_audience = var.spa_multi_tenant ? "AzureADMultipleOrgs" : "AzureADMyOrg"
+
+  # --- Env SP (confidential client credentials) ---
+  env_sp_app_name = "sp-${var.product}-${var.env}-${var.region}-01"
+
+  # KV secret name prefix per env
+  env_secret_prefix = (
+    lower(var.env) == "dev"  ? "DEV--"  :
+    lower(var.env) == "qa"   ? "QA--"   :
+    lower(var.env) == "uat"  ? "UAT--"  :
+    lower(var.env) == "prod" ? "PROD--" :
+    "${upper(var.env)}--"
+  )
+
+  kv_secret_client_id_name     = "${local.env_secret_prefix}AZURE--CLIENT--ID"
+  kv_secret_client_secret_name = "${local.env_secret_prefix}AZURE--CLIENT--SECRET"
+  kv_secret_tenant_id_name     = "${local.env_secret_prefix}AZURE--TENANT--ID"
+}
+
+resource "azuread_application" "spa_app" {
+  count            = local.create_sp ? 1 : 0
+  display_name     = local.spa_app_name
+  sign_in_audience = local.spa_sign_in_audience
+
+  single_page_application {
+    redirect_uris = var.spa_redirect_uris
+  }
+}
+
+resource "azuread_service_principal" "spa_sp" {
+  count     = local.create_sp ? 1 : 0
+  client_id = azuread_application.spa_app[0].client_id
+}
+
 resource "azuread_application" "env_sp_app" {
-  count        = local.create_sp ? 1 : 0
-  display_name = local.sp_name
+  count            = local.create_sp ? 1 : 0
+  display_name     = local.env_sp_app_name
+  sign_in_audience = local.spa_sign_in_audience
 }
 
 resource "azuread_service_principal" "env_sp" {
@@ -1224,29 +1264,28 @@ resource "azuread_service_principal" "env_sp" {
 resource "azuread_service_principal_password" "env_sp_secret" {
   count                = local.create_sp ? 1 : 0
   service_principal_id = azuread_service_principal.env_sp[0].object_id
-  display_name = "sp-${var.product}-${var.env}-${var.region}-01-secret"
-
-  # 365 days from apply time
-  end_date = timeadd(timestamp(), "8760h")
+  display_name         = "${local.env_sp_app_name}-secret"
+  end_date             = timeadd(timestamp(), "8760h")
 }
 
 resource "azurerm_key_vault_secret" "azure_client_id" {
   count        = local.create_sp ? 1 : 0
   key_vault_id = local.core_kv_id
-  name         = "DEV--AZURE--CLIENT--ID"
+  name         = local.kv_secret_client_id_name
   value        = azuread_application.env_sp_app[0].client_id
 }
 
 resource "azurerm_key_vault_secret" "azure_client_secret" {
   count        = local.create_sp ? 1 : 0
   key_vault_id = local.core_kv_id
-  name         = "DEV--AZURE--CLIENT--SECRET"
+  name         = local.kv_secret_client_secret_name
   value        = azuread_service_principal_password.env_sp_secret[0].value
 }
 
 resource "azurerm_key_vault_secret" "azure_tenant_id" {
   count        = local.create_sp ? 1 : 0
   key_vault_id = local.core_kv_id
-  name         = "DEV--AZURE--TENANT--ID"
+  name         = local.kv_secret_tenant_id_name
   value        = var.tenant_id
 }
+
