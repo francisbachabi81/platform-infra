@@ -305,7 +305,7 @@ variable "core_key_vault_soft_delete_retention_days" {
 variable "core_key_vault_purge_protection_enabled" {
   description = "Enable purge protection on the core Key Vault."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "core_key_vault_grant_uami_secrets_user" {

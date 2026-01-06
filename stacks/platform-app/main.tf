@@ -1171,7 +1171,7 @@ module "sa_nsg_flowlogs" {
   cmk_key_vault_id     = local.core_kv_id
   cmk_key_name         = local.cmk_key_name
   cmk_key_version      = null # or local.core_cmk_key_version if you want to pin
-  cmk_identity_name    = "uai-${var.product}-${local.plane_code}-${var.region}-sa-flow-cmk-01"
+  cmk_identity_name    = "uai-${var.product}-${local.plane_code}-${var.region}-netlogs-cmk-01"
 
   pe_blob_name         = "pep-${local.sa_nsg_flowlogs_name_cleaned}-blob"
   psc_blob_name        = "psc-${local.sa_nsg_flowlogs_name_cleaned}-blob"
