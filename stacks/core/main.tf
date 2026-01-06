@@ -10,10 +10,6 @@ terraform {
       source  = "hashicorp/time"
       version = "~> 0.11"
     }
-    azuread = {
-      source  = "hashicorp/azuread"
-      version = "~> 2.50"
-    }
   }
 }
 
@@ -78,9 +74,6 @@ locals {
 
   # Core identity + Key Vault
   core_uami_name = "uai-${var.product}-${local.plane_code}-${var.region}-core-01"
-
-  # Core Service Principal (HRZ only)
-  core_sp_display_name = "sp-${var.product}-${local.plane_code}-${var.region}-core-01"
 }
 
 # Remote state – shared-network
