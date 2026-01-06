@@ -403,7 +403,7 @@ resource "azurerm_web_application_firewall_policy" "this" {
           rule_group_name = rule_group_override.key
 
           dynamic "rule" {
-            for_each = toset(rule_group_override.value)
+            for_each = sort(distinct(rule_group_override.value))
             content {
               id      = rule.value
               enabled = false
