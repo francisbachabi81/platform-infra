@@ -261,3 +261,19 @@ output "nsg_flow_logs_storage" {
     plane = local.plane
   }
 }
+
+output "env_sp" {
+  description = "Env service principal (client credentials are stored in core_kv as AZURE_CLIENT_ID/SECRET/TENANT_ID)."
+  value = local.create_sp ? {
+    name       = local.sp_name
+    client_id  = try(azuread_application.env_sp_app[0].client_id, null)
+    object_id  = try(azuread_service_principal.env_sp[0].object_id, null)
+    tenant_id  = var.tenant_id
+    key_vault_id = local.core_kv_id
+    key_vault_secret_names = [
+      "AZURE_CLIENT_ID",
+      "AZURE_CLIENT_SECRET",
+      "AZURE_TENANT_ID",
+    ]
+  } : null
+}

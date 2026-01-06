@@ -7,11 +7,19 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.14.0"
     }
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 2.53"
+    }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.6"
     }
   }
+}
+
+provider "azuread" {
+  tenant_id = var.tenant_id
 }
 
 provider "azurerm" {
@@ -66,6 +74,10 @@ locals {
 
   plane      = contains(["dev", "qa"], var.env) ? "nonprod" : "prod"
   plane_code = local.plane == "nonprod" ? "np" : "pr"
+
+  # Create for BOTH pub + hrz
+  create_sp = contains(["hrz", "pub"], lower(var.product))
+  sp_name = "sp-${var.product}-${var.env}-${var.region}-01" # "sp-${var.product}-${local.plane_code}-${var.region}-core-01"
 
   vnet_key = (
     var.env == "dev"  ? "dev_spoke"  :
@@ -1197,4 +1209,44 @@ module "sa_nsg_flowlogs" {
     data.azurerm_resource_group.env,
     module.sa1
   ]
+}
+
+resource "azuread_application" "env_sp_app" {
+  count        = local.create_sp ? 1 : 0
+  display_name = local.sp_name
+}
+
+resource "azuread_service_principal" "env_sp" {
+  count     = local.create_sp ? 1 : 0
+  client_id = azuread_application.env_sp_app[0].client_id
+}
+
+resource "azuread_service_principal_password" "env_sp_secret" {
+  count                = local.create_sp ? 1 : 0
+  service_principal_id = azuread_service_principal.env_sp[0].object_id
+  display_name = "sp-${var.product}-${var.env}-${var.region}-01-secret"
+
+  # 365 days from apply time
+  end_date = timeadd(timestamp(), "8760h")
+}
+
+resource "azurerm_key_vault_secret" "azure_client_id" {
+  count        = local.create_sp ? 1 : 0
+  key_vault_id = local.core_kv_id
+  name         = "AZURE_CLIENT_ID"
+  value        = azuread_application.env_sp_app[0].client_id
+}
+
+resource "azurerm_key_vault_secret" "azure_client_secret" {
+  count        = local.create_sp ? 1 : 0
+  key_vault_id = local.core_kv_id
+  name         = "AZURE_CLIENT_SECRET"
+  value        = azuread_service_principal_password.env_sp_secret[0].value
+}
+
+resource "azurerm_key_vault_secret" "azure_tenant_id" {
+  count        = local.create_sp ? 1 : 0
+  key_vault_id = local.core_kv_id
+  name         = "AZURE_TENANT_ID"
+  value        = var.tenant_id
 }
