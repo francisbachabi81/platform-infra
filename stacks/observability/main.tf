@@ -1074,6 +1074,7 @@ locals {
 
 locals {
   policy_alerts_enabled_for_env = contains(["dev", "prod"], local.env_effective)
+  policy_compliance_enabled = var.enable_policy_compliance_alerts && local.policy_alerts_enabled_for_env
 }
 
 resource "azapi_resource" "policy_state_changes" {
@@ -1350,6 +1351,7 @@ locals {
 
 resource "azurerm_api_connection" "office365" {
   provider            = azurerm.core
+  count               = local.policy_compliance_enabled ? 1 : 0
   name                = "office365"
   resource_group_name = local.rg_core_name_resolved
   display_name        = "Office 365"
@@ -1359,7 +1361,7 @@ resource "azurerm_api_connection" "office365" {
 
 resource "azurerm_resource_group_template_deployment" "logicapp" {
   provider            = azurerm.core
-  count               = var.enable_policy_compliance_alerts ? 1 : 0
+  count               = local.policy_compliance_enabled ? 1 : 0
   name                = "tmpl-la-${var.product}-${local.plane_code}-${var.region}-policy-alerts"
   resource_group_name = local.rg_core_name_resolved
   deployment_mode     = "Incremental"
@@ -1389,6 +1391,7 @@ TEMPLATE
 
 data "azurerm_logic_app_workflow" "policy_alerts" {
   provider            = azurerm.core
+  count               = local.policy_compliance_enabled ? 1 : 0
   name                = "la-${var.product}-${local.plane_code}-${var.region}-policy-alerts-01"
   resource_group_name = local.rg_core_name_resolved
 
@@ -1398,6 +1401,7 @@ data "azurerm_logic_app_workflow" "policy_alerts" {
 }
 
 resource "azapi_resource_action" "manual_trigger_callback" {
+  count               = local.policy_compliance_enabled ? 1 : 0
   type        = "Microsoft.Logic/workflows/triggers@2019-05-01"
   resource_id = "${data.azurerm_logic_app_workflow.policy_alerts.id}/triggers/manual"
   action      = "listCallbackUrl"
@@ -1410,11 +1414,14 @@ resource "azapi_resource_action" "manual_trigger_callback" {
 }
 
 locals {
-  logicapp_manual_trigger_callback_url = azapi_resource_action.manual_trigger_callback.output.value
+  logicapp_manual_trigger_callback_url = try(azapi_resource_action.manual_trigger_callback[0].output.value, null)
 }
 
 resource "azapi_resource" "policy_to_logicapp" {
-  for_each = (var.enable_policy_compliance_alerts && local.policy_alerts_enabled_for_env) ? azapi_resource.policy_state_changes : {}
+  for_each = (
+    local.policy_compliance_enabled &&
+    local.logicapp_manual_trigger_callback_url != null
+  ) ? azapi_resource.policy_state_changes : {}
 
   type      = "Microsoft.EventGrid/systemTopics/eventSubscriptions@2022-06-15"
   name      = "egsub-${var.product}-${local.plane_code}-${var.region}-policy-noncompliant-${each.key}"
