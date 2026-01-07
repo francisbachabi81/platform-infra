@@ -18,7 +18,7 @@ action_group_email_receivers = [
 ]
 
 # FedRAMP policy compliance pipeline
-enable_policy_compliance_alerts = true
+# enable_policy_compliance_alerts = false
 policy_alert_email              = "cloudops@intterragroup.com"
 
 policy_source_subscriptions = {

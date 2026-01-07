@@ -18,9 +18,10 @@ action_group_email_receivers = [
 ]
 
 # FedRAMP Policy events pipeline
-enable_policy_compliance_alerts = true
-management_group_name = "7d30ad8b-5042-456b-80bf-e848b6bef108"
+# enable_policy_compliance_alerts = false
+# management_group_name = "7d30ad8b-5042-456b-80bf-e848b6bef108"
 policy_alert_email   = "cloudops@intterragroup.com"
+
 policy_source_subscriptions = {
   dev-core = {
     subscription_id = "57f8aa30-981c-4764-94f6-6691c4d5c01c"
