@@ -1080,7 +1080,7 @@ locals {
 resource "azapi_resource" "policy_state_changes" {
   provider = azapi.core
 
-  for_each = (var.enable_policy_compliance_alerts && local.policy_alerts_enabled_for_env) ? var.policy_source_subscriptions : {}
+  for_each = local.policy_compliance_enabled ? var.policy_source_subscriptions : {}
 
   type      = "Microsoft.EventGrid/systemTopics@2023-06-01-preview"
   name      = "policy-compliance-topic-${var.product}-${local.plane_code}-${var.region}-${each.key}"
