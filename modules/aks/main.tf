@@ -19,6 +19,9 @@ resource "azurerm_kubernetes_cluster" "aks" {
   kubernetes_version      = var.kubernetes_version
   sku_tier                = var.sku_tier
 
+  # oidc_issuer_enabled       = var.oidc_issuer_enabled
+  # workload_identity_enabled = var.workload_identity_enabled
+
   # Only legal when AAD is enabled
   local_account_disabled  = var.enable_aad && var.disable_local_accounts
   azure_policy_enabled    = true

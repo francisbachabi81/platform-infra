@@ -590,6 +590,15 @@ locals {
   )
 }
 
+# locals {
+#   aks_oidc_issuer_url = local.aks_enabled_env ? (
+#     var.env == "dev"  ? try(module.aks1_env_shared_nonprod[0].oidc_issuer_url, null) :
+#     var.env == "prod" ? try(module.aks1_env_prod[0].oidc_issuer_url,           null) :
+#     var.env == "uat"  ? try(module.aks1_env_uat[0].oidc_issuer_url,            null) :
+#                         null
+#   ) : null
+# }
+
 # AKS: PDZ role assignments
 resource "azurerm_role_assignment" "aks_pdz_contrib_shared_nonprod" {
   count                = local.aks_enabled_env && var.env == "dev" ? 1 : 0
@@ -657,6 +666,9 @@ module "aks1_env_shared_nonprod" {
   service_cidr   = local.aks_service_cidr
   dns_service_ip = local.aks_dns_service_ip
 
+  # oidc_issuer_enabled       = true
+  # workload_identity_enabled = true
+
   private_dns_zone_id       = local.aks_private_dns_zone_id
   identity_type             = "UserAssigned"
   user_assigned_identity_id = local.aks_uai_id
@@ -691,6 +703,9 @@ module "aks1_env_prod" {
   service_cidr   = local.aks_service_cidr
   dns_service_ip = local.aks_dns_service_ip
 
+  # oidc_issuer_enabled       = true
+  # workload_identity_enabled = true
+
   private_dns_zone_id       = local.aks_private_dns_zone_id
   identity_type             = "UserAssigned"
   user_assigned_identity_id = local.aks_uai_id
@@ -724,6 +739,9 @@ module "aks1_env_uat" {
   pod_cidr       = var.aks_pod_cidr
   service_cidr   = local.aks_service_cidr
   dns_service_ip = local.aks_dns_service_ip
+
+  # oidc_issuer_enabled       = true
+  # workload_identity_enabled = true
 
   private_dns_zone_id       = local.aks_private_dns_zone_id
   identity_type             = "UserAssigned"
@@ -1207,85 +1225,85 @@ module "sa_nsg_flowlogs" {
   ]
 }
 
-locals {
-  # Create for BOTH pub + hrz
-  create_sp = contains(["hrz", "pub"], lower(var.product))
+# locals {
+#   # Create for BOTH pub + hrz
+#   create_sp = contains(["hrz", "pub"], lower(var.product))
 
-  spa_app_name = "spa-${var.product}-${var.env}-${var.region}-01"
+#   spa_app_name = "spa-${var.product}-${var.env}-${var.region}-01"
 
-  # Single-tenant vs Multi-tenant:
-  # - AzureADMyOrg         = single tenant
-  # - AzureADMultipleOrgs  = multi tenant
-  spa_sign_in_audience = var.spa_multi_tenant ? "AzureADMultipleOrgs" : "AzureADMyOrg"
+#   # Single-tenant vs Multi-tenant:
+#   # - AzureADMyOrg         = single tenant
+#   # - AzureADMultipleOrgs  = multi tenant
+#   spa_sign_in_audience = var.spa_multi_tenant ? "AzureADMultipleOrgs" : "AzureADMyOrg"
 
-  # --- Env SP (confidential client credentials) ---
-  env_sp_app_name = "sp-${var.product}-${var.env}-${var.region}-01"
+#   # --- Env SP (confidential client credentials) ---
+#   env_sp_app_name = "sp-${var.product}-${var.env}-${var.region}-01"
 
-  # KV secret name prefix per env
-  env_secret_prefix = (
-    lower(var.env) == "dev"  ? "DEV--"  :
-    lower(var.env) == "qa"   ? "QA--"   :
-    lower(var.env) == "uat"  ? "UAT--"  :
-    lower(var.env) == "prod" ? "PROD--" :
-    "${upper(var.env)}--"
-  )
+#   # KV secret name prefix per env
+#   env_secret_prefix = (
+#     lower(var.env) == "dev"  ? "DEV--"  :
+#     lower(var.env) == "qa"   ? "QA--"   :
+#     lower(var.env) == "uat"  ? "UAT--"  :
+#     lower(var.env) == "prod" ? "PROD--" :
+#     "${upper(var.env)}--"
+#   )
 
-  kv_secret_client_id_name     = "${local.env_secret_prefix}AZURE--CLIENT--ID"
-  kv_secret_client_secret_name = "${local.env_secret_prefix}AZURE--CLIENT--SECRET"
-  kv_secret_tenant_id_name     = "${local.env_secret_prefix}AZURE--TENANT--ID"
-}
+#   kv_secret_client_id_name     = "${local.env_secret_prefix}AZURE--CLIENT--ID"
+#   kv_secret_client_secret_name = "${local.env_secret_prefix}AZURE--CLIENT--SECRET"
+#   kv_secret_tenant_id_name     = "${local.env_secret_prefix}AZURE--TENANT--ID"
+# }
 
-resource "azuread_application" "spa_app" {
-  count            = local.create_sp ? 1 : 0
-  display_name     = local.spa_app_name
-  sign_in_audience = local.spa_sign_in_audience
+# resource "azuread_application" "spa_app" {
+#   count            = local.create_sp ? 1 : 0
+#   display_name     = local.spa_app_name
+#   sign_in_audience = local.spa_sign_in_audience
 
-  single_page_application {
-    redirect_uris = var.spa_redirect_uris
-  }
-}
+#   single_page_application {
+#     redirect_uris = var.spa_redirect_uris
+#   }
+# }
 
-resource "azuread_service_principal" "spa_sp" {
-  count     = local.create_sp ? 1 : 0
-  client_id = azuread_application.spa_app[0].client_id
-}
+# resource "azuread_service_principal" "spa_sp" {
+#   count     = local.create_sp ? 1 : 0
+#   client_id = azuread_application.spa_app[0].client_id
+# }
 
-resource "azuread_application" "env_sp_app" {
-  count            = local.create_sp ? 1 : 0
-  display_name     = local.env_sp_app_name
-  sign_in_audience = local.spa_sign_in_audience
-}
+# resource "azuread_application" "env_sp_app" {
+#   count            = local.create_sp ? 1 : 0
+#   display_name     = local.env_sp_app_name
+#   sign_in_audience = local.spa_sign_in_audience
+# }
 
-resource "azuread_service_principal" "env_sp" {
-  count     = local.create_sp ? 1 : 0
-  client_id = azuread_application.env_sp_app[0].client_id
-}
+# resource "azuread_service_principal" "env_sp" {
+#   count     = local.create_sp ? 1 : 0
+#   client_id = azuread_application.env_sp_app[0].client_id
+# }
 
-resource "azuread_service_principal_password" "env_sp_secret" {
-  count                = local.create_sp ? 1 : 0
-  service_principal_id = azuread_service_principal.env_sp[0].object_id
-  display_name         = "${local.env_sp_app_name}-secret"
-  end_date             = timeadd(timestamp(), "8760h")
-}
+# resource "azuread_service_principal_password" "env_sp_secret" {
+#   count                = local.create_sp ? 1 : 0
+#   service_principal_id = azuread_service_principal.env_sp[0].object_id
+#   display_name         = "${local.env_sp_app_name}-secret"
+#   end_date             = timeadd(timestamp(), "8760h")
+# }
 
-resource "azurerm_key_vault_secret" "azure_client_id" {
-  count        = local.create_sp ? 1 : 0
-  key_vault_id = local.core_kv_id
-  name         = local.kv_secret_client_id_name
-  value        = azuread_application.env_sp_app[0].client_id
-}
+# resource "azurerm_key_vault_secret" "azure_client_id" {
+#   count        = local.create_sp ? 1 : 0
+#   key_vault_id = local.core_kv_id
+#   name         = local.kv_secret_client_id_name
+#   value        = azuread_application.env_sp_app[0].client_id
+# }
 
-resource "azurerm_key_vault_secret" "azure_client_secret" {
-  count        = local.create_sp ? 1 : 0
-  key_vault_id = local.core_kv_id
-  name         = local.kv_secret_client_secret_name
-  value        = azuread_service_principal_password.env_sp_secret[0].value
-}
+# resource "azurerm_key_vault_secret" "azure_client_secret" {
+#   count        = local.create_sp ? 1 : 0
+#   key_vault_id = local.core_kv_id
+#   name         = local.kv_secret_client_secret_name
+#   value        = azuread_service_principal_password.env_sp_secret[0].value
+# }
 
-resource "azurerm_key_vault_secret" "azure_tenant_id" {
-  count        = local.create_sp ? 1 : 0
-  key_vault_id = local.core_kv_id
-  name         = local.kv_secret_tenant_id_name
-  value        = var.tenant_id
-}
+# resource "azurerm_key_vault_secret" "azure_tenant_id" {
+#   count        = local.create_sp ? 1 : 0
+#   key_vault_id = local.core_kv_id
+#   name         = local.kv_secret_tenant_id_name
+#   value        = var.tenant_id
+# }
 

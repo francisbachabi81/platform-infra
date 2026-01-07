@@ -1134,7 +1134,7 @@ locals {
     "actions" = {
       "If_SubscriptionValidation" = {
         "type"       = "If"
-        "expression" = "@or(equals(triggerOutputs()?['headers']?['aeg-event-type'],'SubscriptionValidation'), equals(first(triggerBody())?['eventType'],'Microsoft.EventGrid.SubscriptionValidationEvent'))"
+        "expression" = "@or(equals(triggerOutputs()?['headers']?['aeg-event-type'],'SubscriptionValidation'), and(greater(length(coalesce(triggerBody(), json('[]'))), 0), equals(first(coalesce(triggerBody(), json('[]')))?['eventType'],'Microsoft.EventGrid.SubscriptionValidationEvent')))"
 
         "actions" = {
           "Return_SubscriptionValidation_Response" = {
@@ -1142,7 +1142,7 @@ locals {
             "inputs" = {
               "statusCode" = 200
               "body" = {
-                "validationResponse" = "@first(triggerBody())?['data']?['validationCode']"
+                "validationResponse" = "@first(coalesce(triggerBody(), json('[]')))?['data']?['validationCode']"
               }
             }
           },
@@ -1151,7 +1151,7 @@ locals {
             "runAfter" = { "Return_SubscriptionValidation_Response" = ["Failed"] }
             "inputs" = {
               "method" = "GET"
-              "uri"    = "@first(triggerBody())?['data']?['validationUrl']"
+              "uri"    = "@first(coalesce(triggerBody(), json('[]')))?['data']?['validationUrl']"
             }
           },
           "Terminate_Validation" = {
@@ -1166,11 +1166,11 @@ locals {
             # inside local.logicapp_definition "actions" -> If_SubscriptionValidation -> else -> actions
             "If_HasEvents" = {
               "type"       = "If"
-              "expression" = "@greater(length(triggerBody()), 0)"
+              "expression" = "@greater(length(coalesce(triggerBody(), json('[]'))), 0)"
               "actions" = {
                 "For_each_event" = {
                   "type"    = "Foreach"
-                  "foreach" = "@triggerBody()"
+                  "foreach" = "@coalesce(triggerBody(), json('[]'))"
                   "actions" = {
                     "If_NonCompliant" = {
                       "type"       = "If"

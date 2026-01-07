@@ -130,3 +130,15 @@ variable "temporary_name_for_rotation" {
   description = "Temporary node pool name used for default node pool rotation (1-12 lowercase alphanumeric, must start with a letter)."
   default     = "rotpool01"
 }
+
+# variable "oidc_issuer_enabled" {
+#   description = "Enable AKS OIDC issuer (required for workload identity)."
+#   type        = bool
+#   default     = true
+# }
+
+# variable "workload_identity_enabled" {
+#   description = "Enable AKS workload identity."
+#   type        = bool
+#   default     = true
+# }

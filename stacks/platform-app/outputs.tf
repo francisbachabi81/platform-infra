@@ -104,6 +104,8 @@ output "aks" {
     subscription_id     = local.aks_subscription_id
     tenant_id           = local.aks_tenant_id
     resource_group      = local.aks_rg_name
+
+    # oidc_issuer_url     = local.aks_oidc_issuer_url
     # provider_alias      = local.aks_provider_alias
   } : null
 }
@@ -262,31 +264,31 @@ output "nsg_flow_logs_storage" {
   }
 }
 
-output "spa" {
-  description = "SPA app registration (public client, no secret)."
-  value = local.create_sp ? {
-    name              = local.spa_app_name
-    client_id         = try(azuread_application.spa_app[0].client_id, null)
-    object_id         = try(azuread_service_principal.spa_sp[0].object_id, null)
-    sign_in_audience  = local.spa_sign_in_audience
-    redirect_uris     = var.spa_redirect_uris
-    tenant_id         = var.tenant_id
-  } : null
-}
+# output "spa" {
+#   description = "SPA app registration (public client, no secret)."
+#   value = local.create_sp ? {
+#     name              = local.spa_app_name
+#     client_id         = try(azuread_application.spa_app[0].client_id, null)
+#     object_id         = try(azuread_service_principal.spa_sp[0].object_id, null)
+#     sign_in_audience  = local.spa_sign_in_audience
+#     redirect_uris     = var.spa_redirect_uris
+#     tenant_id         = var.tenant_id
+#   } : null
+# }
 
-output "env_sp" {
-  description = "Env service principal (confidential). Client credentials are stored in core Key Vault with env prefix."
-  value = local.create_sp ? {
-    name        = local.env_sp_app_name
-    client_id   = try(azuread_application.env_sp_app[0].client_id, null)
-    object_id   = try(azuread_service_principal.env_sp[0].object_id, null)
-    tenant_id   = var.tenant_id
+# output "env_sp" {
+#   description = "Env service principal (confidential). Client credentials are stored in core Key Vault with env prefix."
+#   value = local.create_sp ? {
+#     name        = local.env_sp_app_name
+#     client_id   = try(azuread_application.env_sp_app[0].client_id, null)
+#     object_id   = try(azuread_service_principal.env_sp[0].object_id, null)
+#     tenant_id   = var.tenant_id
 
-    key_vault_id = local.core_kv_id
-    key_vault_secret_names = [
-      local.kv_secret_client_id_name,
-      local.kv_secret_client_secret_name,
-      local.kv_secret_tenant_id_name,
-    ]
-  } : null
-}
+#     key_vault_id = local.core_kv_id
+#     key_vault_secret_names = [
+#       local.kv_secret_client_id_name,
+#       local.kv_secret_client_secret_name,
+#       local.kv_secret_tenant_id_name,
+#     ]
+#   } : null
+# }
