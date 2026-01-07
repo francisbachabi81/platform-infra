@@ -1401,9 +1401,9 @@ data "azurerm_logic_app_workflow" "policy_alerts" {
 }
 
 resource "azapi_resource_action" "manual_trigger_callback" {
-  count               = local.policy_compliance_enabled ? 1 : 0
+  count       = local.policy_compliance_enabled ? 1 : 0
   type        = "Microsoft.Logic/workflows/triggers@2019-05-01"
-  resource_id = "${data.azurerm_logic_app_workflow.policy_alerts.id}/triggers/manual"
+  resource_id = "${data.azurerm_logic_app_workflow.policy_alerts[0].id}/triggers/manual"
   action      = "listCallbackUrl"
   method      = "POST"
   body        = {}
