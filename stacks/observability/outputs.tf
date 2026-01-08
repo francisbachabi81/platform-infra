@@ -35,7 +35,11 @@ output "action_group_id" {
 
 output "diagnostic_setting_ids" {
   value = {
-    kv    = [for _, v in azurerm_monitor_diagnostic_setting.kv    : v.id]
+    # kv    = [for _, v in azurerm_monitor_diagnostic_setting.kv    : v.id]
+    kv_env  = try([for _, v in azurerm_monitor_diagnostic_setting.kv_env  : v.id], [])
+    kv_core = try([for _, v in azurerm_monitor_diagnostic_setting.kv_core : v.id], [])
+    # Subscription diag
+    sub_env  = try([for v in azurerm_monitor_diagnostic_setting.sub_env : v.id], [])
     sa    = [for _, v in azurerm_monitor_diagnostic_setting.sa    : v.id]
     sbns  = [for _, v in azurerm_monitor_diagnostic_setting.sbns  : v.id]
     ehns  = [for _, v in azurerm_monitor_diagnostic_setting.ehns  : v.id]
@@ -49,7 +53,9 @@ output "diagnostic_setting_ids" {
     appgw = [for _, v in azurerm_monitor_diagnostic_setting.appgw : v.id]
     afd   = [for _, v in azurerm_monitor_diagnostic_setting.afd   : v.id]
     aks   = [for _, v in azurerm_monitor_diagnostic_setting.aks   : v.id]
-    nsg   = [for _, v in azurerm_monitor_diagnostic_setting.nsg   : v.id]
+    # nsg   = [for _, v in azurerm_monitor_diagnostic_setting.nsg   : v.id]
+    nsg      = try([for _, v in azurerm_monitor_diagnostic_setting.nsg : v.id], [])
+    appgw_nsg = try([for v in azurerm_monitor_diagnostic_setting.appgw_nsg : v.id], [])
   }
 }
 

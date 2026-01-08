@@ -1,25 +1,56 @@
-# ---- Observability (HRZ | prod) ----
-env         = "prod"
-product     = "hrz"
-plane       = "pr"
-location    = "USGov Arizona"
-region      = "usaz"
+# Core context
+product = "hrz"
+env     = "prod"
 
-rg_name     = "rg-obs-hrz-prod-usaz-01"
-law_name    = "law-hrz-prod-usaz-01"
-ag_name     = "ag-obs-hrz-prod-usaz-01"
+location = "USGov Arizona"
+region   = "usaz"
 
-law_sku             = "PerGB2018"
-law_retention_days  = 90
-
-enable_container_insights = true
-enable_vm_insights        = true
-enable_ama_dcr            = true
-
+# Alerting (Action Group recipients)
 action_group_email_receivers = [
-  { name = "Ops-Primary", email_address = "ops-primary@example.gov" },
-  { name = "Ops-Secondary", email_address = "ops-secondary@example.gov" }
+  {
+    name          = "Ops Manager"
+    email_address = "francis.bachabi@intterragroup.com"
+  },
+  {
+    name          = "Cloud Ops Alerts"
+    email_address = "cloudops@intterragroup.com"
+  }
 ]
 
-diag_categories = ["AuditEvent","SignInLogs","Security","AppServiceHTTPLogs","StorageRead","StorageWrite"]
-tags_extra = { purpose = "observability", criticality = "high", layer = "platform" }
+# FedRAMP policy compliance pipeline
+# enable_policy_compliance_alerts = false
+policy_alert_email              = "cloudops@intterragroup.com"
+
+policy_source_subscriptions = {
+  prod-core = {
+    subscription_id = "<PROD_CORE_SUBSCRIPTION_ID>"
+  }
+  core = {
+    subscription_id = "<PROD_SHARED_CORE_SUBSCRIPTION_ID>"
+  }
+  uat-core = {
+    subscription_id = "<UAT_CORE_SUBSCRIPTION_ID>"
+  }
+}
+
+# Subscription budgets
+enable_subscription_budgets    = true
+subscription_budget_amount     = 500
+subscription_budget_threshold  = 80
+subscription_budget_start_date = "2025-12-01T00:00:00Z"
+subscription_budget_end_date   = "2035-01-01T00:00:00Z"
+
+budget_alert_emails = [
+  "cloudops@intterragroup.com"
+]
+
+# NSG flow logs
+# enable_nsg_flow_logs = false
+
+# Tags
+tags_extra = {
+  purpose = "observability"
+  layer   = "platform"
+}
+
+enable_cost_exports = true
