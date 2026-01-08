@@ -3111,7 +3111,7 @@ locals {
   aks_alert_frequency = "PT5M"
 
   aks_cpu_threshold  = 50.0
-  aks_mem_threshold  = 50.0
+  aks_mem_threshold  = 80.0
   aks_disk_threshold = 50.0
 }
 
