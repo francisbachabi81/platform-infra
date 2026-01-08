@@ -413,6 +413,51 @@ resource "azurerm_monitor_diagnostic_setting" "nsg" {
   }
 }
 
+locals {
+  appgw_nsg_id = try(data.terraform_remote_state.network.outputs.app_gateway.nsg_id, null)
+}
+
+data "azurerm_monitor_diagnostic_categories" "appgw_nsg" {
+  provider    = azurerm.core
+  count       = (var.enable_nsg_diagnostics && local.appgw_nsg_id != null) ? 1 : 0
+  resource_id = local.appgw_nsg_id
+}
+
+resource "azurerm_monitor_diagnostic_setting" "appgw_nsg" {
+  provider                   = azurerm.core
+  count                      = (var.enable_nsg_diagnostics && local.appgw_nsg_id != null) ? 1 : 0
+
+  name                       = "${var.diag_name}-appgw-nsg"
+  target_resource_id         = local.appgw_nsg_id
+  log_analytics_workspace_id = local.law_id
+
+  dynamic "enabled_log" {
+    for_each = toset([
+      for c in var.nsg_log_categories :
+      c if (
+        contains(try(data.azurerm_monitor_diagnostic_categories.appgw_nsg[0].log_category_types, []), c) ||
+        contains(try(data.azurerm_monitor_diagnostic_categories.appgw_nsg[0].logs, []), c)
+      )
+    ])
+    content { category = enabled_log.value }
+  }
+
+  dynamic "metric" {
+    for_each = toset(try(data.azurerm_monitor_diagnostic_categories.appgw_nsg[0].metrics, []))
+    content {
+      category = metric.value
+      enabled  = true
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null
+      error_message = "LAW workspace ID could not be resolved for AppGW NSG diagnostics."
+    }
+  }
+}
+
 resource "azurerm_monitor_diagnostic_setting" "sub_env" {
   provider                   = azurerm.env
   count                      = (local.sub_env_target_id == null || !var.enable_subscription_diagnostics) ? 0 : 1
@@ -2959,9 +3004,9 @@ locals {
 locals {
   aks_alert_frequency = "PT5M"
 
-  aks_cpu_threshold  = 80.0
-  aks_mem_threshold  = 80.0
-  aks_disk_threshold = 80.0
+  aks_cpu_threshold  = 50.0
+  aks_mem_threshold  = 50.0
+  aks_disk_threshold = 50.0
 }
 
 # CPU (Allocatable-based)

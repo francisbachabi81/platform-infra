@@ -78,6 +78,7 @@ output "app_gateway" {
 
     waf_policy_id  = try(module.waf[0].id, null)
     nsg_id         = try(azurerm_network_security_group.appgw_nsg[0].id, null)
+    nsg_name       = try(azurerm_network_security_group.appgw_nsg[0].name, null)
 
     subnet_id      = local.appgw_subnet_id
 
