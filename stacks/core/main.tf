@@ -510,7 +510,7 @@ module "kv_core" {
     purpose = "core-secrets"
   }, var.tags)
 
-  depends_on = [module.rg_core_platform]
+  depends_on = [module.core_vm, module.rg_core_platform]
 }
 
 # ------------------------------------------------------------
