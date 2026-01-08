@@ -7,8 +7,10 @@ seq      = "01"                     # sequence in names
 
 # Private DNS zones (Azure Government)
 private_zones = [
+  # App domains (dev + qa)
   "dev.horizon.intterra.io",
   "qa.horizon.intterra.io",
+
   # Storage
   "privatelink.blob.core.usgovcloudapi.net",
   "privatelink.file.core.usgovcloudapi.net",
@@ -16,21 +18,29 @@ private_zones = [
   "privatelink.table.core.usgovcloudapi.net",
   "privatelink.dfs.core.usgovcloudapi.net",   # Data Lake Gen2
   "privatelink.web.core.usgovcloudapi.net",   # Static website
+
   # Key Vault
   "privatelink.vaultcore.usgovcloudapi.net",
+
   # Redis
   "privatelink.redis.cache.usgovcloudapi.net",
+
   # Cosmos DB (NoSQL)
   "privatelink.documents.azure.us",
+
   # Azure Database for PostgreSQL (Flexible)
   "privatelink.postgres.database.usgovcloudapi.net",
+
   # Cosmos DB for PostgreSQL (Citus)
   "privatelink.postgres.cosmos.azure.us",
+
   # Service Bus / Event Hubs
   "privatelink.servicebus.usgovcloudapi.net",
+
   # App Service (Web Apps + SCM/Kudu)
   "privatelink.azurewebsites.us",
   "privatelink.scm.azurewebsites.us",
+
   # AKS (region-specific)
   "privatelink.usgovvirginia.cx.aks.containerservice.azure.us",
   "privatelink.usgovarizona.cx.aks.containerservice.azure.us"
@@ -38,7 +48,8 @@ private_zones = [
 
 # Public DNS zones
 public_dns_zones = [
-  "dev.horizon.intterra.io"
+  "dev.horizon.intterra.io",
+  "qa.horizon.intterra.io"
 ]
 
 # VNets — NONPROD plane: hub + dev + qa
@@ -182,8 +193,6 @@ dev_spoke = {
 }
 
 qa_spoke = {
-  # rg    = "rg-hrz-qa-usaz-net-01"
-  # vnet  = "vnet-hrz-qa-usaz-01"
   cidrs = ["10.12.0.0/16"]
 
   subnets = {

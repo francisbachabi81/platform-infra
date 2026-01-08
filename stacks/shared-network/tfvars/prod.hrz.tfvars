@@ -1,56 +1,63 @@
-# core / env
-plane           = "prod"         # nonprod | prod
-subscription_id = "641d3872-8322-4bdb-83ce-bfbc119fa3cd"
-tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
-location        = "USGov Arizona"
+# Core / plane
+plane    = "prod"                 # nonprod | prod
+product  = "hrz"                  # hrz | pub
+location = "usgovarizona"         # canonical region name for azurerm provider
+region   = "usaz"                 # short code used in names
+seq      = "01"                   # sequence in names
 
-# naming
-product = "hrz"
-region  = "usaz"                  # short region (e.g. cus, eus)
-seq     = "01"
-
-# private dns zones (privatelink)
+# Private DNS zones (Azure Government)
 private_zones = [
+  # App domains (prod + uat)
+  "horizon.intterra.io",
+  "uat.horizon.intterra.io",
+
   # Storage
   "privatelink.blob.core.usgovcloudapi.net",
   "privatelink.file.core.usgovcloudapi.net",
   "privatelink.queue.core.usgovcloudapi.net",
   "privatelink.table.core.usgovcloudapi.net",
-  "privatelink.dfs.core.usgovcloudapi.net",   # Data Lake Gen2
-  "privatelink.web.core.usgovcloudapi.net",   # Static website
+  "privatelink.dfs.core.usgovcloudapi.net", # Data Lake Gen2
+  "privatelink.web.core.usgovcloudapi.net", # Static website
+
   # Key Vault
   "privatelink.vaultcore.usgovcloudapi.net",
+
   # Redis
   "privatelink.redis.cache.usgovcloudapi.net",
+
   # Cosmos DB (NoSQL)
   "privatelink.documents.azure.us",
+
   # Azure Database for PostgreSQL (Flexible)
   "privatelink.postgres.database.usgovcloudapi.net",
+
   # Cosmos DB for PostgreSQL (Citus)
   "privatelink.postgres.cosmos.azure.us",
+
   # Service Bus / Event Hubs
   "privatelink.servicebus.usgovcloudapi.net",
+
   # App Service (Web Apps + SCM/Kudu)
   "privatelink.azurewebsites.us",
   "privatelink.scm.azurewebsites.us",
+
   # AKS (region-specific)
   "privatelink.usgovvirginia.cx.aks.containerservice.azure.us",
   "privatelink.usgovarizona.cx.aks.containerservice.azure.us"
 ]
 
-# public dns zones
+# Public DNS zones
 public_dns_zones = [
-  "horizon.intterra.io"
+  "horizon.intterra.io",
+  "uat.horizon.intterra.io"
 ]
 
-# vnets
+# VNets — PROD plane: hub + prod + uat
 prod_hub = {
-  rg    = "rg-hrz-pr-usaz-net-01"
-  vnet  = "vnet-hrz-pr-hub-usaz-01"
   cidrs = ["10.13.0.0/16"]
 
   subnets = {
-    GatewaySubnet                 = { address_prefixes = ["10.13.0.0/24"] }   # vpn gateway
+    GatewaySubnet                 = { address_prefixes = ["10.13.0.0/24"] }
     AzureFirewallSubnet           = { address_prefixes = ["10.13.1.0/26"] }
     AzureFirewallManagementSubnet = { address_prefixes = ["10.13.1.64/26"] }
     RouteServerSubnet             = { address_prefixes = ["10.13.1.128/27"] }
@@ -59,7 +66,7 @@ prod_hub = {
     internal                      = { address_prefixes = ["10.13.13.0/24"] }
     external                      = { address_prefixes = ["10.13.14.0/24"] }
     "shared-svc"                  = { address_prefixes = ["10.13.20.0/24"] }
-    appgw                         = { address_prefixes = ["10.13.40.0/27"] }  # app gateway
+    appgw                         = { address_prefixes = ["10.13.40.0/27"] }
 
     "dns-inbound" = {
       address_prefixes = ["10.13.50.0/27"]
@@ -84,14 +91,12 @@ prod_hub = {
 
     "privatelink-hub" = {
       address_prefixes                  = ["10.13.30.0/27"]
-      private_endpoint_network_policies = "Disabled"        # required for private endpoints
+      private_endpoint_network_policies = "Disabled"
     }
   }
 }
 
 prod_spoke = {
-  rg    = "rg-hrz-prod-usaz-01"
-  vnet  = "vnet-hrz-prod-usaz-01"
   cidrs = ["10.14.0.0/16"]
 
   subnets = {
@@ -127,6 +132,7 @@ prod_spoke = {
         actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
       }]
     }
+
     "appsvc-int-windows-01" = {
       address_prefixes = ["10.14.12.0/27"]
       delegations = [{
@@ -186,8 +192,6 @@ prod_spoke = {
 }
 
 uat_spoke = {
-  rg    = "rg-hrz-uat-usaz-01"
-  vnet  = "vnet-hrz-uat-usaz-01"
   cidrs = ["10.15.0.0/16"]
 
   subnets = {
@@ -223,6 +227,7 @@ uat_spoke = {
         actions = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
       }]
     }
+
     "appsvc-int-windows-01" = {
       address_prefixes = ["10.15.12.0/27"]
       delegations = [{
@@ -281,29 +286,44 @@ uat_spoke = {
   }
 }
 
-# connectivity & ingress
-create_vpn_gateway          = true      # create vpng
-vpn_sku                     = "VpnGw1"  # e.g. VpnGw1, VpnGw2, VpnGw3
+# Connectivity & Ingress
+create_vpn_gateway          = true
+vpn_sku                     = "VpnGw1"
 public_ip_sku               = "Standard"
 public_ip_allocation_method = "Static"
 
-create_app_gateway          = false     # create app gw
+# If true → VPN module creates its own PIP; if false → this stack creates an external PIP
+create_vpng_public_ip = false
+
+# App Gateway (prod tier)
+create_app_gateway          = false
 waf_mode                    = "Detection"   # Detection | Prevention
 appgw_public_ip_enabled     = true
 appgw_sku_name              = "WAF_v2"
 appgw_sku_tier              = "WAF_v2"
 appgw_capacity              = 1
-appgw_cookie_based_affinity = "Disabled"    # Enabled | Disabled
+appgw_cookie_based_affinity = "Disabled"
+appgw_private_frontend_ip   = "10.13.40.4"
 
-# tags
+# DNS Private Resolver – optional static inbound IP & forwarding rules
+dnsr_inbound_static_ip = "10.13.50.4"
+dns_forwarding_rules   = [
+  # example:
+  # {
+  #   domain_name = "corp.contoso.com."
+  #   target_ips  = ["10.100.0.10", "10.100.0.11"]
+  # }
+]
+
+# Tags
 tags = {
-  product = "horizon"
-  owner   = "it operations"
+  product = "hrz"
+  owner   = "itops-team"
+  lane    = "prod"
 }
 
-# dns resolver inbound static ip
-dnsr_inbound_static_ip = "10.13.50.4"   # points to dns-inbound endpoint ip
-
-# ── Front Door ────────────────────────────────────
+# Front Door
 fd_create_frontdoor = true
 fd_sku_name         = "Standard_AzureFrontDoor"
+
+dnsresolver_enable_outbound = false

@@ -1,3 +1,4 @@
+# Core context (match dev structure)
 product = "hrz"
 plane   = "nonprod"
 
@@ -29,17 +30,20 @@ waf_policies = {
     vpn_cidrs        = ["192.168.1.0/24"]
     restricted_paths = ["/admin"]
     blocked_countries = ["CN", "RU", "IR"]    # https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/web-application-firewall/ag/geomatch-custom-rules.md
+
     # Disable managed rules by rule group + IDs
     disabled_rules_by_group = {
       "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260","942340", "942370"]
       # "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300"]
     }
   }
+
   # qa = {
   #   mode             = "Prevention"
   #   vpn_cidrs        = ["192.168.1.0/24"]
   #   restricted_paths = ["/admin"]           # ["/admin", "/ops"]
   #   blocked_countries = ["CN", "RU", "IR"]  # https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/web-application-firewall/ag/geomatch-custom-rules.md
+  # 
   # Disable managed rules by rule group + IDs
     # disabled_rules_by_group = {
     #   "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260","942340", "942370"]
@@ -254,6 +258,7 @@ routing_rules = [
     backend_address_pool_name  = "bepool-dev"
     backend_http_settings_name = "bhs-dev-https"
   }
+  
   # qa
   # PUBLIC
   # {

@@ -7,6 +7,10 @@ seq      = "01"                     # sequence in names
 
 # Private DNS zones (Azure Commercial)
 private_zones = [
+  # App domains (dev + qa)
+  "dev.public.intterra.io",
+  "qa.public.intterra.io",
+
   # Storage
   "privatelink.blob.core.windows.net",
   "privatelink.file.core.windows.net",
@@ -14,28 +18,37 @@ private_zones = [
   "privatelink.table.core.windows.net",
   "privatelink.dfs.core.windows.net",   # Data Lake Gen2
   "privatelink.web.core.windows.net",   # Static website
+
   # Key Vault
   "privatelink.vaultcore.azure.net",
+
   # Redis
   "privatelink.redis.cache.windows.net",
+
   # Cosmos DB (NoSQL)
   "privatelink.documents.azure.com",
+
   # Azure Database for PostgreSQL (Flexible)
   "privatelink.postgres.database.azure.com",
+
   # Cosmos DB for PostgreSQL (Citus)
   "privatelink.postgres.cosmos.azure.com",
+
   # Service Bus / Event Hubs
   "privatelink.servicebus.windows.net",
+
   # App Service (Web Apps + SCM/Kudu)
   "privatelink.azurewebsites.net",
   "privatelink.scm.azurewebsites.net",
+
   # AKS (region-specific)
   "privatelink.centralus.azmk8s.io"
 ]
 
 # Public DNS zones
 public_dns_zones = [
-  "dev.public.intterra.io"
+  "dev.public.intterra.io",
+  "qa.public.intterra.io"
 ]
 
 # VNets — NONPROD plane: hub + dev + qa
@@ -179,8 +192,6 @@ dev_spoke = {
 }
 
 qa_spoke = {
-  # rg    = "rg-pub-qa-cus-net-01"
-  # vnet  = "vnet-pub-qa-cus-01"
   cidrs = ["172.12.0.0/16"]
 
   subnets = {

@@ -39,6 +39,7 @@ associate_custom_domain = false
 create_core_vm     = true
 core_vm_private_ip = "10.10.13.10"
 core_vm_admin_username = "coreadmin"
+
 # VM size suggestions:
 # - "Standard_D2s_v5": light CI / tooling, low cost
 # - "Standard_D4s_v5": medium workloads
@@ -47,6 +48,7 @@ core_vm_admin_username = "coreadmin"
 #   - Standard_B1ms  → 1 vCPU, 2 GiB RAM (lighter workloads)
 #   - Standard_B1s   → 1 vCPU, 1 GiB RAM (very light / test only)
 core_runner_vm_size = "Standard_B1ms"
+
 # Ubuntu image suggestions:
 # Keep defaults for latest Ubuntu 22.04 LTS:
 core_runner_vm_image_publisher = "Canonical"

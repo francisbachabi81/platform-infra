@@ -14,7 +14,6 @@ shared_nonprod_tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 # uat_subscription_id  / uat_tenant_id
 # if/when you split those planes.
 
-
 # Remote state (shared-network + core)
 state_rg_name        = "rg-core-infra-state"
 state_sa_name        = "sacoretfstateinfra"
@@ -43,7 +42,7 @@ sa_replication_type = "LRS"  # LRS | ZRS | RAGRS | GZRS | RAGZRS
 # dev: deploys into shared nonprod core RG; nodepool in nonprod hub (akspub/akshrz)
 create_aks         = true
 kubernetes_version = "1.33.5"      # ensure this version is available in region
-aks_node_vm_size   = "Standard_B2ms" #Standard_D2s_v5, Standard_B1ms, Standard_B2ms, Standard_B2s
+aks_node_vm_size   = "Standard_B2ms" #Standard_D2s_v5, Standard_B1ms, Standard_B2ms, Standard_B2s, Standard_D8s_v5
 aks_node_count     = 3
 
 aks_pod_cidr       = "10.210.0.0/16"
