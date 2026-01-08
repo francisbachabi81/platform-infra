@@ -290,13 +290,55 @@ locals {
 }
 
 locals {
+  # Which tiers are managed by this observability run?
+  manage_core_shared = contains(["dev", "prod"], local.env_effective) # dev => nonprod core; prod => prod core
+  manage_env_only    = contains(["qa", "uat"], local.env_effective)
+
+  # Convenience: which env this run is responsible for (itself only)
+  managed_env_key = local.env_effective
+}
+
+locals {
+  # --- Core Key Vault ("kvt") from core stack outputs ---
+  ids_kv_core = compact([
+    try(data.terraform_remote_state.core.outputs.core_key_vault.id, null),
+    try(data.terraform_remote_state.core.outputs.keyvault.core.id, null),
+  ])
+
+  # --- Env Key Vault(s) ("kv") from platform stack outputs / overrides ---
+  ids_kv_env = compact(concat(
+    [
+      try(local.platform_ids.kv1, null),
+      try(data.terraform_remote_state.platform.outputs.ids.kv, null),
+      try(data.terraform_remote_state.platform.outputs.key_vault.id, null),
+      try(data.terraform_remote_state.platform.outputs.keyvault.id, null),
+    ],
+    var.key_vault_ids
+  ))
+
+  kv_core_map = { for id in local.ids_kv_core : id => id }
+  kv_env_map  = { for id in local.ids_kv_env  : id => id }
+}
+
+locals {
   # single resource id (or null if platform stack didn't create it)
   excluded_flowlogs_sa_id = try(data.terraform_remote_state.platform.outputs.nsg_flow_logs_storage.id, null)
 }
 
 # Diagnostic categories (data sources)
-data "azurerm_monitor_diagnostic_categories" "kv" {
-  for_each    = local.kv_map
+# data "azurerm_monitor_diagnostic_categories" "kv" {
+#   for_each    = local.kv_map
+#   resource_id = each.value
+# }
+data "azurerm_monitor_diagnostic_categories" "kv_env" {
+  provider    = azurerm.env
+  for_each    = local.kv_env_map
+  resource_id = each.value
+}
+
+data "azurerm_monitor_diagnostic_categories" "kv_core" {
+  provider    = azurerm.core
+  for_each    = local.kv_core_map
   resource_id = each.value
 }
 
@@ -433,13 +475,12 @@ resource "azurerm_monitor_diagnostic_setting" "appgw_nsg" {
 
   dynamic "enabled_log" {
     for_each = toset([
-      for c in var.nsg_log_categories :
-      c if (
-        contains(try(data.azurerm_monitor_diagnostic_categories.appgw_nsg[0].log_category_types, []), c) ||
-        contains(try(data.azurerm_monitor_diagnostic_categories.appgw_nsg[0].logs, []), c)
-      )
+      for c in var.nsg_log_categories : c
+      if contains(try(data.azurerm_monitor_diagnostic_categories.appgw_nsg[0].log_category_types, []), c)
     ])
-    content { category = enabled_log.value }
+    content {
+      category = enabled_log.value
+    }
   }
 
   dynamic "metric" {
@@ -478,8 +519,42 @@ resource "azurerm_monitor_diagnostic_setting" "sub_env" {
   }
 }
 
-resource "azurerm_monitor_diagnostic_setting" "kv" {
-  for_each                   = var.enable_kv_diagnostics ? data.azurerm_monitor_diagnostic_categories.kv : {}
+# resource "azurerm_monitor_diagnostic_setting" "kv" {
+#   for_each                   = var.enable_kv_diagnostics ? data.azurerm_monitor_diagnostic_categories.kv : {}
+#   name                       = var.diag_name
+#   target_resource_id         = each.key
+#   log_analytics_workspace_id = local.law_id
+
+#   dynamic "enabled_log" {
+#     for_each = toset([
+#       for c in var.kv_log_categories :
+#       c if (
+#         contains(try(each.value.log_category_types, []), c) ||
+#         contains(try(each.value.logs, []), c)
+#       )
+#     ])
+#     content { category = enabled_log.value }
+#   }
+
+#   dynamic "metric" {
+#     for_each = toset(try(each.value.metrics, []))
+#     content {
+#       category = metric.value
+#       enabled  = true
+#     }
+#   }
+
+#   lifecycle {
+#     precondition {
+#       condition     = local.law_id != null
+#       error_message = "LAW workspace ID could not be resolved for Key Vault diagnostics."
+#     }
+#   }
+# }
+
+resource "azurerm_monitor_diagnostic_setting" "kv_env" {
+  provider                   = azurerm.env
+  for_each                   = var.enable_kv_diagnostics ? data.azurerm_monitor_diagnostic_categories.kv_env : {}
   name                       = var.diag_name
   target_resource_id         = each.key
   log_analytics_workspace_id = local.law_id
@@ -487,26 +562,54 @@ resource "azurerm_monitor_diagnostic_setting" "kv" {
   dynamic "enabled_log" {
     for_each = toset([
       for c in var.kv_log_categories :
-      c if (
-        contains(try(each.value.log_category_types, []), c) ||
-        contains(try(each.value.logs, []), c)
-      )
+      c if contains(try(each.value.log_category_types, []), c)
     ])
     content { category = enabled_log.value }
   }
 
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
-    content {
+    content { 
       category = metric.value
-      enabled  = true
+      enabled = true 
     }
   }
 
   lifecycle {
     precondition {
       condition     = local.law_id != null
-      error_message = "LAW workspace ID could not be resolved for Key Vault diagnostics."
+      error_message = "LAW workspace ID could not be resolved for ENV Key Vault diagnostics."
+    }
+  }
+}
+
+resource "azurerm_monitor_diagnostic_setting" "kv_core" {
+  provider                   = azurerm.core
+  for_each                   = (var.enable_kv_diagnostics && local.manage_core_shared) ? data.azurerm_monitor_diagnostic_categories.kv_core : {}
+  name                       = "${var.diag_name}-core"
+  target_resource_id         = each.key
+  log_analytics_workspace_id = local.law_id
+
+  dynamic "enabled_log" {
+    for_each = toset([
+      for c in var.kv_log_categories :
+      c if contains(try(each.value.log_category_types, []), c)
+    ])
+    content { category = enabled_log.value }
+  }
+
+  dynamic "metric" {
+    for_each = toset(try(each.value.metrics, []))
+    content { 
+      category = metric.value
+      enabled = true 
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null
+      error_message = "LAW workspace ID could not be resolved for CORE Key Vault diagnostics."
     }
   }
 }
