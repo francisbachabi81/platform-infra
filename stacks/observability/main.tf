@@ -316,8 +316,11 @@ locals {
     var.key_vault_ids
   ))
 
-  kv_core_map = { for id in local.ids_kv_core : id => id }
-  kv_env_map  = { for id in local.ids_kv_env  : id => id }
+  ids_kv_env_distinct  = distinct(local.ids_kv_env)
+  ids_kv_core_distinct = distinct(local.ids_kv_core)
+
+  kv_env_map  = { for id in local.ids_kv_env_distinct  : id => id }
+  kv_core_map = { for id in local.ids_kv_core_distinct : id => id }
 }
 
 locals {
