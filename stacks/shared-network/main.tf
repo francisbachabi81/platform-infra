@@ -1389,9 +1389,14 @@ locals {
 
 # GitHub Actions runner egress
 
+# locals {
+#   # HRZ keeps the real runner egress; PUB uses fixed 1.1.1.1
+#   ghrunner_egress_ip = lower(var.product) == "pub" ? "172.10.13.10" : "10.10.13.10"
+# }
+
 locals {
-  # HRZ keeps the real runner egress; PUB uses fixed 1.1.1.1
-  ghrunner_egress_ip = lower(var.product) == "pub" ? "172.10.13.10" : "10.10.13.10"
+  # HRZ + PUB use the standard hub egress IPs; PUB uses its own
+  ghrunner_egress_ip = lower(var.product) == "pub" ? (local.is_nonprod ? "172.10.13.10" : "172.13.13.10") : (local.is_nonprod ? "10.10.13.10"  : "10.13.13.10")
 }
 
 resource "azurerm_network_security_rule" "allow_ghrunner_https_internet_hub" {
