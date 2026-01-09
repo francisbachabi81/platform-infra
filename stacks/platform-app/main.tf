@@ -265,6 +265,7 @@ module "rg_qa" {
 module "rg_prod" {
   count    = local.is_prod ? 1 : 0
   source   = "../../modules/resource-group"
+  providers = { azurerm = azurerm.prod }
   name     = local.env_rg_name
   location = var.location
   tags     = merge(local.tags_common, local.prod_only_tags, { layer = local.rg_layer_by_key["prod"] })
@@ -273,6 +274,7 @@ module "rg_prod" {
 module "rg_uat" {
   count    = local.is_uat ? 1 : 0
   source   = "../../modules/resource-group"
+  providers = { azurerm = azurerm.uat }
   name     = local.env_rg_name
   location = var.location
   tags     = merge(local.tags_common, local.uat_only_tags, { layer = local.rg_layer_by_key["uat"] })
@@ -569,6 +571,8 @@ resource "azurerm_user_assigned_identity" "aks_env_prod" {
   location            = var.location
   resource_group_name = local.aks_rg_name_effective
   tags                = merge(local.tags_common, { purpose = "aks-control-plane-identity" }, var.tags)
+
+  depends_on = [module.rg_prod]
 }
 
 resource "azurerm_user_assigned_identity" "aks_env_uat" {
@@ -578,6 +582,8 @@ resource "azurerm_user_assigned_identity" "aks_env_uat" {
   location            = var.location
   resource_group_name = local.aks_rg_name_effective
   tags                = merge(local.tags_common, { purpose = "aks-control-plane-identity" }, var.tags)
+
+  depends_on = [module.rg_uat]
 }
 
 locals {
@@ -1053,7 +1059,19 @@ locals {
   pg_private_zone_id = try(local.zone_ids_effective[local._pg_pdz_name], null)
 
   pg_name1                = "pgflex-${var.product}-${var.env}-${var.region}-01"
-  pg_geo_backup_effective = var.env == "prod" ? true : var.pg_geo_redundant_backup
+  # pg_geo_backup_effective = var.env == "prod" ? true : var.pg_geo_redundant_backup
+
+  pg_geo_backup_supported_regions = toset([
+    # example tokens — populate with what you support in your org
+    "usva",
+    # "usaz",  # apparently NOT supported for your case
+  ])
+
+  pg_geo_backup_effective = (
+    var.env == "prod"
+    && contains(local.pg_geo_backup_supported_regions, lower(var.region))
+    && var.pg_geo_redundant_backup
+  )
 }
 
 module "postgres" {
