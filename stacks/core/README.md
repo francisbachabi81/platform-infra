@@ -37,11 +37,11 @@ After running the Core Apply workflow, SSH into the VM and complete the followin
 ```bash
 mkdir actions-runner && cd actions-runner
 
-curl -o actions-runner-linux-x64-2.329.0.tar.gz -L   https://github.com/actions/runner/releases/download/v2.329.0/actions-runner-linux-x64-2.329.0.tar.gz
+curl -o actions-runner-linux-x64-2.330.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.330.0/actions-runner-linux-x64-2.330.0.tar.gz
 
-echo "194f1e1e4bd02f80b7e9633fc546084d8d4e19f3928a324d512ea53430102e1d  actions-runner-linux-x64-2.329.0.tar.gz"   | shasum -a 256 -c
+echo "af5c33fa94f3cc33b8e97937939136a6b04197e6dadfcfb3b6e33ae1bf41e79a  actions-runner-linux-x64-2.330.0.tar.gz" | shasum -a 256 -c
 
-tar xzf ./actions-runner-linux-x64-2.329.0.tar.gz
+tar xzf ./actions-runner-linux-x64-2.330.0.tar.gz
 ```
 
 ---
@@ -80,16 +80,62 @@ az version
 
 ---
 
-## 4. Install kubectl & Helm (Required for AKS Deployments)
+## 5. Install kubectl
 
 ```bash
-sudo az aks install-cli
-curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
+sudo mkdir -p /etc/apt/keyrings
+
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+sudo apt-get update
+sudo apt-get install -y kubectl
+
+kubectl version --client
 ```
 
 ---
 
-## 5. Required Runner Tags
+## 6. Install Helm
+
+```bash
+curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
+helm version
+```
+
+---
+
+## 7. Install unzip
+
+```bash
+sudo apt-get install -y unzip
+```
+
+---
+
+## 8. Install Node.js
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+node --version
+npm --version
+```
+
+---
+
+## 9. Install jq
+
+```bash
+sudo apt-get install -y jq
+jq --version
+```
+
+---
+
+## 10. Required Runner Tags
 
 Workflows reference runner tags like:
 
@@ -103,7 +149,21 @@ Ensure these tags were added during `./config.sh`.
 
 ---
 
-## 6. Next Steps
+## 11. Validation Checklist
+
+```bash
+az version
+kubectl version --client
+helm version
+node --version
+npm --version
+jq --version
+unzip -v
+```
+
+---
+
+## 12. Next Steps
 
 With the runner installed and online:
 
