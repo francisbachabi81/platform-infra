@@ -41,13 +41,13 @@ core_vm_private_ip      = "10.13.13.10"
 core_vm_admin_username  = "coreadmin"
 
 # VM size suggestions:
-# - "Standard_D2s_v5": light CI / tooling, low cost
+# - "Standard_D2s_v5": light CI / tooling, low cost -- Standard_D2s_v4
 # - "Standard_D4s_v5": medium workloads
 # - "Standard_D8s_v5": heavier pipelines or multiple runners
 #   - Standard_B2ms  → 2 vCPU, 8 GiB RAM (good default, burstable)
 #   - Standard_B1ms  → 1 vCPU, 2 GiB RAM (lighter workloads)
 #   - Standard_B1s   → 1 vCPU, 1 GiB RAM (very light / test only)
-core_runner_vm_size = "Standard_B1ms"
+core_runner_vm_size = "Standard_D2s_v4"
 
 # Ubuntu image suggestions:
 # Keep defaults for latest Ubuntu 22.04 LTS:
