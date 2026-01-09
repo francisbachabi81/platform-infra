@@ -536,12 +536,16 @@ data "azurerm_resource_group" "aks_rg_prod" {
   count    = local.aks_enabled_env && var.env == "prod" ? 1 : 0
   name     = local.aks_rg_name
   provider = azurerm.prod
+
+  depends_on = [ module.rg_prod ]
 }
 
 data "azurerm_resource_group" "aks_rg_uat" {
   count    = local.aks_enabled_env && var.env == "uat" ? 1 : 0
   name     = local.aks_rg_name
   provider = azurerm.uat
+
+  depends_on = [ module.rg_uat ]
 }
 
 locals {

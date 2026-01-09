@@ -198,7 +198,7 @@ resource "azurerm_recovery_services_vault" "plane" {
 # Action Group
 locals {
   action_group_name       = "ag-${var.product}-${local.plane_code}-${var.region}-core-01"
-  action_group_short_name = "${upper(var.product)}CoreAG"
+  action_group_short_name = "${upper(var.product)}${upper(local.plane_code)}CoreAG"
 }
 
 resource "azurerm_monitor_action_group" "core" {
