@@ -137,3 +137,5 @@ KQL
     }
   }
 }
+
+create_storage_cmk = true

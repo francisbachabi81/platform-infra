@@ -516,8 +516,17 @@ module "kv_core" {
 # ------------------------------------------------------------
 # Storage CMK key (in core key vault)
 # ------------------------------------------------------------
+
+locals {
+  create_storage_cmk_effective = (
+    var.create_storage_cmk
+    && var.create_core_key_vault
+    && local.create_scope_both
+  )
+}
+
 resource "azurerm_key_vault_key" "storage_cmk" {
-  count        = (var.create_core_key_vault && local.create_scope_both) ? 1 : 0
+  count        = local.create_storage_cmk_effective ? 1 : 0
   name         = "cmk-storage-${var.product}-${local.plane_code}-${var.region}-01"
   key_vault_id = module.kv_core[0].id
   key_type     = "RSA"

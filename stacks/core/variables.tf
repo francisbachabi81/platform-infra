@@ -325,3 +325,9 @@ variable "core_kv_private_dns_zone_ids_override" {
   type        = map(string)
   default     = null
 }
+
+variable "create_storage_cmk" {
+  description = "Create the storage customer-managed key (CMK) in the core Key Vault."
+  type        = bool
+  default     = false
+}
