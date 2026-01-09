@@ -138,4 +138,9 @@ KQL
   }
 }
 
+# create_storage_cmk → **IMPORTANT first-run behavior**:
+# Set to false **on the first Core stack deployment** so the stack can create the Key Vault and the GitHub runner VM.
+# The Key Vault is created with **public access disabled**, so if create_storage_cmk = true on the first run, the CMK/key creation can fail (no private access path exists yet).
+# After the VM is created, **configure the self-hosted runner** on that VM and update workflows to use it for deployments.
+# Then set create_storage_cmk = true and re-apply to create the CMK/keys, since the runner VM has internal network access to the Key Vault.
 create_storage_cmk = true
