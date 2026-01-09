@@ -296,7 +296,7 @@ public_ip_allocation_method = "Static"
 create_vpng_public_ip = false
 
 # App Gateway (prod tier)
-create_app_gateway          = false
+create_app_gateway          = true
 waf_mode                    = "Detection"   # Detection | Prevention
 appgw_public_ip_enabled     = true
 appgw_sku_name              = "WAF_v2"
