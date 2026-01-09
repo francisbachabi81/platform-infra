@@ -426,7 +426,7 @@ variable "aks_ingress_allowed_cidrs" {
   type        = map(list(string))
   default = {
     nonprod = ["0.0.0.0/0"] 
-    prod    = ["AzureFrontDoor.Backend"] # or your WAF/AppGW public IP range later
+    prod    = ["0.0.0.0/0"] # or your WAF/AppGW public IP range later
   }
 }
 
