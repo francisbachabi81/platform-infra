@@ -3421,20 +3421,30 @@ locals {
   # Tip: Start empty, observe a week, then add the top noisy callers.
   rg_alert_excluded_callers = coalesce(var.rg_alert_excluded_callers, [])
 
+  env_sub_by_env = {
+    dev  = local.dev_sub
+    qa   = local.qa_sub
+    uat  = local.uat_sub
+    prod = local.prod_sub
+  }
+
   # RG targets to monitor (env RG + core RG if present)
   rg_alert_targets = {
+    # ENV target key becomes the real env name (dev/qa/uat/prod)
     for k, v in {
-      env = {
-        rg_name   = local.rg_env_name_resolved
-        sub_id    = local.sub_env_resolved
-        ag_id     = local.ag_id_env
-        enabled   = local.rg_env_name_resolved != null && local.sub_env_resolved != null
+      "${local.env_effective}" = {
+        rg_name = local.rg_env_name_resolved
+        sub_id  = lookup(local.env_sub_by_env, local.env_effective, local.env_sub)
+        ag_id   = local.ag_id_env
+        enabled = local.rg_env_name_resolved != null
       }
-      core = {
-        rg_name   = local.rg_core_name_resolved
-        sub_id    = local.sub_core_resolved
-        ag_id     = local.ag_id_core
-        enabled   = local.rg_core_name_resolved != null && local.sub_core_resolved != null
+
+      # CORE target key becomes np-core/pr-core (or whatever you prefer)
+      "${local.plane_code}-core" = {
+        rg_name = local.rg_core_name_resolved
+        sub_id  = local.core_sub
+        ag_id   = local.ag_id_core
+        enabled = local.rg_core_name_resolved != null
       }
     } : k => v if v.enabled
   }
@@ -3587,18 +3597,18 @@ locals {
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "rg_high_signal" {
   provider = azurerm.core
 
-  # for_each = (
-  #   var.enable_high_signal_rg_alerts &&
-  #   local.law_id != null &&
-  #   local.rg_core_name_resolved != null
-  # ) ? local.high_signal_alert_instances : {}
-
   for_each = (
-    var.enable_high_signal_rg_alerts && 
-    local.policy_alerts_enabled_for_env && 
-    local.law_id != null && 
+    var.enable_high_signal_rg_alerts &&
+    local.law_id != null &&
     local.rg_core_name_resolved != null
-    ) ? local.high_signal_alert_instances : {}
+  ) ? local.high_signal_alert_instances : {}
+
+  # for_each = (
+  #   var.enable_high_signal_rg_alerts && 
+  #   local.policy_alerts_enabled_for_env && 
+  #   local.law_id != null && 
+  #   local.rg_core_name_resolved != null
+  #   ) ? local.high_signal_alert_instances : {}
 
   name                = "al-${var.product}-${each.value.t_key}-${var.region}-${each.value.alertdef.suffix}"
   resource_group_name = local.rg_core_name_resolved
