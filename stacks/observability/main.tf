@@ -3587,11 +3587,18 @@ locals {
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "rg_high_signal" {
   provider = azurerm.core
 
+  # for_each = (
+  #   var.enable_high_signal_rg_alerts &&
+  #   local.law_id != null &&
+  #   local.rg_core_name_resolved != null
+  # ) ? local.high_signal_alert_instances : {}
+
   for_each = (
-    var.enable_high_signal_rg_alerts &&
-    local.law_id != null &&
+    var.enable_high_signal_rg_alerts && 
+    local.policy_alerts_enabled_for_env && 
+    local.law_id != null && 
     local.rg_core_name_resolved != null
-  ) ? local.high_signal_alert_instances : {}
+    ) ? local.high_signal_alert_instances : {}
 
   name                = "al-${var.product}-${each.value.t_key}-${var.region}-${each.value.alertdef.suffix}"
   resource_group_name = local.rg_core_name_resolved
