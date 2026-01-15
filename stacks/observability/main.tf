@@ -3134,8 +3134,8 @@ locals {
 locals {
   aks_alert_frequency = "PT5M"
 
-  aks_cpu_threshold  = 80.0
-  aks_mem_threshold  = 80.0
+  aks_cpu_threshold  = 90.0
+  aks_mem_threshold  = 90.0
   aks_disk_threshold = 50.0
 }
 
@@ -3456,7 +3456,7 @@ locals {
   # Helper: caller exclusion snippet for KQL
   # Uses "Caller" column in AzureActivity (string)
   rg_alert_kql_exclude_callers = length(local.rg_alert_excluded_callers) == 0 ? "" : format(
-    "| where Caller !in (%s)\n",
+    "| where Caller !in (%s)",
     join(", ", [for c in local.rg_alert_excluded_callers : format("'%s'", replace(c, "'", "''"))])
   )
 
@@ -3572,7 +3572,7 @@ locals {
       kql      = <<-KQL
         AzureActivity
         | where CategoryValue == "Administrative"
-        | where ActivityStatusValue in ("Failed")
+        | where ActivityStatusValue in ("Failure", "Failed")
         ${local.rg_alert_kql_exclude_callers}
       KQL
     }
@@ -3625,8 +3625,8 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "rg_high_signal" {
   criteria {
     query = <<-KQL
       ${each.value.alertdef.kql}
-      | where SubscriptionId == "${each.value.target.sub_id}"
-      | where ResourceGroup == "${each.value.target.rg_name}"
+      | where SubscriptionId has "${each.value.target.sub_id}"
+      | where ResourceGroup has "${each.value.target.rg_name}"
       | project TimeGenerated, Caller, OperationNameValue, ActivityStatusValue, ResourceProviderValue, ResourceId, CorrelationId
       | order by TimeGenerated desc
     KQL
