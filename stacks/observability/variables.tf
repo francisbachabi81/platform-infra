@@ -640,3 +640,15 @@ variable "aks_resource_ids_override" {
   description = "Optional: explicit AKS resource IDs to alert on (used when remote state does not expose AKS IDs)."
   default     = []
 }
+
+variable "enable_high_signal_rg_alerts" {
+  type        = bool
+  description = "Enable high-signal RG change alerts (LAW scheduled query alerts)."
+  default     = true
+}
+
+variable "rg_alert_excluded_callers" {
+  type        = list(string)
+  description = "List of AzureActivity Caller values to exclude (e.g., Terraform/GitHub deployment identities) to reduce alert noise."
+  default     = []
+}

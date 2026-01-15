@@ -522,6 +522,30 @@ resource "azurerm_monitor_diagnostic_setting" "sub_env" {
   }
 }
 
+locals {
+  sub_core_target_id = local.sub_core_resolved != null ? "/subscriptions/${local.sub_core_resolved}" : null
+}
+
+resource "azurerm_monitor_diagnostic_setting" "sub_core" {
+  provider                   = azurerm.core
+  count                      = (local.sub_core_target_id == null || !var.enable_subscription_diagnostics) ? 0 : 1
+  name                       = "${var.diag_name}-core"
+  target_resource_id         = local.sub_core_target_id
+  log_analytics_workspace_id = local.law_id
+
+  dynamic "enabled_log" {
+    for_each = toset(var.subscription_log_categories)
+    content { category = enabled_log.value }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null
+      error_message = "LAW workspace ID not resolved for core subscription diagnostics."
+    }
+  }
+}
+
 # resource "azurerm_monitor_diagnostic_setting" "kv" {
 #   for_each                   = var.enable_kv_diagnostics ? data.azurerm_monitor_diagnostic_categories.kv : {}
 #   name                       = var.diag_name
@@ -3382,4 +3406,229 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_disk_high_prod" {
   }
 
   action { action_groups = [local.ag_id_env] }
+}
+
+#############################
+# High-signal RG change alerts (LAW / AzureActivity)
+#############################
+
+locals {
+  # Use LAW for high-signal alerts. If LAW isn't resolved, we do nothing.
+  enable_high_signal_rg_alerts = var.enable_high_signal_rg_alerts
+
+  # Exclude known "expected" automation callers to reduce deployment noise.
+  # Populate with your actual service principals / managed identities (display names) that deploy infra.
+  # Tip: Start empty, observe a week, then add the top noisy callers.
+  rg_alert_excluded_callers = coalesce(var.rg_alert_excluded_callers, [])
+
+  # RG targets to monitor (env RG + core RG if present)
+  rg_alert_targets = {
+    for k, v in {
+      env = {
+        rg_name   = local.rg_env_name_resolved
+        sub_id    = local.sub_env_resolved
+        ag_id     = local.ag_id_env
+        enabled   = local.rg_env_name_resolved != null && local.sub_env_resolved != null
+      }
+      core = {
+        rg_name   = local.rg_core_name_resolved
+        sub_id    = local.sub_core_resolved
+        ag_id     = local.ag_id_core
+        enabled   = local.rg_core_name_resolved != null && local.sub_core_resolved != null
+      }
+    } : k => v if v.enabled
+  }
+
+  # Shared schedule knobs (tune as needed)
+  rg_alert_freq   = "PT5M"
+  rg_alert_window = "PT5M"
+
+  # Helper: caller exclusion snippet for KQL
+  # Uses "Caller" column in AzureActivity (string)
+  rg_alert_kql_exclude_callers = length(local.rg_alert_excluded_callers) == 0 ? "" : format(
+    "| where Caller !in (%s)\n",
+    join(", ", [for c in local.rg_alert_excluded_callers : format("'%s'", replace(c, "'", "''"))])
+  )
+
+  # --- 6 high-signal alert definitions (edit/add/remove here) ---
+  # Each entry should produce low-noise, high-value signals.
+  high_signal_alert_defs = {
+    # 1) RBAC changes
+    rbac_changes = {
+      suffix   = "rbac-changes"
+      severity = 1
+      desc     = "RBAC changes (role assignments/definitions) in the resource group."
+      kql      = <<-KQL
+        AzureActivity
+        | where CategoryValue == "Administrative"
+        | where Authorization has "Microsoft.Authorization"
+        | where OperationNameValue has_any (
+            "Microsoft.Authorization/roleAssignments/write",
+            "Microsoft.Authorization/roleAssignments/delete",
+            "Microsoft.Authorization/roleDefinitions/write",
+            "Microsoft.Authorization/roleDefinitions/delete"
+          )
+        ${local.rg_alert_kql_exclude_callers}
+      KQL
+    }
+
+    # 2) Azure Policy changes
+    policy_changes = {
+      suffix   = "policy-changes"
+      severity = 2
+      desc     = "Policy assignment/definition changes in the resource group."
+      kql      = <<-KQL
+        AzureActivity
+        | where CategoryValue == "Administrative"
+        | where OperationNameValue has_any (
+            "Microsoft.Authorization/policyAssignments/write",
+            "Microsoft.Authorization/policyAssignments/delete",
+            "Microsoft.Authorization/policyDefinitions/write",
+            "Microsoft.Authorization/policyDefinitions/delete",
+            "Microsoft.Authorization/policySetDefinitions/write",
+            "Microsoft.Authorization/policySetDefinitions/delete"
+          )
+        ${local.rg_alert_kql_exclude_callers}
+      KQL
+    }
+
+    # 3) Key Vault sensitive admin operations (focus on vault config / access control)
+    keyvault_admin = {
+      suffix   = "kv-admin"
+      severity = 2
+      desc     = "Key Vault configuration/access-control changes (high signal)."
+      kql      = <<-KQL
+        AzureActivity
+        | where CategoryValue == "Administrative"
+        | where ResourceProviderValue == "MICROSOFT.KEYVAULT"
+        | where OperationNameValue has_any (
+            "Microsoft.KeyVault/vaults/write",
+            "Microsoft.KeyVault/vaults/delete",
+            "Microsoft.KeyVault/vaults/accessPolicies/write",
+            "Microsoft.KeyVault/vaults/accessPolicies/delete"
+          )
+        ${local.rg_alert_kql_exclude_callers}
+      KQL
+    }
+
+    # 4) Network security perimeter changes (NSG rules / route changes / public exposure)
+    network_security_changes = {
+      suffix   = "netsec-changes"
+      severity = 2
+      desc     = "Network perimeter changes (NSG rules, routes, public IPs, gateways) in the RG."
+      kql      = <<-KQL
+        AzureActivity
+        | where CategoryValue == "Administrative"
+        | where ResourceProviderValue == "MICROSOFT.NETWORK"
+        | where OperationNameValue has_any (
+            "Microsoft.Network/networkSecurityGroups/securityRules/write",
+            "Microsoft.Network/networkSecurityGroups/securityRules/delete",
+            "Microsoft.Network/routeTables/routes/write",
+            "Microsoft.Network/routeTables/routes/delete",
+            "Microsoft.Network/publicIPAddresses/write",
+            "Microsoft.Network/publicIPAddresses/delete",
+            "Microsoft.Network/virtualNetworkGateways/write",
+            "Microsoft.Network/virtualNetworkGateways/delete",
+            "Microsoft.Network/azureFirewalls/write",
+            "Microsoft.Network/azureFirewalls/delete",
+            "Microsoft.Network/applicationGateways/write",
+            "Microsoft.Network/applicationGateways/delete",
+            "Microsoft.Network/firewallPolicies/write",
+            "Microsoft.Network/firewallPolicies/delete"
+          )
+        ${local.rg_alert_kql_exclude_callers}
+      KQL
+    }
+
+    # 5) Deletes (broad but only delete ops; still usually high-signal)
+    deletes = {
+      suffix   = "resource-deletes"
+      severity = 2
+      desc     = "Any successful delete operations in the resource group."
+      kql      = <<-KQL
+        AzureActivity
+        | where CategoryValue == "Administrative"
+        | where OperationNameValue endswith "/delete"
+        | where ActivityStatusValue in ("Succeeded")
+        ${local.rg_alert_kql_exclude_callers}
+      KQL
+    }
+
+    # 6) Failed administrative operations (probing / mistakes / attempted changes)
+    failed_admin_ops = {
+      suffix   = "admin-failures"
+      severity = 2
+      desc     = "Failed administrative operations (attempted changes that did not succeed)."
+      kql      = <<-KQL
+        AzureActivity
+        | where CategoryValue == "Administrative"
+        | where ActivityStatusValue in ("Failed")
+        ${local.rg_alert_kql_exclude_callers}
+      KQL
+    }
+  }
+
+  # Expand into instances: { "<target>.<alert_key>" => {...} }
+  high_signal_alert_instances = {
+    for item in flatten([
+      for t_key, t in local.rg_alert_targets : [
+        for a_key, a in local.high_signal_alert_defs : {
+          key      = "${t_key}.${a_key}"
+          t_key    = t_key
+          a_key    = a_key
+          target   = t
+          alertdef = a
+        }
+      ]
+    ]) : item.key => item
+  }
+}
+
+resource "azurerm_monitor_scheduled_query_rules_alert_v2" "rg_high_signal" {
+  provider = azurerm.core
+
+  for_each = (
+    var.enable_high_signal_rg_alerts &&
+    local.law_id != null &&
+    local.rg_core_name_resolved != null
+  ) ? local.high_signal_alert_instances : {}
+
+  name                = "al-${var.product}-${each.value.t_key}-${var.region}-${each.value.alertdef.suffix}"
+  resource_group_name = local.rg_core_name_resolved
+  location            = var.location
+
+  scopes = [local.law_id]
+
+  severity    = each.value.alertdef.severity
+  description = each.value.alertdef.desc
+
+  evaluation_frequency = local.rg_alert_freq
+  window_duration      = local.rg_alert_window
+
+  criteria {
+    query = <<-KQL
+      ${each.value.alertdef.kql}
+      | where SubscriptionId == "${each.value.target.sub_id}"
+      | where ResourceGroup == "${each.value.target.rg_name}"
+      | project TimeGenerated, Caller, OperationNameValue, ActivityStatusValue, ResourceProviderValue, ResourceId, CorrelationId
+      | order by TimeGenerated desc
+    KQL
+
+    time_aggregation_method = "Count"
+    threshold               = 0
+    operator                = "GreaterThan"
+  }
+
+  action { action_groups = [each.value.target.ag_id] }
+
+  lifecycle {
+    precondition {
+      condition     = local.law_id != null
+      error_message = "LAW workspace ID not resolved; cannot create high-signal RG alerts."
+    }
+    precondition {
+      condition     = local.rg_core_name_resolved != null
+      error_message = "Core RG not resolved; cannot create high-signal RG alerts centrally."
+    }
+  }
 }
