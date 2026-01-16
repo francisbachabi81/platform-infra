@@ -40,10 +40,10 @@ resource "azurerm_storage_account" "sa" {
     }
   }
 
-  # depends_on = [
-  #   azurerm_user_assigned_identity.cmk,
-  #   azurerm_role_assignment.cmk_kv_crypto
-  # ]
+  depends_on = [
+    azurerm_user_assigned_identity.cmk,
+    azurerm_role_assignment.cmk_kv_crypto
+  ]
 }
 
 resource "azurerm_user_assigned_identity" "cmk" {
@@ -52,10 +52,6 @@ resource "azurerm_user_assigned_identity" "cmk" {
   location            = var.location
   resource_group_name = var.resource_group_name
   tags                = var.tags
-
-  lifecycle {
-    create_before_destroy = true
-  }
 }
 
 resource "azurerm_role_assignment" "cmk_kv_crypto" {
@@ -65,32 +61,19 @@ resource "azurerm_role_assignment" "cmk_kv_crypto" {
   principal_id         = azurerm_user_assigned_identity.cmk[0].principal_id
 }
 
-resource "time_sleep" "cmk_settle" {
-  count = local.cmk_effective ? 1 : 0
-
-  depends_on = [
-    azurerm_storage_account.sa,
-    azurerm_user_assigned_identity.cmk,
-    azurerm_role_assignment.cmk_kv_crypto
-  ]
-
-  create_duration = "60s"
-}
-
 resource "azurerm_storage_account_customer_managed_key" "cmk" {
-  count              = local.cmk_effective ? 1 : 0
-  storage_account_id = azurerm_storage_account.sa.id
+  count                    = local.cmk_effective ? 1 : 0
+  storage_account_id       = azurerm_storage_account.sa.id
 
-  key_vault_id  = var.cmk_key_vault_id
-  key_name      = var.cmk_key_name
-  key_version   = var.cmk_key_version
+  key_vault_id             = var.cmk_key_vault_id
+  key_name                 = var.cmk_key_name
+  key_version              = var.cmk_key_version # optional (null = latest)
 
   user_assigned_identity_id = azurerm_user_assigned_identity.cmk[0].id
 
   depends_on = [
-    azurerm_storage_account.sa,              # <- ensures identity attach is applied first
-    azurerm_role_assignment.cmk_kv_crypto,    # <- ensures RBAC exists
-    time_sleep.cmk_settle                     # <- gives propagation time
+    azurerm_user_assigned_identity.cmk,
+    azurerm_role_assignment.cmk_kv_crypto
   ]
 }
 

@@ -1334,4 +1334,3 @@ module "sa_nsg_flowlogs" {
 #   name         = local.kv_secret_tenant_id_name
 #   value        = var.tenant_id
 # }
-
