@@ -39,11 +39,6 @@ resource "azurerm_storage_account" "sa" {
       identity_ids = [azurerm_user_assigned_identity.cmk[0].id]
     }
   }
-
-  # depends_on = [
-  #   azurerm_user_assigned_identity.cmk,
-  #   azurerm_role_assignment.cmk_kv_crypto
-  # ]
 }
 
 resource "azurerm_user_assigned_identity" "cmk" {
@@ -72,7 +67,7 @@ resource "azurerm_storage_account_customer_managed_key" "cmk" {
   user_assigned_identity_id = azurerm_user_assigned_identity.cmk[0].id
 
   depends_on = [
-    azurerm_user_assigned_identity.cmk,
+    azurerm_storage_account.sa,
     azurerm_role_assignment.cmk_kv_crypto
   ]
 }
