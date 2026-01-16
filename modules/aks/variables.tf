@@ -142,3 +142,8 @@ variable "temporary_name_for_rotation" {
 #   type        = bool
 #   default     = true
 # }
+
+variable "law_workspace_id" {
+  type    = string
+  default = null
+}

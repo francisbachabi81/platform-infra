@@ -430,7 +430,7 @@ module "sa1" {
   cmk_key_vault_id     = local.core_kv_id
   cmk_key_name         = local.cmk_key_name
   cmk_key_version      = null # or local.core_cmk_key_version if you want to pin
-  cmk_identity_name    = "uai-${var.product}-${var.env}-${var.region}-sta-cmk-01"
+  cmk_identity_name    = "uai-${var.product}-${var.env}-${var.region}-sa1-cmk-01"
 
   pe_blob_name         = "pep-${local.sa1_name_cleaned}-blob"
   psc_blob_name        = "psc-${local.sa1_name_cleaned}-blob"
@@ -676,6 +676,8 @@ module "aks1_env_shared_nonprod" {
   service_cidr   = local.aks_service_cidr
   dns_service_ip = local.aks_dns_service_ip
 
+  law_workspace_id = local.law_workspace_id
+
   # oidc_issuer_enabled       = true
   # workload_identity_enabled = true
 
@@ -713,6 +715,8 @@ module "aks1_env_prod" {
   service_cidr   = local.aks_service_cidr
   dns_service_ip = local.aks_dns_service_ip
 
+  law_workspace_id = local.law_workspace_id
+
   # oidc_issuer_enabled       = true
   # workload_identity_enabled = true
 
@@ -749,6 +753,8 @@ module "aks1_env_uat" {
   pod_cidr       = var.aks_pod_cidr
   service_cidr   = local.aks_service_cidr
   dns_service_ip = local.aks_dns_service_ip
+
+  law_workspace_id = local.law_workspace_id
 
   # oidc_issuer_enabled       = true
   # workload_identity_enabled = true

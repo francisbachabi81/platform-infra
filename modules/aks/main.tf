@@ -85,6 +85,13 @@ resource "azurerm_kubernetes_cluster" "aks" {
     }
   }
 
+  dynamic "oms_agent" {
+    for_each = var.law_workspace_id != null ? [1] : []
+    content {
+      log_analytics_workspace_id = var.law_workspace_id
+    }
+  }
+
   lifecycle {
     ignore_changes = [
       oms_agent,

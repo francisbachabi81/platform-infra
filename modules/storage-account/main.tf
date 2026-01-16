@@ -40,10 +40,10 @@ resource "azurerm_storage_account" "sa" {
     }
   }
 
-  depends_on = [
-    azurerm_user_assigned_identity.cmk,
-    azurerm_role_assignment.cmk_kv_crypto
-  ]
+  # depends_on = [
+  #   azurerm_user_assigned_identity.cmk,
+  #   azurerm_role_assignment.cmk_kv_crypto
+  # ]
 }
 
 resource "azurerm_user_assigned_identity" "cmk" {
@@ -56,11 +56,6 @@ resource "azurerm_user_assigned_identity" "cmk" {
   lifecycle {
     create_before_destroy = true
   }
-
-  depends_on = [
-    # This ensures destroy of the *old* identity waits until CMK is updated
-    azurerm_storage_account_customer_managed_key.cmk
-  ]
 }
 
 resource "azurerm_role_assignment" "cmk_kv_crypto" {
