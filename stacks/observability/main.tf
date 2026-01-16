@@ -3478,7 +3478,6 @@ locals {
             "Microsoft.Authorization/roleDefinitions/write",
             "Microsoft.Authorization/roleDefinitions/delete"
           )
-        ${local.rg_alert_kql_exclude_callers}
       KQL
     }
 
@@ -3498,7 +3497,6 @@ locals {
             "Microsoft.Authorization/policySetDefinitions/write",
             "Microsoft.Authorization/policySetDefinitions/delete"
           )
-        ${local.rg_alert_kql_exclude_callers}
       KQL
     }
 
@@ -3517,7 +3515,6 @@ locals {
             "Microsoft.KeyVault/vaults/accessPolicies/write",
             "Microsoft.KeyVault/vaults/accessPolicies/delete"
           )
-        ${local.rg_alert_kql_exclude_callers}
       KQL
     }
 
@@ -3546,7 +3543,6 @@ locals {
             "Microsoft.Network/firewallPolicies/write",
             "Microsoft.Network/firewallPolicies/delete"
           )
-        ${local.rg_alert_kql_exclude_callers}
       KQL
     }
 
@@ -3560,7 +3556,6 @@ locals {
         | where CategoryValue == "Administrative"
         | where OperationNameValue endswith "/delete"
         | where ActivityStatusValue in ("Succeeded")
-        ${local.rg_alert_kql_exclude_callers}
       KQL
     }
 
@@ -3573,7 +3568,6 @@ locals {
         AzureActivity
         | where CategoryValue == "Administrative"
         | where ActivityStatusValue in ("Failure", "Failed")
-        ${local.rg_alert_kql_exclude_callers}
       KQL
     }
   }
@@ -3623,17 +3617,21 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "rg_high_signal" {
   window_duration      = local.rg_alert_window
 
   criteria {
-    query = <<-KQL
-      ${each.value.alertdef.kql}
-      | where SubscriptionId has "${each.value.target.sub_id}"
-      | where ResourceGroup has "${each.value.target.rg_name}"
-      | project TimeGenerated, Caller, OperationNameValue, ActivityStatusValue, ResourceProviderValue, ResourceId, CorrelationId
-      | order by TimeGenerated desc
-    KQL
+    query = join("\n", [
+      for line in split("\n", trimspace(<<-KQL
+        ${each.value.alertdef.kql}
+        | where SubscriptionId == "${each.value.target.sub_id}"
+        | where ResourceGroup == "${each.value.target.rg_name}"
+        | project TimeGenerated, Caller, OperationNameValue, ActivityStatusValue, ResourceProviderValue, ResourceId, CorrelationId
+        | order by TimeGenerated desc
+      KQL
+      )) : trimspace(line)
+      if trimspace(line) != ""
+    ])
 
     time_aggregation_method = "Count"
-    threshold               = 0
     operator                = "GreaterThan"
+    threshold               = 0
   }
 
   action { action_groups = [each.value.target.ag_id] }
