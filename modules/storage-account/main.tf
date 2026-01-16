@@ -65,6 +65,18 @@ resource "azurerm_role_assignment" "cmk_kv_crypto" {
   principal_id         = azurerm_user_assigned_identity.cmk[0].principal_id
 }
 
+resource "time_sleep" "cmk_settle" {
+  count = local.cmk_effective ? 1 : 0
+
+  depends_on = [
+    azurerm_storage_account.sa,
+    azurerm_user_assigned_identity.cmk,
+    azurerm_role_assignment.cmk_kv_crypto
+  ]
+
+  create_duration = "60s"
+}
+
 resource "azurerm_storage_account_customer_managed_key" "cmk" {
   count                    = local.cmk_effective ? 1 : 0
   storage_account_id       = azurerm_storage_account.sa.id
@@ -76,8 +88,7 @@ resource "azurerm_storage_account_customer_managed_key" "cmk" {
   user_assigned_identity_id = azurerm_user_assigned_identity.cmk[0].id
 
   depends_on = [
-    azurerm_user_assigned_identity.cmk,
-    azurerm_role_assignment.cmk_kv_crypto
+    time_sleep.cmk_settle
   ]
 }
 
