@@ -43,7 +43,7 @@ sa_replication_type = "RAGRS"  # LRS | ZRS | RAGRS | GZRS | RAGZRS
 create_aks         = true
 kubernetes_version = "1.33.5"          # ensure this version is available in region
 aks_node_vm_size   = "Standard_D2s_v4" # Standard_D2s_v5
-aks_node_count     = 3
+aks_node_count     = 4
 
 aks_pod_cidr       = "10.214.0.0/16"
 aks_service_cidr   = "10.114.0.0/16"

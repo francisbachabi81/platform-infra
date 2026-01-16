@@ -87,7 +87,8 @@ resource "azurerm_kubernetes_cluster" "aks" {
 
   lifecycle {
     ignore_changes = [
-      oms_agent
+      oms_agent,
+      microsoft_defender,
     ]
   }
 
