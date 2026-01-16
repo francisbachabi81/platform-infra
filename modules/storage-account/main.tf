@@ -40,10 +40,10 @@ resource "azurerm_storage_account" "sa" {
     }
   }
 
-  # depends_on = [
-  #   azurerm_user_assigned_identity.cmk,
-  #   azurerm_role_assignment.cmk_kv_crypto
-  # ]
+  depends_on = [
+    azurerm_user_assigned_identity.cmk,
+    azurerm_role_assignment.cmk_kv_crypto
+  ]
 }
 
 resource "azurerm_user_assigned_identity" "cmk" {

@@ -412,6 +412,11 @@ locals {
 
 module "sa1" {
   count               = local.enable_both ? 1 : 0
+
+  providers = {
+    azurerm = var.env == "prod" ? azurerm.prod : var.env == "uat"  ? azurerm.uat  : var.env == "dev"  ? azurerm.shared_nonprod : azurerm
+  }
+
   source              = "../../modules/storage-account"
   product             = var.product
   name                = local.sa1_name
