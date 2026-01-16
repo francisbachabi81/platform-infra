@@ -52,6 +52,15 @@ resource "azurerm_user_assigned_identity" "cmk" {
   location            = var.location
   resource_group_name = var.resource_group_name
   tags                = var.tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  depends_on = [
+    # This ensures destroy of the *old* identity waits until CMK is updated
+    azurerm_storage_account_customer_managed_key.cmk
+  ]
 }
 
 resource "azurerm_role_assignment" "cmk_kv_crypto" {
