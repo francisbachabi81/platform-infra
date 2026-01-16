@@ -1121,23 +1121,23 @@ locals {
   ag_id_core = local.ag_id
 }
 
-resource "azurerm_monitor_activity_log_alert" "rg_changes_env" {
-  count               = (local.rg_env_name_resolved != null) ? 1 : 0
-  provider            = azurerm.env
-  name                = "rg-change-${var.product}-${local.env_effective}"
-  location            = "Global"
-  resource_group_name = local.rg_env_name_resolved
-  scopes              = [local.rg_env_id_resolved]
-  criteria { category = "Administrative" }
-  action   { action_group_id = local.ag_id_env }
+# resource "azurerm_monitor_activity_log_alert" "rg_changes_env" {
+#   count               = (local.rg_env_name_resolved != null) ? 1 : 0
+#   provider            = azurerm.env
+#   name                = "rg-change-${var.product}-${local.env_effective}"
+#   location            = "Global"
+#   resource_group_name = local.rg_env_name_resolved
+#   scopes              = [local.rg_env_id_resolved]
+#   criteria { category = "Administrative" }
+#   action   { action_group_id = local.ag_id_env }
 
-  lifecycle {
-    precondition {
-      condition     = local.sub_env_resolved != null && local.rg_env_name_resolved != null
-      error_message = "ENV RG not found in ENV subscription. Set var.env_rg_name or fix platform outputs."
-    }
-  }
-}
+#   lifecycle {
+#     precondition {
+#       condition     = local.sub_env_resolved != null && local.rg_env_name_resolved != null
+#       error_message = "ENV RG not found in ENV subscription. Set var.env_rg_name or fix platform outputs."
+#     }
+#   }
+# }
 
 resource "azurerm_monitor_activity_log_alert" "service_health_env" {
   count               = (local.rg_env_name_resolved != null) ? 1 : 0
@@ -1176,17 +1176,17 @@ resource "azurerm_monitor_activity_log_alert" "service_health_core" {
   }
 }
 
-resource "azurerm_monitor_activity_log_alert" "rg_changes_core" {
-  count               = local.rg_core_name_resolved != null && local.ag_id_core != null && local.sub_core_resolved != null ? 1 : 0
-  provider            = azurerm.core
-  name                = "rg-change-${var.product}-${local.plane_code}-core"
-  location            = local.activity_alert_location
-  resource_group_name = local.rg_core_name_resolved
-  scopes              = ["/subscriptions/${local.sub_core_resolved}/resourceGroups/${local.rg_core_name_resolved}"]
-  description         = "Alert on administrative operations in core RG"
-  criteria { category = "Administrative" }
-  action   { action_group_id = local.ag_id_core }
-}
+# resource "azurerm_monitor_activity_log_alert" "rg_changes_core" {
+#   count               = local.rg_core_name_resolved != null && local.ag_id_core != null && local.sub_core_resolved != null ? 1 : 0
+#   provider            = azurerm.core
+#   name                = "rg-change-${var.product}-${local.plane_code}-core"
+#   location            = local.activity_alert_location
+#   resource_group_name = local.rg_core_name_resolved
+#   scopes              = ["/subscriptions/${local.sub_core_resolved}/resourceGroups/${local.rg_core_name_resolved}"]
+#   description         = "Alert on administrative operations in core RG"
+#   criteria { category = "Administrative" }
+#   action   { action_group_id = local.ag_id_core }
+# }
 
 # AKS diagnostics
 locals {
@@ -3418,7 +3418,6 @@ locals {
 
   # Exclude known "expected" automation callers to reduce deployment noise.
   # Populate with your actual service principals / managed identities (display names) that deploy infra.
-  # Tip: Start empty, observe a week, then add the top noisy callers.
   rg_alert_excluded_callers = coalesce(var.rg_alert_excluded_callers, [])
 
   env_sub_by_env = {
@@ -3428,26 +3427,30 @@ locals {
     prod = local.prod_sub
   }
 
-  # RG targets to monitor (env RG + core RG if present)
-  rg_alert_targets = {
-    # ENV target key becomes the real env name (dev/qa/uat/prod)
-    for k, v in {
-      "${local.env_effective}" = {
-        rg_name = local.rg_env_name_resolved
-        sub_id  = lookup(local.env_sub_by_env, local.env_effective, local.env_sub)
-        ag_id   = local.ag_id_env
-        enabled = local.rg_env_name_resolved != null
-      }
+  # --- ENV target (always: dev/qa/uat/prod) ---
+  rg_alert_target_env = (
+    local.rg_env_name_resolved != null
+  ) ? {
+    "${local.env_effective}" = {
+      rg_name = local.rg_env_name_resolved
+      sub_id  = lookup(local.env_sub_by_env, local.env_effective, local.env_sub)
+      ag_id   = local.ag_id_env
+      kind    = "env"
+    }
+  } : {}
 
-      # CORE target key becomes np-core/pr-core (or whatever you prefer)
-      "${local.plane_code}-core" = {
-        rg_name = local.rg_core_name_resolved
-        sub_id  = local.core_sub
-        ag_id   = local.ag_id_core
-        enabled = local.rg_core_name_resolved != null
-      }
-    } : k => v if v.enabled
-  }
+  # --- CORE target (only when dev/prod) ---
+  rg_alert_target_core = (
+    contains(["dev", "prod"], local.env_effective) &&
+    local.rg_core_name_resolved != null
+  ) ? {
+    "${local.plane_code}-core" = {
+      rg_name = local.rg_core_name_resolved
+      sub_id  = local.core_sub
+      ag_id   = local.ag_id_core
+      kind    = "core"
+    }
+  } : {}
 
   # Shared schedule knobs (tune as needed)
   rg_alert_freq   = "PT5M"
@@ -3478,6 +3481,7 @@ locals {
             "Microsoft.Authorization/roleDefinitions/write",
             "Microsoft.Authorization/roleDefinitions/delete"
           )
+          ${local.rg_alert_kql_exclude_callers}
       KQL
     }
 
@@ -3497,6 +3501,7 @@ locals {
             "Microsoft.Authorization/policySetDefinitions/write",
             "Microsoft.Authorization/policySetDefinitions/delete"
           )
+          ${local.rg_alert_kql_exclude_callers}
       KQL
     }
 
@@ -3515,6 +3520,7 @@ locals {
             "Microsoft.KeyVault/vaults/accessPolicies/write",
             "Microsoft.KeyVault/vaults/accessPolicies/delete"
           )
+          ${local.rg_alert_kql_exclude_callers}
       KQL
     }
 
@@ -3543,6 +3549,7 @@ locals {
             "Microsoft.Network/firewallPolicies/write",
             "Microsoft.Network/firewallPolicies/delete"
           )
+          ${local.rg_alert_kql_exclude_callers}
       KQL
     }
 
@@ -3555,7 +3562,8 @@ locals {
         AzureActivity
         | where CategoryValue == "Administrative"
         | where OperationNameValue endswith "/delete"
-        | where ActivityStatusValue in ("Succeeded")
+        | where ActivityStatusValue in ("Succeeded", "Success")
+        ${local.rg_alert_kql_exclude_callers}
       KQL
     }
 
@@ -3568,14 +3576,29 @@ locals {
         AzureActivity
         | where CategoryValue == "Administrative"
         | where ActivityStatusValue in ("Failure", "Failed")
+        ${local.rg_alert_kql_exclude_callers}
       KQL
     }
   }
 
   # Expand into instances: { "<target>.<alert_key>" => {...} }
-  high_signal_alert_instances = {
+  high_signal_alert_instances_env = {
     for item in flatten([
-      for t_key, t in local.rg_alert_targets : [
+      for t_key, t in local.rg_alert_target_env : [
+        for a_key, a in local.high_signal_alert_defs : {
+          key      = "${t_key}.${a_key}"
+          t_key    = t_key
+          a_key    = a_key
+          target   = t
+          alertdef = a
+        }
+      ]
+    ]) : item.key => item
+  }
+
+  high_signal_alert_instances_core = {
+    for item in flatten([
+      for t_key, t in local.rg_alert_target_core : [
         for a_key, a in local.high_signal_alert_defs : {
           key      = "${t_key}.${a_key}"
           t_key    = t_key
@@ -3588,31 +3611,22 @@ locals {
   }
 }
 
-resource "azurerm_monitor_scheduled_query_rules_alert_v2" "rg_high_signal" {
-  provider = azurerm.core
+resource "azurerm_monitor_scheduled_query_rules_alert_v2" "rg_high_signal_env" {
+  provider = azurerm.env
 
   for_each = (
     var.enable_high_signal_rg_alerts &&
     local.law_id != null &&
-    local.rg_core_name_resolved != null
-  ) ? local.high_signal_alert_instances : {}
-
-  # for_each = (
-  #   var.enable_high_signal_rg_alerts && 
-  #   local.policy_alerts_enabled_for_env && 
-  #   local.law_id != null && 
-  #   local.rg_core_name_resolved != null
-  #   ) ? local.high_signal_alert_instances : {}
+    local.rg_env_name_resolved != null
+  ) ? local.high_signal_alert_instances_env : {}
 
   name                = "al-${var.product}-${each.value.t_key}-${var.region}-${each.value.alertdef.suffix}"
-  resource_group_name = local.rg_core_name_resolved
+  resource_group_name = local.rg_env_name_resolved
   location            = var.location
+  scopes              = [local.law_id]
 
-  scopes = [local.law_id]
-
-  severity    = each.value.alertdef.severity
-  description = each.value.alertdef.desc
-
+  severity             = each.value.alertdef.severity
+  description          = each.value.alertdef.desc
   evaluation_frequency = local.rg_alert_freq
   window_duration      = local.rg_alert_window
 
@@ -3620,8 +3634,9 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "rg_high_signal" {
     query = join("\n", [
       for line in split("\n", trimspace(<<-KQL
         ${each.value.alertdef.kql}
-        | where SubscriptionId == "${each.value.target.sub_id}"
-        | where ResourceGroup == "${each.value.target.rg_name}"
+        ${local.rg_alert_kql_exclude_callers}
+        | where SubscriptionId has "${each.value.target.sub_id}"
+        | where ResourceGroup has "${each.value.target.rg_name}"
         | project TimeGenerated, Caller, OperationNameValue, ActivityStatusValue, ResourceProviderValue, ResourceId, CorrelationId
         | order by TimeGenerated desc
       KQL
@@ -3635,15 +3650,46 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "rg_high_signal" {
   }
 
   action { action_groups = [each.value.target.ag_id] }
+}
 
-  lifecycle {
-    precondition {
-      condition     = local.law_id != null
-      error_message = "LAW workspace ID not resolved; cannot create high-signal RG alerts."
-    }
-    precondition {
-      condition     = local.rg_core_name_resolved != null
-      error_message = "Core RG not resolved; cannot create high-signal RG alerts centrally."
-    }
+resource "azurerm_monitor_scheduled_query_rules_alert_v2" "rg_high_signal_core" {
+  provider = azurerm.core
+
+  for_each = (
+    var.enable_high_signal_rg_alerts &&
+    contains(["dev", "prod"], local.env_effective) &&
+    local.law_id != null &&
+    local.rg_core_name_resolved != null
+  ) ? local.high_signal_alert_instances_core : {}
+
+  name                = "al-${var.product}-${each.value.t_key}-${var.region}-${each.value.alertdef.suffix}"
+  resource_group_name = local.rg_core_name_resolved
+  location            = var.location
+  scopes              = [local.law_id]
+
+  severity             = each.value.alertdef.severity
+  description          = each.value.alertdef.desc
+  evaluation_frequency = local.rg_alert_freq
+  window_duration      = local.rg_alert_window
+
+  criteria {
+    query = join("\n", [
+      for line in split("\n", trimspace(<<-KQL
+        ${each.value.alertdef.kql}
+        ${local.rg_alert_kql_exclude_callers}
+        | where SubscriptionId has "${each.value.target.sub_id}"
+        | where ResourceGroup has "${each.value.target.rg_name}"
+        | project TimeGenerated, Caller, OperationNameValue, ActivityStatusValue, ResourceProviderValue, ResourceId, CorrelationId
+        | order by TimeGenerated desc
+      KQL
+      )) : trimspace(line)
+      if trimspace(line) != ""
+    ])
+
+    time_aggregation_method = "Count"
+    operator                = "GreaterThan"
+    threshold               = 0
   }
+
+  action { action_groups = [each.value.target.ag_id] }
 }
