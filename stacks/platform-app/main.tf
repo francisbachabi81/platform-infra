@@ -904,8 +904,8 @@ module "funcapp1" {
 
   depends_on = [
     data.azurerm_resource_group.env,
-    module.plan1_func,
-    module.sa1
+    module.plan1_func
+    # module.sa1
   ]
 }
 
@@ -947,9 +947,9 @@ module "funcapp2" {
 
   depends_on = [
     data.azurerm_resource_group.env,
-    module.plan1_func,
-    module.sa1,
-    module.funcapp1
+    module.plan1_func
+    # module.sa1,
+    # module.funcapp1
   ]
 }
 
@@ -1247,9 +1247,9 @@ module "sa_nsg_flowlogs" {
 
   depends_on = [
     data.terraform_remote_state.core,
-    data.terraform_remote_state.shared,
-    data.azurerm_resource_group.env,
-    module.sa1
+    data.terraform_remote_state.shared
+    # data.azurerm_resource_group.env
+    # module.sa1
   ]
 }
 
