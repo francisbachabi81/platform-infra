@@ -30,34 +30,34 @@ provider "azurerm" {
 }
 
 provider "azurerm" {
-  alias           = "hub"
-  features        {}
+  alias = "hub"
+  features {}
   subscription_id = coalesce(var.hub_subscription_id, var.subscription_id)
-  tenant_id       = coalesce(var.hub_tenant_id,       var.tenant_id)
+  tenant_id       = coalesce(var.hub_tenant_id, var.tenant_id)
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
 provider "azurerm" {
-  alias           = "shared_nonprod" # used when env=dev
-  features        {}
+  alias = "shared_nonprod" # used when env=dev
+  features {}
   subscription_id = coalesce(var.shared_nonprod_subscription_id, var.subscription_id)
-  tenant_id       = coalesce(var.shared_nonprod_tenant_id,       var.tenant_id)
+  tenant_id       = coalesce(var.shared_nonprod_tenant_id, var.tenant_id)
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
 provider "azurerm" {
-  alias           = "prod"
-  features        {}
+  alias = "prod"
+  features {}
   subscription_id = coalesce(var.prod_subscription_id, var.subscription_id)
-  tenant_id       = coalesce(var.prod_tenant_id,       var.tenant_id)
+  tenant_id       = coalesce(var.prod_tenant_id, var.tenant_id)
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
 provider "azurerm" {
-  alias           = "uat"
-  features        {}
+  alias = "uat"
+  features {}
   subscription_id = coalesce(var.uat_subscription_id, var.subscription_id)
-  tenant_id       = coalesce(var.uat_tenant_id,       var.tenant_id)
+  tenant_id       = coalesce(var.uat_tenant_id, var.tenant_id)
   environment     = var.product == "hrz" ? "usgovernment" : "public"
 }
 
@@ -76,10 +76,10 @@ locals {
   plane_code = local.plane == "nonprod" ? "np" : "pr"
 
   vnet_key = (
-    var.env == "dev"  ? "dev_spoke"  :
-    var.env == "qa"   ? "qa_spoke"   :
-    var.env == "uat"  ? "uat_spoke"  :
-                        "prod_spoke"
+    var.env == "dev" ? "dev_spoke" :
+    var.env == "qa" ? "qa_spoke" :
+    var.env == "uat" ? "uat_spoke" :
+    "prod_spoke"
   )
 
   sa1_name  = substr("sa${var.product}${var.env}${var.region}01", 0, 24)
@@ -104,12 +104,12 @@ locals {
     local.runtime_tags
   )
 
-  tags_kv       = { purpose = "secrets",           service = "key-vault" }
-  tags_sa       = { purpose = "storage",           service = "blob,file" }
-  tags_cosmos   = { purpose = "database",          service = "cosmosdb" }
-  tags_aks      = { purpose = "kubernetes",        service = "aks" }
+  tags_kv       = { purpose = "secrets", service = "key-vault" }
+  tags_sa       = { purpose = "storage", service = "blob,file" }
+  tags_cosmos   = { purpose = "database", service = "cosmosdb" }
+  tags_aks      = { purpose = "kubernetes", service = "aks" }
   tags_postgres = { purpose = "postgres-database", service = "postgresql" }
-  tags_redis    = { purpose = "redis-cache",       service = "redis" }
+  tags_redis    = { purpose = "redis-cache", service = "redis" }
 
   # Default AKS: enabled for all envs except QA (overridable)
   create_aks = var.create_aks == null ? (var.env != "qa") : var.create_aks
@@ -188,7 +188,7 @@ locals {
     usva = "usgovvirginia"
   }
 
-  _is_az = length(regexall("arizona",  local._loc_lower)) > 0
+  _is_az = length(regexall("arizona", local._loc_lower)) > 0
   _is_va = length(regexall("virginia", local._loc_lower)) > 0
 
   aks_region_token = local.enable_hrz_features ? coalesce(
@@ -213,16 +213,16 @@ locals {
     try(data.terraform_remote_state.core[0].outputs, {})
   )
 
-  law_workspace_id       = var.law_workspace_id_override       != null ? var.law_workspace_id_override       : try(local.core_outputs.observability.law_workspace_id, null)
+  law_workspace_id       = var.law_workspace_id_override != null ? var.law_workspace_id_override : try(local.core_outputs.observability.law_workspace_id, null)
   appi_connection_string = var.appi_connection_string_override != null ? var.appi_connection_string_override : try(local.core_outputs.observability.appi_connection_string, null)
 
   # AKS allowed only in dev/prod/uat & when create_aks=true
   aks_enabled_env = contains(["dev", "prod", "uat"], var.env) && local.create_aks
 
-  dev_only_tags  = { environment = "dev",  purpose = "env-dev",  criticality = "Low",    patchgroup = "Test",    lane = "nonprod" }
-  qa_only_tags   = { environment = "qa",   purpose = "env-qa",   criticality = "Medium", patchgroup = "Test",    lane = "nonprod" }
-  uat_only_tags  = { environment = "uat",  purpose = "env-uat",  criticality = "Medium", patchgroup = "Monthly", lane = "prod" }
-  prod_only_tags = { environment = "prod", purpose = "env-prod", criticality = "High",   patchgroup = "Monthly", lane = "prod" }
+  dev_only_tags  = { environment = "dev", purpose = "env-dev", criticality = "Low", patchgroup = "Test", lane = "nonprod" }
+  qa_only_tags   = { environment = "qa", purpose = "env-qa", criticality = "Medium", patchgroup = "Test", lane = "nonprod" }
+  uat_only_tags  = { environment = "uat", purpose = "env-uat", criticality = "Medium", patchgroup = "Monthly", lane = "prod" }
+  prod_only_tags = { environment = "prod", purpose = "env-prod", criticality = "High", patchgroup = "Monthly", lane = "prod" }
 
   is_nonprod = local.plane == "nonprod"
 
@@ -230,7 +230,7 @@ locals {
     nphub = "shared-network"
     dev   = "platform-dev"
     qa    = "platform-qa"
-  } : {
+    } : {
     prhub = "shared-network"
     prod  = "platform-prod"
     uat   = "platform-uat"
@@ -238,9 +238,9 @@ locals {
 }
 
 locals {
-  core_kv_id       = try(local.core_outputs.storage_cmk.key_vault_id, null)
-  cmk_key_name     = try(local.core_outputs.storage_cmk.key_name, null)
-  cmk_key_version  = try(local.core_outputs.storage_cmk.key_version, null)
+  core_kv_id      = try(local.core_outputs.storage_cmk.key_vault_id, null)
+  cmk_key_name    = try(local.core_outputs.storage_cmk.key_name, null)
+  cmk_key_version = try(local.core_outputs.storage_cmk.key_version, null)
 
   storage_cmk_enabled = local.core_kv_id != null && local.cmk_key_name != null
 }
@@ -263,21 +263,21 @@ module "rg_qa" {
 }
 
 module "rg_prod" {
-  count    = local.is_prod ? 1 : 0
-  source   = "../../modules/resource-group"
+  count     = local.is_prod ? 1 : 0
+  source    = "../../modules/resource-group"
   providers = { azurerm = azurerm.prod }
-  name     = local.env_rg_name
-  location = var.location
-  tags     = merge(local.tags_common, local.prod_only_tags, { layer = local.rg_layer_by_key["prod"] })
+  name      = local.env_rg_name
+  location  = var.location
+  tags      = merge(local.tags_common, local.prod_only_tags, { layer = local.rg_layer_by_key["prod"] })
 }
 
 module "rg_uat" {
-  count    = local.is_uat ? 1 : 0
-  source   = "../../modules/resource-group"
+  count     = local.is_uat ? 1 : 0
+  source    = "../../modules/resource-group"
   providers = { azurerm = azurerm.uat }
-  name     = local.env_rg_name
-  location = var.location
-  tags     = merge(local.tags_common, local.uat_only_tags, { layer = local.rg_layer_by_key["uat"] })
+  name      = local.env_rg_name
+  location  = var.location
+  tags      = merge(local.tags_common, local.uat_only_tags, { layer = local.rg_layer_by_key["uat"] })
 }
 
 data "azurerm_resource_group" "env" {
@@ -309,7 +309,7 @@ check "private_net_basics_present" {
 # AKS env routing / subscription mapping
 locals {
   shared_np_subscription_id = try(data.terraform_remote_state.core[0].outputs.meta.subscription, null)
-  shared_np_tenant_id       = try(data.terraform_remote_state.core[0].outputs.meta.tenant,       var.tenant_id)
+  shared_np_tenant_id       = try(data.terraform_remote_state.core[0].outputs.meta.tenant, var.tenant_id)
   shared_np_core_rg_name    = try(data.terraform_remote_state.core[0].outputs.resource_group.name, null)
 
   np_hub_vnet_id = try(local.rs_outputs.vnets["nonprod_hub"].id, null)
@@ -322,17 +322,17 @@ locals {
   )
 
   aks_subscription_id = (
-    var.env == "dev"  ? local.shared_np_subscription_id :
+    var.env == "dev" ? local.shared_np_subscription_id :
     var.env == "prod" ? coalesce(var.prod_subscription_id, var.subscription_id) :
-    var.env == "uat"  ? coalesce(var.uat_subscription_id,  var.subscription_id) :
-                        null
+    var.env == "uat" ? coalesce(var.uat_subscription_id, var.subscription_id) :
+    null
   )
 
   aks_tenant_id = (
-    var.env == "dev"  ? local.shared_np_tenant_id :
+    var.env == "dev" ? local.shared_np_tenant_id :
     var.env == "prod" ? coalesce(var.prod_tenant_id, var.tenant_id) :
-    var.env == "uat"  ? coalesce(var.uat_tenant_id,  var.tenant_id) :
-                        null
+    var.env == "uat" ? coalesce(var.uat_tenant_id, var.tenant_id) :
+    null
   )
 
   # dev → shared nonprod core RG; prod/uat → env RG
@@ -340,15 +340,15 @@ locals {
 
   aks_default_nodepool_subnet_id = (
     var.env == "dev"
-      ? coalesce(
-          (
-            var.aks_nodepool_subnet_id != null && trimspace(var.aks_nodepool_subnet_id) != ""
-              ? var.aks_nodepool_subnet_id
-              : null
-          ),
-          local.np_hub_subnet_aks
-        )
-      : local.aks_nodepool_subnet_effective
+    ? coalesce(
+      (
+        var.aks_nodepool_subnet_id != null && trimspace(var.aks_nodepool_subnet_id) != ""
+        ? var.aks_nodepool_subnet_id
+        : null
+      ),
+      local.np_hub_subnet_aks
+    )
+    : local.aks_nodepool_subnet_effective
   )
 
   aks_private_dns_zone_id = try(local.zone_ids_effective[local.aks_pdns_name], null)
@@ -356,7 +356,7 @@ locals {
 
 check "dev_provider_matches_core" {
   assert {
-    condition = !(var.env == "dev" && var.shared_state_enabled && var.core_state_enabled) || (local.shared_np_subscription_id == coalesce(var.shared_nonprod_subscription_id, var.subscription_id))
+    condition     = !(var.env == "dev" && var.shared_state_enabled && var.core_state_enabled) || (local.shared_np_subscription_id == coalesce(var.shared_nonprod_subscription_id, var.subscription_id))
     error_message = "Provider 'shared_nonprod' subscription_id does not match CORE remote state's shared nonprod subscription for env=dev."
   }
 }
@@ -410,6 +410,21 @@ locals {
   sa1_name_cleaned = replace(lower(trimspace(local.sa1_name)), "-", "")
 }
 
+# UAI used for storage encryption
+resource "azurerm_user_assigned_identity" "sa1_cmk" {
+  name                = "uai-${var.product}-${var.env}-${var.region}-sta-cmk-01" # your updated name
+  location            = var.location
+  resource_group_name = local.env_rg_name
+  tags                = local.tags_common
+}
+
+# Grant KV permissions to that identity
+resource "azurerm_role_assignment" "sa1_cmk_kv_crypto" {
+  scope                = local.core_kv_id
+  role_definition_name = "Key Vault Crypto Service Encryption User"
+  principal_id         = azurerm_user_assigned_identity.sa1_cmk.principal_id
+}
+
 module "sa1" {
   count               = local.enable_both ? 1 : 0
   source              = "../../modules/storage-account"
@@ -426,11 +441,8 @@ module "sa1" {
   # --- compliance ---
   restrict_network_access = true
 
-  cmk_enabled          = local.storage_cmk_enabled
-  cmk_key_vault_id     = local.core_kv_id
-  cmk_key_name         = local.cmk_key_name
-  cmk_key_version      = null # or local.core_cmk_key_version if you want to pin
-  cmk_identity_name    = "uai-${var.product}-${var.env}-${var.region}-sa1-cmk-01"
+  identity_type = "UserAssigned"
+  identity_ids  = [azurerm_user_assigned_identity.sa1_cmk.id]
 
   pe_blob_name         = "pep-${local.sa1_name_cleaned}-blob"
   psc_blob_name        = "psc-${local.sa1_name_cleaned}-blob"
@@ -439,8 +451,13 @@ module "sa1" {
   psc_file_name        = "psc-${local.sa1_name_cleaned}-file"
   file_zone_group_name = "pdns-${local.sa1_name_cleaned}-file"
 
-  tags       = merge(local.tags_common, local.tags_sa, var.tags)
-  depends_on = [data.azurerm_resource_group.env, module.kv1]
+  tags = merge(local.tags_common, local.tags_sa, var.tags)
+  depends_on = [
+    data.azurerm_resource_group.env,
+    module.kv1,
+    azurerm_user_assigned_identity.sa1_cmk,
+    azurerm_role_assignment.sa1_cmk_kv_crypto
+  ]
 }
 
 # Cosmos DB (NoSQL) (env)
@@ -516,9 +533,9 @@ resource "azurerm_cosmosdb_sql_container" "events" {
 locals {
   aks_service_cidr = coalesce(
     var.aks_service_cidr,
-    local.is_dev  ? "10.120.0.0/16" :
+    local.is_dev ? "10.120.0.0/16" :
     local.is_prod ? "10.124.0.0/16" :
-                    "10.125.0.0/16"
+    "10.125.0.0/16"
   )
 
   aks_dns_service_ip = coalesce(
@@ -539,7 +556,7 @@ data "azurerm_resource_group" "aks_rg_prod" {
   name     = local.aks_rg_name
   provider = azurerm.prod
 
-  depends_on = [ module.rg_prod ]
+  depends_on = [module.rg_prod]
 }
 
 data "azurerm_resource_group" "aks_rg_uat" {
@@ -547,7 +564,7 @@ data "azurerm_resource_group" "aks_rg_uat" {
   name     = local.aks_rg_name
   provider = azurerm.uat
 
-  depends_on = [ module.rg_uat ]
+  depends_on = [module.rg_uat]
 }
 
 locals {
@@ -589,25 +606,16 @@ resource "azurerm_user_assigned_identity" "aks_env_uat" {
 locals {
   aks_uai_id = coalesce(
     try(azurerm_user_assigned_identity.aks_env_shared_nonprod[0].id, null),
-    try(azurerm_user_assigned_identity.aks_env_prod[0].id,           null),
-    try(azurerm_user_assigned_identity.aks_env_uat[0].id,            null)
+    try(azurerm_user_assigned_identity.aks_env_prod[0].id, null),
+    try(azurerm_user_assigned_identity.aks_env_uat[0].id, null)
   )
 
   aks_uai_principal_id = coalesce(
     try(azurerm_user_assigned_identity.aks_env_shared_nonprod[0].principal_id, null),
-    try(azurerm_user_assigned_identity.aks_env_prod[0].principal_id,           null),
-    try(azurerm_user_assigned_identity.aks_env_uat[0].principal_id,            null)
+    try(azurerm_user_assigned_identity.aks_env_prod[0].principal_id, null),
+    try(azurerm_user_assigned_identity.aks_env_uat[0].principal_id, null)
   )
 }
-
-# locals {
-#   aks_oidc_issuer_url = local.aks_enabled_env ? (
-#     var.env == "dev"  ? try(module.aks1_env_shared_nonprod[0].oidc_issuer_url, null) :
-#     var.env == "prod" ? try(module.aks1_env_prod[0].oidc_issuer_url,           null) :
-#     var.env == "uat"  ? try(module.aks1_env_uat[0].oidc_issuer_url,            null) :
-#                         null
-#   ) : null
-# }
 
 # AKS: PDZ role assignments
 resource "azurerm_role_assignment" "aks_pdz_contrib_shared_nonprod" {
@@ -776,24 +784,24 @@ module "aks1_env_uat" {
 # AKS: unified locals for outputs
 locals {
   aks_id = local.aks_enabled_env ? (
-    var.env == "dev"  ? try(module.aks1_env_shared_nonprod[0].id,               null) :
-    var.env == "prod" ? try(module.aks1_env_prod[0].id,                         null) :
-    var.env == "uat"  ? try(module.aks1_env_uat[0].id,                          null) :
-                        null
+    var.env == "dev" ? try(module.aks1_env_shared_nonprod[0].id, null) :
+    var.env == "prod" ? try(module.aks1_env_prod[0].id, null) :
+    var.env == "uat" ? try(module.aks1_env_uat[0].id, null) :
+    null
   ) : null
 
   aks_name = local.aks_enabled_env ? (
-    var.env == "dev"  ? try(module.aks1_env_shared_nonprod[0].name,             null) :
-    var.env == "prod" ? try(module.aks1_env_prod[0].name,                       null) :
-    var.env == "uat"  ? try(module.aks1_env_uat[0].name,                        null) :
-                        null
+    var.env == "dev" ? try(module.aks1_env_shared_nonprod[0].name, null) :
+    var.env == "prod" ? try(module.aks1_env_prod[0].name, null) :
+    var.env == "uat" ? try(module.aks1_env_uat[0].name, null) :
+    null
   ) : null
 
   aks_node_rg = local.aks_enabled_env ? (
-    var.env == "dev"  ? try(module.aks1_env_shared_nonprod[0].node_resource_group, null) :
-    var.env == "prod" ? try(module.aks1_env_prod[0].node_resource_group,           null) :
-    var.env == "uat"  ? try(module.aks1_env_uat[0].node_resource_group,            null) :
-                        null
+    var.env == "dev" ? try(module.aks1_env_shared_nonprod[0].node_resource_group, null) :
+    var.env == "prod" ? try(module.aks1_env_prod[0].node_resource_group, null) :
+    var.env == "uat" ? try(module.aks1_env_uat[0].node_resource_group, null) :
+    null
   ) : null
 }
 
@@ -867,16 +875,16 @@ locals {
 }
 
 module "funcapp1" {
-  count                      = local.enable_both ? 1 : 0
-  source                     = "../../modules/function-app"
-  product                    = var.product
-  name                       = local.funcapp1_name
-  location                   = var.location
-  resource_group_name        = local.env_rg_name
-  service_plan_id            = module.plan1_func[0].id
-  plan_sku_name              = module.plan1_func[0].sku_name
-  storage_account_name       = module.sa1[0].name
-  storage_account_access_key = module.sa1[0].primary_access_key
+  count                = local.enable_both ? 1 : 0
+  source               = "../../modules/function-app"
+  product              = var.product
+  name                 = local.funcapp1_name
+  location             = var.location
+  resource_group_name  = local.env_rg_name
+  service_plan_id      = module.plan1_func[0].id
+  plan_sku_name        = module.plan1_func[0].sku_name
+  storage_account_name = module.sa1[0].name
+  # storage_account_access_key = module.sa1[0].primary_access_key
 
   vnet_integration_subnet_id = try(local.subnet_ids_from_state["appsvc-int-linux-01"], null)
   pe_subnet_id               = local.pe_subnet_id_effective
@@ -904,22 +912,22 @@ module "funcapp1" {
 
   depends_on = [
     data.azurerm_resource_group.env,
-    module.plan1_func
-    # module.sa1
+    module.plan1_func,
+    module.sa1
   ]
 }
 
 module "funcapp2" {
-  count                      = local.enable_both ? 1 : 0
-  source                     = "../../modules/function-app"
-  product                    = var.product
-  name                       = local.funcapp2_name
-  location                   = var.location
-  resource_group_name        = local.env_rg_name
-  service_plan_id            = module.plan1_func[0].id
-  plan_sku_name              = module.plan1_func[0].sku_name
-  storage_account_name       = module.sa1[0].name
-  storage_account_access_key = module.sa1[0].primary_access_key
+  count                = local.enable_both ? 1 : 0
+  source               = "../../modules/function-app"
+  product              = var.product
+  name                 = local.funcapp2_name
+  location             = var.location
+  resource_group_name  = local.env_rg_name
+  service_plan_id      = module.plan1_func[0].id
+  plan_sku_name        = module.plan1_func[0].sku_name
+  storage_account_name = module.sa1[0].name
+  # storage_account_access_key = module.sa1[0].primary_access_key
 
   vnet_integration_subnet_id = try(local.subnet_ids_from_state["appsvc-int-linux-01"], null)
   pe_subnet_id               = local.pe_subnet_id_effective
@@ -947,11 +955,51 @@ module "funcapp2" {
 
   depends_on = [
     data.azurerm_resource_group.env,
-    module.plan1_func
-    # module.sa1,
-    # module.funcapp1
+    module.plan1_func,
+    module.sa1,
+    module.funcapp1
   ]
 }
+
+locals {
+  func_role_assignments = local.enable_both ? {
+    "funcapp1-blob"  = { scope = module.sa1[0].id, role = "Storage Blob Data Contributor", principal_id = module.funcapp1[0].principal_id }
+    "funcapp1-queue" = { scope = module.sa1[0].id, role = "Storage Queue Data Contributor", principal_id = module.funcapp1[0].principal_id }
+    "funcapp2-blob"  = { scope = module.sa1[0].id, role = "Storage Blob Data Contributor", principal_id = module.funcapp2[0].principal_id }
+    "funcapp2-queue" = { scope = module.sa1[0].id, role = "Storage Queue Data Contributor", principal_id = module.funcapp2[0].principal_id }
+  } : {}
+}
+
+resource "azurerm_role_assignment" "func_sa_data_roles" {
+  for_each             = local.func_role_assignments
+  scope                = each.value.scope
+  role_definition_name = each.value.role
+  principal_id         = each.value.principal_id
+}
+
+# resource "azurerm_role_assignment" "funcapp1_blob_contrib" {
+#   scope                = module.sa1[0].id
+#   role_definition_name = "Storage Blob Data Contributor"
+#   principal_id         = module.funcapp1[0].principal_id
+# }
+
+# resource "azurerm_role_assignment" "funcapp1_queue_contrib" {
+#   scope                = module.sa1[0].id
+#   role_definition_name = "Storage Queue Data Contributor"
+#   principal_id         = module.funcapp1[0].principal_id
+# }
+
+# resource "azurerm_role_assignment" "funcapp2_blob_contrib" {
+#   scope                = module.sa1[0].id
+#   role_definition_name = "Storage Blob Data Contributor"
+#   principal_id         = module.funcapp2[0].principal_id
+# }
+
+# resource "azurerm_role_assignment" "funcapp2_queue_contrib" {
+#   scope                = module.sa1[0].id
+#   role_definition_name = "Storage Queue Data Contributor"
+#   principal_id         = module.funcapp2[0].principal_id
+# }
 
 # Event Hubs (env)
 locals {
@@ -1057,14 +1105,14 @@ module "cdbpg1" {
 
 # PostgreSQL Flexible (env)
 locals {
-  _pg_pdz_pub = "privatelink.postgres.database.azure.com"
-  _pg_pdz_gov = "privatelink.postgres.database.usgovcloudapi.net"
+  _pg_pdz_pub  = "privatelink.postgres.database.azure.com"
+  _pg_pdz_gov  = "privatelink.postgres.database.usgovcloudapi.net"
   _pg_pdz_name = var.product == "hrz" ? local._pg_pdz_gov : local._pg_pdz_pub
 
   pgflex_subnet_id   = try(local.subnet_ids_from_state[var.pg_delegated_subnet_name], null)
   pg_private_zone_id = try(local.zone_ids_effective[local._pg_pdz_name], null)
 
-  pg_name1                = "pgflex-${var.product}-${var.env}-${var.region}-01"
+  pg_name1 = "pgflex-${var.product}-${var.env}-${var.region}-01"
   # pg_geo_backup_effective = var.env == "prod" ? true : var.pg_geo_redundant_backup
 
   pg_geo_backup_supported_regions = toset([
@@ -1177,14 +1225,26 @@ module "redis1" {
 
 # NSG Flow Logs Storage (hub / core)
 locals {
-  sa_nsg_flowlogs_name = substr(
-    "saobs-${var.product}-${local.plane_code}-${var.region}-nsg",
+  # sa_core_shared_name = substr(
+  #   "saobs-${var.product}-${local.plane_code}-${var.region}-nsg",
+  #   0,
+  #   24
+  # )
+
+  # sa_core_shared_name_cleaned = replace(
+  #   lower(trimspace(local.sa_core_shared_name)),
+  #   "-",
+  #   ""
+  # )
+
+  sa_core_shared_name = substr(
+    "saobs-${var.product}-${local.plane_code}-${var.region}-core",
     0,
     24
   )
 
-  sa_nsg_flowlogs_name_cleaned = replace(
-    lower(trimspace(local.sa_nsg_flowlogs_name)),
+  sa_core_shared_name_cleaned = replace(
+    lower(trimspace(local.sa_core_shared_name)),
     "-",
     ""
   )
@@ -1193,14 +1253,36 @@ locals {
 
   hub_privatelink_subnet_id = coalesce(
     try(local.hub_subnet_ids["privatelink-hub"], null),
-    try(local.hub_subnet_ids["privatelink"],      null)
+    try(local.hub_subnet_ids["privatelink"], null)
   )
 
   hub_private_dns_zone_ids = var.shared_state_enabled ? try(data.terraform_remote_state.shared[0].outputs.private_dns.zone_ids, {}) : {}
 }
 
-module "sa_nsg_flowlogs" {
-  count = local.enable_both ? 1 : 0
+locals {
+  create_hub_core_storage = contains(["dev", "prod"], var.env)
+}
+
+# UAI used for storage encryption
+resource "azurerm_user_assigned_identity" "sa_core_shared_cmk" {
+  count               = local.enable_both && local.create_hub_core_storage ? 1 : 0
+  provider            = azurerm.hub
+  name                = "uai-${var.product}-${local.plane_code}-${var.region}-obsstore-cmk-01"
+  location            = var.location
+  resource_group_name = local.shared_np_core_rg_name
+  tags                = local.tags_common
+}
+
+# Grant KV permissions to that identity
+resource "azurerm_role_assignment" "sa_core_shared_cmk_kv_crypto" {
+  count                = local.enable_both && local.create_hub_core_storage ? 1 : 0
+  scope                = local.core_kv_id
+  role_definition_name = "Key Vault Crypto Service Encryption User"
+  principal_id         = azurerm_user_assigned_identity.sa_core_shared_cmk[0].principal_id
+}
+
+module "sa_core_shared" {
+  count = local.enable_both && local.create_hub_core_storage ? 1 : 0
 
   providers = {
     azurerm = azurerm.hub
@@ -1209,11 +1291,11 @@ module "sa_nsg_flowlogs" {
   source = "../../modules/storage-account"
 
   product             = var.product
-  name                = local.sa_nsg_flowlogs_name_cleaned
+  name                = local.sa_core_shared_name_cleaned
   location            = var.location
   resource_group_name = local.shared_np_core_rg_name
   replication_type    = var.sa_replication_type
-  container_names     = ["nsg-flow-logs","cost-exports"]
+  container_names     = ["nsg-flow-logs", "cost-exports"]
 
   pe_subnet_id         = local.hub_privatelink_subnet_id
   private_dns_zone_ids = local.hub_private_dns_zone_ids
@@ -1221,25 +1303,118 @@ module "sa_nsg_flowlogs" {
   # --- compliance ---
   restrict_network_access = true
 
-  cmk_enabled          = local.storage_cmk_enabled
-  cmk_key_vault_id     = local.core_kv_id
-  cmk_key_name         = local.cmk_key_name
-  cmk_key_version      = null # or local.core_cmk_key_version if you want to pin
-  cmk_identity_name    = "uai-${var.product}-${local.plane_code}-${var.region}-netlogs-cmk-01"
+  identity_type = "UserAssigned"
+  identity_ids  = [azurerm_user_assigned_identity.sa_core_shared_cmk[0].id]
 
-  pe_blob_name         = "pep-${local.sa_nsg_flowlogs_name_cleaned}-blob"
-  psc_blob_name        = "psc-${local.sa_nsg_flowlogs_name_cleaned}-blob"
-  blob_zone_group_name = "pdns-${local.sa_nsg_flowlogs_name_cleaned}-blob"
-  pe_file_name         = "pep-${local.sa_nsg_flowlogs_name_cleaned}-file"
-  psc_file_name        = "psc-${local.sa_nsg_flowlogs_name_cleaned}-file"
-  file_zone_group_name = "pdns-${local.sa_nsg_flowlogs_name_cleaned}-file"
+  pe_blob_name         = "pep-${local.sa_core_shared_name_cleaned}-blob"
+  psc_blob_name        = "psc-${local.sa_core_shared_name_cleaned}-blob"
+  blob_zone_group_name = "pdns-${local.sa_core_shared_name_cleaned}-blob"
+  pe_file_name         = "pep-${local.sa_core_shared_name_cleaned}-file"
+  psc_file_name        = "psc-${local.sa_core_shared_name_cleaned}-file"
+  file_zone_group_name = "pdns-${local.sa_core_shared_name_cleaned}-file"
 
   tags = merge(
     local.tags_common,
     {
-      purpose = "nsg-flow-logs"
+      purpose   = "core-shared-observability"
+      lane      = local.plane
+      layer     = "core-observability"
+      service   = "blob"
+      component = "storage"
+    },
+    var.tags
+  )
+
+  depends_on = [
+    data.terraform_remote_state.core,
+    data.terraform_remote_state.shared,
+    data.azurerm_resource_group.env,
+    module.sa1,
+    azurerm_user_assigned_identity.sa_core_shared_cmk,
+    azurerm_role_assignment.sa_core_shared_cmk_kv_crypto
+  ]
+}
+
+# Grafana (Loki/Mimir/Tempo) Storage (hub / core)
+locals {
+  create_grafana_storage = contains(["dev", "prod"], var.env)
+
+  sa_grafana_name = substr(
+    "saobs-${var.product}-${local.plane_code}-${var.region}-graf",
+    0,
+    24
+  )
+
+  sa_grafana_name_cleaned = replace(
+    lower(trimspace(local.sa_grafana_name)),
+    "-",
+    ""
+  )
+}
+
+# UAI used for storage encryption (hub/core scoped)
+resource "azurerm_user_assigned_identity" "sa_grafana_cmk" {
+  count               = local.enable_both && local.create_grafana_storage ? 1 : 0
+  provider            = azurerm.hub
+  name                = "uai-${var.product}-${local.plane_code}-${var.region}-grafana-cmk-01"
+  location            = var.location
+  resource_group_name = local.shared_np_core_rg_name
+  tags                = local.tags_common
+}
+
+# Grant KV permissions to that identity
+resource "azurerm_role_assignment" "sa_grafana_cmk_kv_crypto" {
+  count                = local.enable_both && local.create_grafana_storage ? 1 : 0
+  scope                = local.core_kv_id
+  role_definition_name = "Key Vault Crypto Service Encryption User"
+  principal_id         = azurerm_user_assigned_identity.sa_grafana_cmk[0].principal_id
+}
+
+module "sa_grafana" {
+  count = local.enable_both && local.create_grafana_storage ? 1 : 0
+
+  providers = {
+    azurerm = azurerm.hub
+  }
+
+  source = "../../modules/storage-account"
+
+  product             = var.product
+  name                = local.sa_grafana_name_cleaned
+  location            = var.location
+  resource_group_name = local.shared_np_core_rg_name
+  replication_type    = var.sa_replication_type
+
+  container_names = [
+    "loki-logs",
+    "mimir-alertmanager",
+    "mimir-blocks",
+    "mimir-ruler",
+    "tempo-traces",
+  ]
+
+  pe_subnet_id         = local.hub_privatelink_subnet_id
+  private_dns_zone_ids = local.hub_private_dns_zone_ids
+
+  # --- compliance ---
+  restrict_network_access = true
+
+  identity_type = "UserAssigned"
+  identity_ids  = [azurerm_user_assigned_identity.sa_grafana_cmk[0].id]
+
+  pe_blob_name         = "pep-${local.sa_grafana_name_cleaned}-blob"
+  psc_blob_name        = "psc-${local.sa_grafana_name_cleaned}-blob"
+  blob_zone_group_name = "pdns-${local.sa_grafana_name_cleaned}-blob"
+  pe_file_name         = "pep-${local.sa_grafana_name_cleaned}-file"
+  psc_file_name        = "psc-${local.sa_grafana_name_cleaned}-file"
+  file_zone_group_name = "pdns-${local.sa_grafana_name_cleaned}-file"
+
+  tags = merge(
+    local.tags_common,
+    {
+      purpose = "grafana-storage"
       lane    = local.plane
-      layer   = "core-network-logging"
+      layer   = "core-observability"
       service = "blob"
     },
     var.tags
@@ -1247,90 +1422,10 @@ module "sa_nsg_flowlogs" {
 
   depends_on = [
     data.terraform_remote_state.core,
-    data.terraform_remote_state.shared
-    # data.azurerm_resource_group.env
-    # module.sa1
+    data.terraform_remote_state.shared,
+    data.azurerm_resource_group.env,
+    module.sa1,
+    azurerm_user_assigned_identity.sa_grafana_cmk,
+    azurerm_role_assignment.sa_grafana_cmk_kv_crypto
   ]
 }
-
-# locals {
-#   # Create for BOTH pub + hrz
-#   create_sp = contains(["hrz", "pub"], lower(var.product))
-
-#   spa_app_name = "spa-${var.product}-${var.env}-${var.region}-01"
-
-#   # Single-tenant vs Multi-tenant:
-#   # - AzureADMyOrg         = single tenant
-#   # - AzureADMultipleOrgs  = multi tenant
-#   spa_sign_in_audience = var.spa_multi_tenant ? "AzureADMultipleOrgs" : "AzureADMyOrg"
-
-#   # --- Env SP (confidential client credentials) ---
-#   env_sp_app_name = "sp-${var.product}-${var.env}-${var.region}-01"
-
-#   # KV secret name prefix per env
-#   env_secret_prefix = (
-#     lower(var.env) == "dev"  ? "DEV--"  :
-#     lower(var.env) == "qa"   ? "QA--"   :
-#     lower(var.env) == "uat"  ? "UAT--"  :
-#     lower(var.env) == "prod" ? "PROD--" :
-#     "${upper(var.env)}--"
-#   )
-
-#   kv_secret_client_id_name     = "${local.env_secret_prefix}AZURE--CLIENT--ID"
-#   kv_secret_client_secret_name = "${local.env_secret_prefix}AZURE--CLIENT--SECRET"
-#   kv_secret_tenant_id_name     = "${local.env_secret_prefix}AZURE--TENANT--ID"
-# }
-
-# resource "azuread_application" "spa_app" {
-#   count            = local.create_sp ? 1 : 0
-#   display_name     = local.spa_app_name
-#   sign_in_audience = local.spa_sign_in_audience
-
-#   single_page_application {
-#     redirect_uris = var.spa_redirect_uris
-#   }
-# }
-
-# resource "azuread_service_principal" "spa_sp" {
-#   count     = local.create_sp ? 1 : 0
-#   client_id = azuread_application.spa_app[0].client_id
-# }
-
-# resource "azuread_application" "env_sp_app" {
-#   count            = local.create_sp ? 1 : 0
-#   display_name     = local.env_sp_app_name
-#   sign_in_audience = local.spa_sign_in_audience
-# }
-
-# resource "azuread_service_principal" "env_sp" {
-#   count     = local.create_sp ? 1 : 0
-#   client_id = azuread_application.env_sp_app[0].client_id
-# }
-
-# resource "azuread_service_principal_password" "env_sp_secret" {
-#   count                = local.create_sp ? 1 : 0
-#   service_principal_id = azuread_service_principal.env_sp[0].object_id
-#   display_name         = "${local.env_sp_app_name}-secret"
-#   end_date             = timeadd(timestamp(), "8760h")
-# }
-
-# resource "azurerm_key_vault_secret" "azure_client_id" {
-#   count        = local.create_sp ? 1 : 0
-#   key_vault_id = local.core_kv_id
-#   name         = local.kv_secret_client_id_name
-#   value        = azuread_application.env_sp_app[0].client_id
-# }
-
-# resource "azurerm_key_vault_secret" "azure_client_secret" {
-#   count        = local.create_sp ? 1 : 0
-#   key_vault_id = local.core_kv_id
-#   name         = local.kv_secret_client_secret_name
-#   value        = azuread_service_principal_password.env_sp_secret[0].value
-# }
-
-# resource "azurerm_key_vault_secret" "azure_tenant_id" {
-#   count        = local.create_sp ? 1 : 0
-#   key_vault_id = local.core_kv_id
-#   name         = local.kv_secret_tenant_id_name
-#   value        = var.tenant_id
-# }

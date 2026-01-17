@@ -44,7 +44,9 @@ resource "azurerm_linux_function_app" "func_linux" {
   https_only                    = true
   public_network_access_enabled = false
   storage_account_name          = var.storage_account_name
-  storage_account_access_key    = var.storage_account_access_key
+  # storage_account_access_key    = var.storage_account_access_key
+
+  storage_uses_managed_identity = true
 
   identity { type = "SystemAssigned" }
 
@@ -64,15 +66,22 @@ resource "azurerm_linux_function_app" "func_linux" {
     http2_enabled = true
   }
 
+  # app_settings = merge(
+  #   {
+  #     WEBSITE_RUN_FROM_PACKAGE       = var.website_run_from_package
+  #     FUNCTIONS_WORKER_PROCESS_COUNT = tostring(var.functions_worker_process_count)
+  #   },
+  #   var.app_settings,
+  #   var.application_insights_connection_string != null && trimspace(var.application_insights_connection_string) != "" ? {
+  #     APPLICATIONINSIGHTS_CONNECTION_STRING = var.application_insights_connection_string
+  #   } : {}
+  # )
   app_settings = merge(
     {
       WEBSITE_RUN_FROM_PACKAGE       = var.website_run_from_package
       FUNCTIONS_WORKER_PROCESS_COUNT = tostring(var.functions_worker_process_count)
     },
-    var.app_settings,
-    var.application_insights_connection_string != null && trimspace(var.application_insights_connection_string) != "" ? {
-      APPLICATIONINSIGHTS_CONNECTION_STRING = var.application_insights_connection_string
-    } : {}
+    var.app_settings
   )
 
   lifecycle {
@@ -96,7 +105,9 @@ resource "azurerm_windows_function_app" "func_windows" {
   https_only                    = true
   public_network_access_enabled = false
   storage_account_name          = var.storage_account_name
-  storage_account_access_key    = var.storage_account_access_key
+  # storage_account_access_key    = var.storage_account_access_key
+
+  storage_uses_managed_identity = true
 
   identity { type = "SystemAssigned" }
 

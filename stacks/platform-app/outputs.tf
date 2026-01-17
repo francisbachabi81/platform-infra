@@ -20,33 +20,33 @@ output "features" {
     enable_hrz_features    = local.enable_hrz_features
     create_aks             = local.create_aks
     deploy_aks_in_env      = local.aks_enabled_env
-    sbns1_created          = try(length(module.sbns1)  > 0, false)
+    sbns1_created          = try(length(module.sbns1) > 0, false)
     eventhub_created       = try(length(module.eventhub) > 0, false)
     # AKS can exist in exactly one of the three per-env modules
-    aks1_created           = (
+    aks1_created = (
       try(length(module.aks1_env_shared_nonprod) > 0, false) ||
       try(length(module.aks1_env_prod) > 0, false) ||
       try(length(module.aks1_env_uat) > 0, false)
     )
-    postgres_created       = try(length(module.postgres) > 0, false)
-    redis_created          = try(length(module.redis1) > 0, false)
-    cdbpg_created          = try(length(module.cdbpg1) > 0, false)
-    cosmos_created         = try(length(module.cosmos1) > 0, false)
+    postgres_created = try(length(module.postgres) > 0, false)
+    redis_created    = try(length(module.redis1) > 0, false)
+    cdbpg_created    = try(length(module.cdbpg1) > 0, false)
+    cosmos_created   = try(length(module.cosmos1) > 0, false)
   }
 }
 
 output "ids" {
   value = {
-    kv1      = try(module.kv1[0].id, null)
-    sa1      = try(module.sa1[0].id, null)
-    cosmos1  = try(module.cosmos1[0].id, null)
-    aks1     = local.aks_id
-    aks      = local.aks_id
-    sbns1    = try(module.sbns1[0].id, null)
-    eventhub = try(module.eventhub[0].id, null)
-    postgres = try(module.postgres[0].id, null)
-    redis    = try(module.redis1[0].id, null)
-    cdbpg1   = try(module.cdbpg1[0].id, null)
+    kv1        = try(module.kv1[0].id, null)
+    sa1        = try(module.sa1[0].id, null)
+    cosmos1    = try(module.cosmos1[0].id, null)
+    aks1       = local.aks_id
+    aks        = local.aks_id
+    sbns1      = try(module.sbns1[0].id, null)
+    eventhub   = try(module.eventhub[0].id, null)
+    postgres   = try(module.postgres[0].id, null)
+    redis      = try(module.redis1[0].id, null)
+    cdbpg1     = try(module.cdbpg1[0].id, null)
     funcapp1   = try(module.funcapp1[0].id, null)
     funcapp2   = try(module.funcapp2[0].id, null)
     plan1_func = try(module.plan1_func[0].id, null)
@@ -59,19 +59,19 @@ output "aks_id" {
 
 output "names" {
   value = {
-    kv1           = try(module.kv1[0].name, null)
-    sa1           = try(module.sa1[0].name, null)
-    cosmos1       = try(module.cosmos1[0].name, null)
-    aks1          = local.aks_name
-    sbns1         = try(module.sbns1[0].name, null)
-    eventhub_ns   = try(module.eventhub[0].namespace_name, null)
-    eventhub      = try(module.eventhub[0].eventhub_name, null)
-    postgres      = try(module.postgres[0].name, null)
-    redis         = try(module.redis1[0].name, null)
-    cdbpg1        = try(module.cdbpg1[0].name, null)
-    funcapp1      = try(module.funcapp1[0].name, null)
-    funcapp2      = try(module.funcapp2[0].name, null)
-    plan1_func    = try(module.plan1_func[0].name, null)
+    kv1         = try(module.kv1[0].name, null)
+    sa1         = try(module.sa1[0].name, null)
+    cosmos1     = try(module.cosmos1[0].name, null)
+    aks1        = local.aks_name
+    sbns1       = try(module.sbns1[0].name, null)
+    eventhub_ns = try(module.eventhub[0].namespace_name, null)
+    eventhub    = try(module.eventhub[0].eventhub_name, null)
+    postgres    = try(module.postgres[0].name, null)
+    redis       = try(module.redis1[0].name, null)
+    cdbpg1      = try(module.cdbpg1[0].name, null)
+    funcapp1    = try(module.funcapp1[0].name, null)
+    funcapp2    = try(module.funcapp2[0].name, null)
+    plan1_func  = try(module.plan1_func[0].name, null)
   }
 }
 
@@ -169,10 +169,10 @@ locals {
 
 output "cosmos_nosql" {
   value = try({
-    id        = module.cosmos1[0].id
-    name      = module.cosmos1[0].name
-    endpoint  = "https://${module.cosmos1[0].name}.${local._cos_domain}:443/"
-    database  = try(azurerm_cosmosdb_sql_database.app[0].name, null)
+    id       = module.cosmos1[0].id
+    name     = module.cosmos1[0].name
+    endpoint = "https://${module.cosmos1[0].name}.${local._cos_domain}:443/"
+    database = try(azurerm_cosmosdb_sql_database.app[0].name, null)
     containers = compact([
       try(azurerm_cosmosdb_sql_container.items[0].name, null),
       try(azurerm_cosmosdb_sql_container.events[0].name, null)
@@ -255,12 +255,22 @@ output "kubernetes" {
   } : null
 }
 
-output "nsg_flow_logs_storage" {
-  value = try(module.sa_nsg_flowlogs[0].id, null) == null ? null : {
-    id    = module.sa_nsg_flowlogs[0].id
-    name  = module.sa_nsg_flowlogs[0].name
+output "sa_core_shared" {
+  value = length(module.sa_core_shared) == 0 ? null : {
+    id    = module.sa_core_shared[0].id
+    name  = module.sa_core_shared[0].name
     rg    = local.shared_np_core_rg_name
     plane = local.plane
+  }
+}
+
+output "grafana_storage" {
+  value = try(module.sa_grafana[0].id, null) == null ? null : {
+    id    = module.sa_grafana[0].id
+    name  = module.sa_grafana[0].name
+    rg    = local.shared_np_core_rg_name
+    plane = local.plane
+    envs  = ["dev", "prod"]
   }
 }
 

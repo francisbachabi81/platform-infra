@@ -417,3 +417,9 @@ FodyWeavers.xsd
 *.msm
 *.msp
 stacks/shared-network/tfvars/.DS_Store
+stacks/platform-app/.terraform.lock.hcl
+/stacks/platform-app/.terraform
+stacks/platform-app/plan-raw.txt
+stacks/platform-app/plan.txt
+stacks/platform-app/tfplan
+stacks/platform-app/plan.json

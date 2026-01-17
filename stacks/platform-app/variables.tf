@@ -47,19 +47,19 @@ variable "kubernetes_version" {
 variable "state_rg_name" {
   description = "remote state resource group"
   type        = string
-  default = "state_rg_name"
+  default     = "state_rg_name"
 }
 
 variable "state_sa_name" {
   description = "remote state storage account"
   type        = string
-  default = "state_sa_name"
+  default     = "state_sa_name"
 }
 
 variable "state_container_name" {
   description = "remote state container"
   type        = string
-  default = "state_container_name"
+  default     = "state_container_name"
 }
 
 variable "shared_state_enabled" {
@@ -194,10 +194,10 @@ variable "servicebus_min_tls_version" {
 }
 
 # AKS: sizing & networking
-variable "rg_plane_name" { 
-  description = "plane-scoped hub resource group name" 
-  type = string 
-  default = null 
+variable "rg_plane_name" {
+  description = "plane-scoped hub resource group name"
+  type        = string
+  default     = null
 }
 
 variable "aks_node_vm_size" {

@@ -6,10 +6,6 @@ terraform {
   }
 }
 
-locals {
-  cmk_effective = var.cmk_enabled && var.cmk_key_vault_id != null && var.cmk_key_name != null
-}
-
 resource "azurerm_storage_account" "sa" {
   name                            = var.name
   resource_group_name             = var.resource_group_name
@@ -31,45 +27,19 @@ resource "azurerm_storage_account" "sa" {
     }
   }
 
-  # Required for CMK (only when enabled)
   dynamic "identity" {
-    for_each = local.cmk_effective ? [1] : []
+    for_each = (var.identity_type == "UserAssigned" && length(var.identity_ids) > 0) ? [1] : []
     content {
       type         = "UserAssigned"
-      identity_ids = [azurerm_user_assigned_identity.cmk[0].id]
+      identity_ids = var.identity_ids
     }
   }
-}
 
-resource "azurerm_user_assigned_identity" "cmk" {
-  count               = local.cmk_effective ? 1 : 0
-  name                = coalesce(var.cmk_identity_name, "uai-${replace(lower(var.name), "-", "")}-cmk-01")
-  location            = var.location
-  resource_group_name = var.resource_group_name
-  tags                = var.tags
-}
-
-resource "azurerm_role_assignment" "cmk_kv_crypto" {
-  count                = local.cmk_effective ? 1 : 0
-  scope                = var.cmk_key_vault_id
-  role_definition_name = "Key Vault Crypto Service Encryption User"
-  principal_id         = azurerm_user_assigned_identity.cmk[0].principal_id
-}
-
-resource "azurerm_storage_account_customer_managed_key" "cmk" {
-  count                    = local.cmk_effective ? 1 : 0
-  storage_account_id       = azurerm_storage_account.sa.id
-
-  key_vault_id             = var.cmk_key_vault_id
-  key_name                 = var.cmk_key_name
-  key_version              = var.cmk_key_version # optional (null = latest)
-
-  user_assigned_identity_id = azurerm_user_assigned_identity.cmk[0].id
-
-  depends_on = [
-    azurerm_storage_account.sa,
-    azurerm_role_assignment.cmk_kv_crypto
-  ]
+  lifecycle {
+    ignore_changes = [
+      customer_managed_key,
+    ]
+  }
 }
 
 resource "azurerm_storage_container" "containers" {

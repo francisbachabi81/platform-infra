@@ -92,27 +92,37 @@ variable "restrict_network_access" {
   default = true
 }
 
-variable "cmk_enabled" {
-  type    = bool
-  default = false
+# variable "cmk_enabled" {
+#   type    = bool
+#   default = false
+# }
+
+# variable "cmk_key_vault_id" {
+#   type    = string
+#   default = null
+# }
+
+# variable "cmk_identity_name" {
+#   type    = string
+#   default = null
+# }
+
+# variable "cmk_key_name" {
+#   type    = string
+#   default = null
+# }
+
+# variable "cmk_key_version" {
+#   type    = string
+#   default = null
+# }
+
+variable "identity_type" {
+  type    = string
+  default = null # "UserAssigned" or null
 }
 
-variable "cmk_key_vault_id" {
-  type    = string
-  default = null
-}
-
-variable "cmk_identity_name" {
-  type    = string
-  default = null
-}
-
-variable "cmk_key_name" {
-  type    = string
-  default = null
-}
-
-variable "cmk_key_version" {
-  type    = string
-  default = null
+variable "identity_ids" {
+  type    = list(string)
+  default = []
 }

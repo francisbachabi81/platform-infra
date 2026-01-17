@@ -35,13 +35,13 @@ output "file_private_endpoint_id" {
   value = try(azurerm_private_endpoint.file.id, null)
 }
 
-output "cmk_identity_id" {
-  value = try(azurerm_user_assigned_identity.cmk[0].id, null)
-}
+# output "cmk_identity_id" {
+#   value = try(azurerm_user_assigned_identity.cmk[0].id, null)
+# }
 
-output "cmk_identity_principal_id" {
-  value = try(azurerm_user_assigned_identity.cmk[0].principal_id, null)
-}
+# output "cmk_identity_principal_id" {
+#   value = try(azurerm_user_assigned_identity.cmk[0].principal_id, null)
+# }
 
 output "network_public_access_enabled" {
   value = azurerm_storage_account.sa.public_network_access_enabled

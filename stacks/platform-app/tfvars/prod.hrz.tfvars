@@ -1,6 +1,6 @@
 # Core env / provider
-env      = "prod"         # dev | qa | uat | prod
-product  = "hrz"          # hrz (Azure Gov) | pub (Azure Commercial)
+env      = "prod" # dev | qa | uat | prod
+product  = "hrz"  # hrz (Azure Gov) | pub (Azure Commercial)
 location = "USGov Arizona"
 region   = "usaz"
 
@@ -19,8 +19,8 @@ state_rg_name        = "rg-core-infra-state"
 state_sa_name        = "sacoretfstateinfra"
 state_container_name = "tfstate"
 
-shared_state_enabled = true   # read shared-network state (vnets, PDZs, subnets)
-core_state_enabled   = true   # read core state (LAW + App Insights connection)
+shared_state_enabled = true # read shared-network state (vnets, PDZs, subnets)
+core_state_enabled   = true # read core state (LAW + App Insights connection)
 
 # core_state_key can be overridden if layout changes:
 # core_state_key = "core/hrz/pr/terraform.tfstate"
@@ -36,7 +36,7 @@ purge_protection_enabled   = true
 soft_delete_retention_days = 30
 
 # Storage
-sa_replication_type = "RAGRS"  # LRS | ZRS | RAGRS | GZRS | RAGZRS
+sa_replication_type = "RAGRS" # LRS | ZRS | RAGRS | GZRS | RAGZRS
 
 # AKS (env)
 # prod: deploys into prod env subscription
@@ -49,12 +49,12 @@ aks_pod_cidr       = "10.214.0.0/16"
 aks_service_cidr   = "10.114.0.0/16"
 aks_dns_service_ip = "10.114.0.10"
 
-aks_sku_tier = "Standard"            # Free | Standard | Premium
+aks_sku_tier = "Standard" # Free | Standard | Premium
 
 # Service Bus (env)
 create_servicebus   = true
-servicebus_sku      = "Standard"     # Basic | Standard | Premium
-servicebus_capacity = 1             # for Premium: messaging units; for lower SKUs: 0/1/(sometimes accepted >1 depending on module)
+servicebus_sku      = "Standard" # Basic | Standard | Premium
+servicebus_capacity = 1          # for Premium: messaging units; for lower SKUs: 0/1/(sometimes accepted >1 depending on module)
 
 servicebus_queues = [
   "incident-processor",
@@ -72,7 +72,7 @@ servicebus_authorization_rules_override = {
   }
 }
 # servicebus_manage_policy_name = "sb-dev-manage"
-servicebus_min_tls_version    = "1.2"
+servicebus_min_tls_version = "1.2"
 
 # Cosmos DB for PostgreSQL (Citus) (env)
 create_cdbpg = true
@@ -81,7 +81,7 @@ cdbpg_node_count    = 2
 cdbpg_citus_version = "12.1"
 
 # Coordinator
-cdbpg_coordinator_server_edition      = "GeneralPurpose"  # BurstableGeneralPurpose | GeneralPurpose | MemoryOptimized
+cdbpg_coordinator_server_edition      = "GeneralPurpose" # BurstableGeneralPurpose | GeneralPurpose | MemoryOptimized
 cdbpg_coordinator_vcore_count         = 2
 cdbpg_coordinator_storage_quota_in_mb = 131072
 
@@ -117,18 +117,18 @@ pg_aad_auth_enabled      = true
 # - pg_ha_enabled = true  → built-in HA (no replica module).
 # - pg_replica_enabled = true & pg_ha_enabled = false → create read replica.
 # - both = false → single primary only.
-pg_ha_enabled      = true   # HA ON/OFF
-pg_replica_enabled = false  # no replica
+pg_ha_enabled      = true  # HA ON/OFF
+pg_replica_enabled = false # no replica
 
 # Zones:
 # - Azure Government (e.g. usgovarizona):
 #   • Many SKUs have supportedZones behavior that varies by region/SKU.
 #   • If zones are not supported for your chosen SKU, set pg_zone/pg_ha_zone to null and use SameZone HA only.
-pg_zone    = null   # no explicit AZ in Gov for this SKU
-pg_ha_zone = null   # ignored while HA is off and no explicit AZ
+pg_zone    = null # no explicit AZ in Gov for this SKU
+pg_ha_zone = null # ignored while HA is off and no explicit AZ
 
 pg_firewall_rules = []
-pg_databases      = ["appdb","citus"]
+pg_databases      = ["appdb", "citus"]
 
 pg_enable_postgis = true
 # pg_admin_password via TF_VAR_pg_admin_password
@@ -145,10 +145,10 @@ pg_extensions = [
 cosno_total_throughput_limit = 1200
 
 # Redis (env)
-redis_sku_name   = "Premium"   # Basic | Standard | Premium
+redis_sku_name   = "Premium" # Basic | Standard | Premium
 redis_sku_family = "P"
-redis_capacity   = 1           # 0–6 depending on SKU
+redis_capacity   = 1 # 0–6 depending on SKU
 
 # App Service Plan / Functions (env)
-asp_os_type              = "Linux"  # Linux | Windows
-func_linux_plan_sku_name = "P0v3"   # e.g. P0v3/P1v3 for Premium Functions in Gov
+asp_os_type              = "Linux" # Linux | Windows
+func_linux_plan_sku_name = "P0v3"  # e.g. P0v3/P1v3 for Premium Functions in Gov

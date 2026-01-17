@@ -1,8 +1,8 @@
 # env / provider
-env             = "dev"                         # dev | qa | uat | prod
-product         = "pub"                         # hrz (Azure Gov) | pub (Azure Commercial)
-location        = "Central US"
-region          = "cus"
+env      = "dev" # dev | qa | uat | prod
+product  = "pub" # hrz (Azure Gov) | pub (Azure Commercial)
+location = "Central US"
+region   = "cus"
 
 # Provider alias overrides used by AKS routing logic (shared nonprod)
 shared_nonprod_subscription_id = "ee8a4693-54d4-4de8-842b-b6f35fc0674d"
@@ -13,8 +13,8 @@ state_rg_name        = "rg-core-infra-state"
 state_sa_name        = "sacoretfstateinfra"
 state_container_name = "tfstate"
 
-shared_state_enabled = true   # read shared-network state (vnets, PDZs, subnets)
-core_state_enabled   = true   # read core state (LAW + App Insights connection)
+shared_state_enabled = true # read shared-network state (vnets, PDZs, subnets)
+core_state_enabled   = true # read core state (LAW + App Insights connection)
 
 # tags / naming
 tags = {
@@ -27,11 +27,11 @@ purge_protection_enabled   = false
 soft_delete_retention_days = 7
 
 # storage 
-sa_replication_type = "LRS"  # LRS | ZRS | RAGRS | GZRS | RAGZRS
+sa_replication_type = "LRS" # LRS | ZRS | RAGRS | GZRS | RAGZRS
 
 # AKS (dev deploys in shared nonprod)
 create_aks         = true
-kubernetes_version = "1.33.5"      # ensure this version is available in region
+kubernetes_version = "1.33.5"        # ensure this version is available in region
 aks_node_vm_size   = "Standard_B2ms" #Standard_D2s_v5, Standard_B1ms, Standard_B2ms, Standard_B2s
 aks_node_count     = 3
 
@@ -39,12 +39,12 @@ aks_pod_cidr       = "172.210.0.0/16"
 aks_service_cidr   = "172.110.0.0/16"
 aks_dns_service_ip = "172.110.0.10"
 
-aks_sku_tier       = "Free"                       # Free | Standard | Premium
+aks_sku_tier = "Free" # Free | Standard | Premium
 
 # Service Bus (env)
-create_servicebus             = true
-servicebus_sku                = "Standard"       # Basic | Standard | Premium
-servicebus_capacity           = 1
+create_servicebus   = true
+servicebus_sku      = "Standard" # Basic | Standard | Premium
+servicebus_capacity = 1
 
 servicebus_queues = [
   "incident-processor",
@@ -70,7 +70,7 @@ servicebus_authorization_rules_override = {
   }
 }
 # servicebus_manage_policy_name = "sb-dev-manage"
-servicebus_min_tls_version    = "1.2"
+servicebus_min_tls_version = "1.2"
 
 # Cosmos DB for PostgreSQL (Citus) (env)
 create_cdbpg = true
@@ -81,7 +81,7 @@ cdbpg_node_count = 0
 cdbpg_citus_version = "12.1"
 
 # Coordinator
-cdbpg_coordinator_server_edition      = "BurstableGeneralPurpose"  # BurstableGeneralPurpose | GeneralPurpose | MemoryOptimized
+cdbpg_coordinator_server_edition      = "BurstableGeneralPurpose" # BurstableGeneralPurpose | GeneralPurpose | MemoryOptimized
 cdbpg_coordinator_vcore_count         = 2
 cdbpg_coordinator_storage_quota_in_mb = 131072
 
@@ -117,8 +117,8 @@ pg_aad_auth_enabled      = true
 # - pg_ha_enabled = true  → built-in HA (no replica module).
 # - pg_replica_enabled = true & pg_ha_enabled = false → create read replica.
 # - both = false → single primary only.
-pg_ha_enabled      = false  # HA ON/OFF
-pg_replica_enabled = false  # no replica
+pg_ha_enabled      = false # HA ON/OFF
+pg_replica_enabled = false # no replica
 
 # Zones:
 # - Azure Government (e.g. usgovarizona):
@@ -127,11 +127,11 @@ pg_replica_enabled = false  # no replica
 # - Azure Commercial:
 #   • pg_zone may be set explicitly (1/2/3) if SKU/region supports it.
 #   • HA may support SameZone or ZoneRedundant depending on SKU/region.
-pg_zone    = "1"   # no explicit AZ in Gov for this SKU
-pg_ha_zone = "2"   # ignored while HA is off and no explicit AZ
+pg_zone    = "1" # no explicit AZ in Gov for this SKU
+pg_ha_zone = "2" # ignored while HA is off and no explicit AZ
 
 pg_firewall_rules = []
-pg_databases      = ["appdb","citus"]
+pg_databases      = ["appdb", "citus"]
 
 pg_enable_postgis = true
 # pg_admin_password via TF_VAR_pg_admin_password
@@ -148,10 +148,10 @@ pg_extensions = [
 cosno_total_throughput_limit = 400
 
 # Redis (env)
-redis_sku_name   = "Standard"   # Basic | Standard | Premium
+redis_sku_name   = "Standard" # Basic | Standard | Premium
 redis_sku_family = "C"
-redis_capacity   = 1            # 0–6 depending on SKU
+redis_capacity   = 1 # 0–6 depending on SKU
 
 # App Service Plan / Functions (env)
-asp_os_type              = "Linux"  # Linux | Windows
-func_linux_plan_sku_name = "P0v3"   # e.g. P0v3/P1v3 for Premium Functions in Gov
+asp_os_type              = "Linux" # Linux | Windows
+func_linux_plan_sku_name = "P0v3"  # e.g. P0v3/P1v3 for Premium Functions in Gov

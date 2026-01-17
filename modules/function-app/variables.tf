@@ -23,10 +23,10 @@ variable "storage_account_name" {
   type = string
 }
 
-variable "storage_account_access_key" {
-  type      = string
-  sensitive = true
-}
+# variable "storage_account_access_key" {
+#   type      = string
+#   sensitive = true
+# }
 
 variable "functions_extension_version" {
   type    = string

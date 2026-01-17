@@ -1,6 +1,6 @@
 # ── env / provider ────────────────────────────────────────────────────────────
-env             = "qa"                          # dev | qa | uat | prod
-product         = "pub"                         # pub (Azure Commercial)
+env             = "qa"  # dev | qa | uat | prod
+product         = "pub" # pub (Azure Commercial)
 location        = "Central US"
 region          = "cus"
 rg_name         = "rg-pub-qa-cus-01"
@@ -30,21 +30,21 @@ purge_protection_enabled   = false
 soft_delete_retention_days = 7
 
 # ── storage ───────────────────────────────────────────────────────────────────
-sa_replication_type = "LRS"                      # LRS | ZRS | RAGRS | GZRS | RAGZRS
+sa_replication_type = "LRS" # LRS | ZRS | RAGRS | GZRS | RAGZRS
 
 # ── AKS (QA typically off) ───────────────────────────────────────────────────
-create_aks          = false                      # leave false for QA
+create_aks          = false # leave false for QA
 kubernetes_version  = "1.33.3"
-node_resource_group = "rg-pub-np-aksnodes-cus"   # module appends -01
+node_resource_group = "rg-pub-np-aksnodes-cus" # module appends -01
 aks_node_vm_size    = "Standard_B2s"
 aks_node_count      = 2
 aks_pod_cidr        = "172.212.0.0/16"
 aks_service_cidr    = "172.112.0.0/16"
 aks_dns_service_ip  = "172.112.0.10"
-aks_sku_tier        = "Free"                     # Free | Standard | Premium
+aks_sku_tier        = "Free" # Free | Standard | Premium
 
 # ── ACR (hub) ─────────────────────────────────────────────────────────────────
-acr_sku                        = "Basic"         # Basic | Standard | Premium
+acr_sku                        = "Basic" # Basic | Standard | Premium
 admin_enabled                  = true
 public_network_access_enabled  = false           # honored on Premium only
 acr_network_rule_bypass_option = "AzureServices" # None | AzureServices
@@ -54,7 +54,7 @@ acr_zone_redundancy_enabled    = false
 
 # ── Service Bus (env) ─────────────────────────────────────────────────────────
 create_servicebus             = true
-servicebus_sku                = "Standard"       # Basic | Standard | Premium
+servicebus_sku                = "Standard" # Basic | Standard | Premium
 servicebus_capacity           = 1
 servicebus_queues             = ["custom-dlq"]
 servicebus_topics             = []
@@ -66,7 +66,7 @@ servicebus_min_tls_version    = "1.2"
 create_cdbpg                          = true
 cdbpg_node_count                      = 0
 cdbpg_citus_version                   = "12.1"
-cdbpg_coordinator_server_edition      = "BurstableGeneralPurpose"  # BurstableGeneralPurpose | GeneralPurpose | MemoryOptimized
+cdbpg_coordinator_server_edition      = "BurstableGeneralPurpose" # BurstableGeneralPurpose | GeneralPurpose | MemoryOptimized
 cdbpg_coordinator_vcore_count         = 2
 cdbpg_coordinator_storage_quota_in_mb = 131072
 cdbpg_node_server_edition             = "GeneralPurpose"
@@ -96,7 +96,7 @@ pg_enable_postgis        = true
 cosno_total_throughput_limit = 400
 
 # ── Redis (env) ───────────────────────────────────────────────────────────────
-redis_sku_name   = "Standard"                     # Basic | Standard | Premium
+redis_sku_name   = "Standard" # Basic | Standard | Premium
 redis_sku_family = "C"
 redis_capacity   = 1
 

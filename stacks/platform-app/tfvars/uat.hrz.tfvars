@@ -1,6 +1,6 @@
 # ── env / provider ────────────────────────────────────────────────────────────
-env             = "uat"                         # dev | qa | uat | prod
-product         = "hrz"                         # hrz (Azure Gov)
+env             = "uat" # dev | qa | uat | prod
+product         = "hrz" # hrz (Azure Gov)
 location        = "USGov Arizona"
 region          = "usaz"
 rg_name         = "rg-hrz-uat-usaz-01"
@@ -30,21 +30,21 @@ purge_protection_enabled   = true
 soft_delete_retention_days = 14
 
 # ── storage ───────────────────────────────────────────────────────────────────
-sa_replication_type = "ZRS"                      # LRS | ZRS | RAGRS | GZRS | RAGZRS
+sa_replication_type = "ZRS" # LRS | ZRS | RAGRS | GZRS | RAGZRS
 
 # ── AKS (uat deploys in env) ─────────────────────────────────────────────────
 create_aks          = true
 kubernetes_version  = "1.33.3"
-node_resource_group = "rg-hrz-pr-aksnodes-usaz"  # module appends -01
+node_resource_group = "rg-hrz-pr-aksnodes-usaz" # module appends -01
 aks_node_vm_size    = "Standard_D4s_v5"
 aks_node_count      = 3
 aks_pod_cidr        = "10.215.0.0/16"
 aks_service_cidr    = "10.115.0.0/16"
 aks_dns_service_ip  = "10.115.0.10"
-aks_sku_tier        = "Standard"                 # Free | Standard | Premium
+aks_sku_tier        = "Standard" # Free | Standard | Premium
 
 # ── ACR (hub pr) ──────────────────────────────────────────────────────────────
-acr_sku                        = "Standard"      # Basic | Standard | Premium
+acr_sku                        = "Standard" # Basic | Standard | Premium
 admin_enabled                  = true
 public_network_access_enabled  = false
 acr_network_rule_bypass_option = "AzureServices" # None | AzureServices
@@ -54,7 +54,7 @@ acr_zone_redundancy_enabled    = true
 
 # ── Service Bus (env) ─────────────────────────────────────────────────────────
 create_servicebus             = true
-servicebus_sku                = "Standard"       # Basic | Standard | Premium
+servicebus_sku                = "Standard" # Basic | Standard | Premium
 servicebus_capacity           = 2
 servicebus_queues             = ["custom-dlq"]
 servicebus_topics             = []
@@ -66,7 +66,7 @@ servicebus_min_tls_version    = "1.2"
 create_cdbpg                          = true
 cdbpg_node_count                      = 0
 cdbpg_citus_version                   = "12.1"
-cdbpg_coordinator_server_edition      = "GeneralPurpose"   # BurstableGeneralPurpose | GeneralPurpose | MemoryOptimized
+cdbpg_coordinator_server_edition      = "GeneralPurpose" # BurstableGeneralPurpose | GeneralPurpose | MemoryOptimized
 cdbpg_coordinator_vcore_count         = 4
 cdbpg_coordinator_storage_quota_in_mb = 262144
 cdbpg_node_server_edition             = "GeneralPurpose"
@@ -96,7 +96,7 @@ pg_enable_postgis        = true
 cosno_total_throughput_limit = 400
 
 # ── Redis (env) ───────────────────────────────────────────────────────────────
-redis_sku_name   = "Standard"                     # Basic | Standard | Premium
+redis_sku_name   = "Standard" # Basic | Standard | Premium
 redis_sku_family = "C"
 redis_capacity   = 2
 

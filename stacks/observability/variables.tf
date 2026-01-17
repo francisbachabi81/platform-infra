@@ -282,7 +282,7 @@ variable "nsg_flow_logs_retention_days" {
   default     = 30
 }
 
-variable "nsg_flow_logs_storage_account_id_override" {
+variable "sa_core_shared_account_id_override" {
   description = "Optional override for the Storage Account used for NSG flow logs. Must live in Core subscription."
   type        = string
   default     = null

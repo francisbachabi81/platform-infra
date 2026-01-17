@@ -284,9 +284,9 @@ locals {
   afd_map   = { for id in local.ids_frontdoor : id => id }
   nsg_map   = { for id in local.ids_nsg       : id => id }
 
-  nsg_flow_logs_storage = try(data.terraform_remote_state.platform.outputs.nsg_flow_logs_storage, null)
+  sa_core_shared = try(data.terraform_remote_state.platform.outputs.sa_core_shared, null)
 
-  existing_exports_sa_id   = coalesce(var.nsg_flow_logs_storage_account_id_override, try(local.nsg_flow_logs_storage.id, null))
+  existing_exports_sa_id   = coalesce(var.sa_core_shared_account_id_override, try(local.sa_core_shared.id, null))
 }
 
 locals {
@@ -325,7 +325,7 @@ locals {
 
 locals {
   # single resource id (or null if platform stack didn't create it)
-  excluded_flowlogs_sa_id = try(data.terraform_remote_state.platform.outputs.nsg_flow_logs_storage.id, null)
+  excluded_flowlogs_sa_id = try(data.terraform_remote_state.platform.outputs.sa_core_shared.id, null)
 }
 
 # Diagnostic categories (data sources)
@@ -1676,7 +1676,7 @@ locals {
   flow_logs_sa_override_id = try(
     coalesce(
       var.vnet_flow_logs_storage_account_id_override,
-      var.nsg_flow_logs_storage_account_id_override
+      var.sa_core_shared_account_id_override
     ),
     null
   )
@@ -1690,7 +1690,7 @@ locals {
   )
 
   # Storage account for flow logs (from platform remote state OR explicit override)
-  flow_logs_storage = try(data.terraform_remote_state.platform.outputs.nsg_flow_logs_storage, null)
+  flow_logs_storage = try(data.terraform_remote_state.platform.outputs.sa_core_shared, null)
   flow_logs_sa_id   = coalesce(local.flow_logs_sa_override_id, try(local.flow_logs_storage.id, null))
 
   # Pull VNets from:
