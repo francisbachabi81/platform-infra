@@ -87,7 +87,8 @@ resource "azurerm_linux_function_app" "func_linux" {
   lifecycle {
     ignore_changes = [
       app_settings["FUNCTIONS_EXTENSION_VERSION"],
-      virtual_network_subnet_id
+      virtual_network_subnet_id,
+      tags["hidden-link: /app-insights-resource-id"]
     ]
   }
 
@@ -137,7 +138,8 @@ resource "azurerm_windows_function_app" "func_windows" {
   lifecycle {
     ignore_changes = [
       app_settings["FUNCTIONS_EXTENSION_VERSION"],
-      virtual_network_subnet_id
+      virtual_network_subnet_id,
+      tags["hidden-link: /app-insights-resource-id"]
     ]
   }
 

@@ -142,4 +142,41 @@ exit "$ec"
 # export CDBPG_ADMIN_PASSWORD='8XrAEg9YnExLcB_E'
 # export PG_ADMIN_PASSWORD='MYGNjDo9Gf9Vye!c'
 
+# env | grep -E '^(ENV_IN|PRODUCT_IN|TENANT_ID|STATE_SUB|HUB_SUB|TARGET_SUB|CDBPG_ADMIN_PASSWORD|PG_ADMIN_PASSWORD)='
+
+# export ENV_IN=prod
+# export PRODUCT_IN=hrz
+# export TENANT_ID="ed7990c3-61c2-477d-85e9-1a396c19ae94"
+# export STATE_SUB="641d3872-8322-4bdb-83ce-bfbc119fa3cd"
+# export HUB_SUB="d072f6c1-7c2d-4d27-8ffb-fd96f828c3b6"
+# export TARGET_SUB="641d3872-8322-4bdb-83ce-bfbc119fa3cd"
+# export CDBPG_ADMIN_PASSWORD='nzu1bgw7dmx3QNT*zcn'
+# export PG_ADMIN_PASSWORD='EGU7bqn4qkn*qhf*rye'
+
+# env | grep -E '^(ENV_IN|PRODUCT_IN|TENANT_ID|STATE_SUB|HUB_SUB|TARGET_SUB|CDBPG_ADMIN_PASSWORD|PG_ADMIN_PASSWORD)='
+
 # bash ./local-plan-platform-app.sh
+
+# unset ENV_IN
+# unset PRODUCT_IN
+# unset TENANT_ID
+# unset STATE_SUB
+# unset HUB_SUB
+# unset TARGET_SUB
+# unset CDBPG_ADMIN_PASSWORD
+# unset PG_ADMIN_PASSWORD
+
+
+# az cloud set -n AzureUSGovernment
+# az account set --subscription 641d3872-8322-4bdb-83ce-bfbc119fa3cd
+
+# # 1) recreate the missing RG
+# az group create \
+#   -n DefaultResourceGroup-USGA \
+#   -l usgovarizona
+
+# # 2) recreate the missing Log Analytics workspace (same name)
+# az monitor log-analytics workspace create \
+#   -g DefaultResourceGroup-USGA \
+#   -n DefaultWorkspace-641d3872-8322-4bdb-83ce-bfbc119fa3cd-USGA \
+#   -l usgovarizona
