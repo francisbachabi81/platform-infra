@@ -13,14 +13,14 @@ shared_network_state = {
   resource_group_name  = "rg-core-infra-state"
   storage_account_name = "sacoretfstateinfra"
   container_name       = "tfstate"
-  key                  = "shared-network/pub/usaz/np.tfstate"
+  key                  = "shared-network/pub/cus/np.tfstate"
 }
 
 core_state = {
   resource_group_name  = "rg-core-infra-state"
   storage_account_name = "sacoretfstateinfra"
   container_name       = "tfstate"
-  key                  = "core/pub/usaz/np.tfstate"
+  key                  = "core/pub/cus/np.tfstate"
 }
 
 waf_policies = {
@@ -29,12 +29,27 @@ waf_policies = {
     vpn_cidrs        = ["192.168.1.0/24"]
     restricted_paths = ["/admin"]
     blocked_countries = ["CN", "RU", "IR"]    # https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/web-application-firewall/ag/geomatch-custom-rules.md
+
+    # Disable managed rules by rule group + IDs
+    disabled_rules_by_group = {
+      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260","942340", "942370"]
+      "REQUEST-931-APPLICATION-ATTACK-RFI" = ["931130"]
+      # "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300"]
+    }
   }
+
   # qa = {
   #   mode             = "Prevention"
   #   vpn_cidrs        = ["192.168.1.0/24"]
   #   restricted_paths = ["/admin"]           # ["/admin", "/ops"]
   #   blocked_countries = ["CN", "RU", "IR"]  # https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/web-application-firewall/ag/geomatch-custom-rules.md
+  # 
+  # Disable managed rules by rule group + IDs
+    # disabled_rules_by_group = {
+    #   "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260","942340", "942370"]
+    #   "REQUEST-931-APPLICATION-ATTACK-RFI" = ["931130"]
+    #   # "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300"]
+    # }
   # }
 }
 
@@ -244,6 +259,7 @@ routing_rules = [
     backend_address_pool_name  = "bepool-dev"
     backend_http_settings_name = "bhs-dev-https"
   }
+  
   # qa
   # PUBLIC
   # {

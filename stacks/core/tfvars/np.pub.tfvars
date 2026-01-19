@@ -39,6 +39,7 @@ associate_custom_domain = false
 create_core_vm     = true
 core_vm_private_ip = "172.10.13.10"
 core_vm_admin_username = "coreadmin"
+
 # VM size suggestions:
 # - "Standard_D2s_v5": light CI / tooling, low cost
 # - "Standard_D4s_v5": medium workloads
@@ -47,6 +48,7 @@ core_vm_admin_username = "coreadmin"
 #   - Standard_B1ms  → 1 vCPU, 2 GiB RAM (lighter workloads)
 #   - Standard_B1s   → 1 vCPU, 1 GiB RAM (very light / test only)
 core_runner_vm_size = "Standard_B1ms"
+
 # Ubuntu image suggestions:
 # Keep defaults for latest Ubuntu 22.04 LTS:
 core_runner_vm_image_publisher = "Canonical"
@@ -135,3 +137,10 @@ KQL
     }
   }
 }
+
+# create_storage_cmk → **IMPORTANT first-run behavior**:
+# Set to false **on the first Core stack deployment** so the stack can create the Key Vault and the GitHub runner VM.
+# The Key Vault is created with **public access disabled**, so if create_storage_cmk = true on the first run, the CMK/key creation can fail (no private access path exists yet).
+# After the VM is created, **configure the self-hosted runner** on that VM and update workflows to use it for deployments.
+# Then set create_storage_cmk = true and re-apply to create the CMK/keys, since the runner VM has internal network access to the Key Vault.
+create_storage_cmk = true

@@ -1,24 +1,56 @@
-# ---- Observability (HRZ | qa) ----
-env         = "qa"
-product     = "hrz"
-plane       = "np"
-location    = "USGov Arizona"
-region      = "usaz"
+# Core context
+product = "hrz"
+env     = "qa"
 
-rg_name     = "rg-obs-hrz-qa-usaz-01"
-law_name    = "law-hrz-qa-usaz-01"
-ag_name     = "ag-obs-hrz-qa-usaz-01"
+location = "USGov Arizona"
+region   = "usaz"
 
-law_sku             = "PerGB2018"
-law_retention_days  = 30
-
-enable_container_insights = true
-enable_vm_insights        = true
-enable_ama_dcr            = true
-
+# Alerting (Action Group recipients)
 action_group_email_receivers = [
-  { name = "QA-Ops", email_address = "qa-ops@example.gov" }
+  {
+    name          = "Ops Manager"
+    email_address = "francis.bachabi@intterragroup.com"
+  },
+  {
+    name          = "Cloud Ops Alerts"
+    email_address = "cloudops@intterragroup.com"
+  }
 ]
 
-diag_categories = ["AuditEvent","Security","AppServiceHTTPLogs","StorageRead","StorageWrite"]
-tags_extra = { purpose = "observability", layer = "platform" }
+# FedRAMP policy compliance pipeline
+# enable_policy_compliance_alerts = false
+policy_alert_email              = "cloudops@intterragroup.com"
+
+policy_source_subscriptions = {
+  dev-core = {
+    subscription_id = "62ae6908-cbcb-40cb-8773-54bd318ff7f9"
+  }
+  core = {
+    subscription_id = "df6dc63f-c4dc-4590-ba4b-f2ce9639ca6c"
+  }
+  qa-core = {
+    subscription_id = "d4c1d472-722c-49c2-857f-4243441104c8"
+  }
+}
+
+# Subscription budgets
+enable_subscription_budgets    = false
+subscription_budget_amount     = 500
+subscription_budget_threshold  = 80
+subscription_budget_start_date = "2026-01-01T00:00:00Z"
+subscription_budget_end_date   = "2035-01-01T00:00:00Z"
+
+budget_alert_emails = [
+  "cloudops@intterragroup.com"
+]
+
+# NSG flow logs
+# enable_nsg_flow_logs = false
+
+# Tags
+tags_extra = {
+  purpose = "observability"
+  layer   = "platform"
+}
+
+enable_cost_exports = false

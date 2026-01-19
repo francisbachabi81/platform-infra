@@ -10,6 +10,8 @@ private_zones = [
   # App domains (dev + qa)
   "dev.public.intterra.io",
   "qa.public.intterra.io",
+  "internal.dev.public.intterra.io",
+  "internal.qa.public.intterra.io",
 
   # Storage
   "privatelink.blob.core.windows.net",
@@ -295,13 +297,14 @@ public_ip_allocation_method = "Static"
 create_vpng_public_ip       = false
 
 # App Gateway (disabled in this nonprod example)
-create_app_gateway          = false
+create_app_gateway          = true
 waf_mode                    = "Detection"   # Detection | Prevention
 appgw_public_ip_enabled     = true
 appgw_sku_name              = "WAF_v2"
 appgw_sku_tier              = "WAF_v2"
 appgw_capacity              = 1
 appgw_cookie_based_affinity = "Disabled"
+appgw_private_frontend_ip = "172.10.40.4"
 
 # DNS Private Resolver – optional static inbound IP & forwarding rules
 dnsr_inbound_static_ip = "172.10.50.4"

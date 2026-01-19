@@ -1,16 +1,18 @@
-# core / env
-plane           = "prod"         # nonprod | prod
-subscription_id = "aab00dd1-a61d-4ecc-9010-e1b43ef16c9f"
-tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
-location        = "Central US"
+# Core / plane
+plane    = "prod"                # nonprod | prod
+product  = "pub"                    # hrz | pub
+location = "centralus"              # canonical azurerm region name
+region   = "cus"                    # short code used in names
+seq      = "01"                     # sequence in names
 
-# naming
-product = "pub"
-region  = "cus"                  # short region (e.g. cus, eus)
-seq     = "01"
-
-# private dns zones (privatelink)
+# Private DNS zones (Azure Commercial)
 private_zones = [
+  # App domains (dev + qa)
+  "dev.public.intterra.io",
+  "qa.public.intterra.io",
+  "internal.public.intterra.io",
+  "internal.uat.public.intterra.io",
+
   # Storage
   "privatelink.blob.core.windows.net",
   "privatelink.file.core.windows.net",
@@ -18,34 +20,41 @@ private_zones = [
   "privatelink.table.core.windows.net",
   "privatelink.dfs.core.windows.net",   # Data Lake Gen2
   "privatelink.web.core.windows.net",   # Static website
+
   # Key Vault
   "privatelink.vaultcore.azure.net",
+
   # Redis
   "privatelink.redis.cache.windows.net",
+
   # Cosmos DB (NoSQL)
   "privatelink.documents.azure.com",
+
   # Azure Database for PostgreSQL (Flexible)
   "privatelink.postgres.database.azure.com",
+
   # Cosmos DB for PostgreSQL (Citus)
   "privatelink.postgres.cosmos.azure.com",
+
   # Service Bus / Event Hubs
   "privatelink.servicebus.windows.net",
+
   # App Service (Web Apps + SCM/Kudu)
   "privatelink.azurewebsites.net",
   "privatelink.scm.azurewebsites.net",
+
   # AKS (region-specific)
   "privatelink.centralus.azmk8s.io"
 ]
 
-# public dns zones
+# Public DNS zones
 public_dns_zones = [
-  "horizon.intterra.io"
+  "public.intterra.io",
+  "uat.public.intterra.io"
 ]
 
 # vnets
 prod_hub = {
-  rg    = "rg-pub-pr-cus-net-01"
-  vnet  = "vnet-pub-pr-hub-cus-01"
   cidrs = ["172.13.0.0/16"]
 
   subnets = {
@@ -89,8 +98,8 @@ prod_hub = {
 }
 
 prod_spoke = {
-  rg    = "rg-pub-prod-cus-01"
-  vnet  = "vnet-pub-prod-cus-01"
+  # rg    = "rg-pub-prod-cus-01"
+  # vnet  = "vnet-pub-prod-cus-01"
   cidrs = ["172.14.0.0/16"]
 
   subnets = {
@@ -185,8 +194,6 @@ prod_spoke = {
 }
 
 uat_spoke = {
-  rg    = "rg-pub-uat-cus-01"
-  vnet  = "vnet-pub-uat-cus-01"
   cidrs = ["172.15.0.0/16"]
 
   subnets = {
@@ -286,23 +293,38 @@ vpn_sku                     = "VpnGw1"  # e.g. VpnGw1, VpnGw2, VpnGw3
 public_ip_sku               = "Standard"
 public_ip_allocation_method = "Static"
 
-create_app_gateway          = false     # create app gw
+# If true → VPN module creates its own PIP; if false → this stack creates an external PIP
+create_vpng_public_ip       = false
+
+# App Gateway (disabled in this nonprod example)
+create_app_gateway          = true
 waf_mode                    = "Detection"   # Detection | Prevention
 appgw_public_ip_enabled     = true
 appgw_sku_name              = "WAF_v2"
 appgw_sku_tier              = "WAF_v2"
 appgw_capacity              = 1
-appgw_cookie_based_affinity = "Disabled"    # Enabled | Disabled
+appgw_cookie_based_affinity = "Disabled"
+appgw_private_frontend_ip = "172.13.40.4"
 
-# tags
+# DNS Private Resolver – optional static inbound IP & forwarding rules
+dnsr_inbound_static_ip = "172.13.50.4"
+dns_forwarding_rules   = [
+  # example:
+  # {
+  #   domain_name = "corp.contoso.com."
+  #   target_ips  = ["10.100.0.10", "10.100.0.11"]
+  # }
+]
+
+# Tags
 tags = {
-  product = "horizon"
+  product = "pub"
   owner   = "it operations"
+  lane    = "nonprod"
 }
 
-# dns resolver inbound static ip
-dnsr_inbound_static_ip = "172.13.50.4"   # points to dns-inbound endpoint ip
-
-# ── Front Door ────────────────────────────────────
+# Front Door
 fd_create_frontdoor = true
 fd_sku_name         = "Standard_AzureFrontDoor"
+
+dnsresolver_enable_outbound = false

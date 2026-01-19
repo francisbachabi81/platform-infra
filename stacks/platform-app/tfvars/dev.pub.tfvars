@@ -4,9 +4,15 @@ product  = "pub" # hrz (Azure Gov) | pub (Azure Commercial)
 location = "Central US"
 region   = "cus"
 
-# Provider alias overrides used by AKS routing logic (shared nonprod)
+# Provider alias overrides (AKS shared nonprod routing)
+# Used by env=dev AKS routing logic to land cluster in shared nonprod subscription.
 shared_nonprod_subscription_id = "ee8a4693-54d4-4de8-842b-b6f35fc0674d"
 shared_nonprod_tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
+
+# (Optional) You can also set:
+# prod_subscription_id / prod_tenant_id
+# uat_subscription_id  / uat_tenant_id
+# if/when you split those planes.
 
 # remote state (shared-network + core)
 state_rg_name        = "rg-core-infra-state"
@@ -15,6 +21,9 @@ state_container_name = "tfstate"
 
 shared_state_enabled = true # read shared-network state (vnets, PDZs, subnets)
 core_state_enabled   = true # read core state (LAW + App Insights connection)
+
+# core_state_key can be overridden if layout changes:
+# core_state_key = "core/hrz/np/terraform.tfstate"
 
 # tags / naming
 tags = {
@@ -29,7 +38,8 @@ soft_delete_retention_days = 7
 # storage 
 sa_replication_type = "LRS" # LRS | ZRS | RAGRS | GZRS | RAGZRS
 
-# AKS (dev deploys in shared nonprod)
+# AKS (env)
+# dev: deploys into shared nonprod core RG; nodepool in nonprod hub (akspub/akshrz)
 create_aks         = true
 kubernetes_version = "1.33.5"        # ensure this version is available in region
 aks_node_vm_size   = "Standard_B2ms" #Standard_D2s_v5, Standard_B1ms, Standard_B2ms, Standard_B2s
