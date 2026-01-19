@@ -1,6 +1,7 @@
 <# 
   Creates/reuses an Entra ID App Registration + Service Principal for identity-svc.
-  pwsh -File ./create-identity-svc-sp.ps1 -Product hrz -Env dev -Region usaz -Seq 01 -TenantId dd58f16c-b85a-4d66-99e1-f8690545385
+
+    pwsh -File ./create-identity-svc-sp.ps1 -Product hrz -Env dev -Region usaz -Seq 01 -TenantId dd58f16c-b85a-4d66-99e1-f86905453853
 #>
 
 [CmdletBinding()]

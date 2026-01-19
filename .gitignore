@@ -423,3 +423,5 @@ stacks/platform-app/plan-raw.txt
 stacks/platform-app/plan.txt
 stacks/platform-app/tfplan
 stacks/platform-app/plan.json
+scripts/.DS_Store
+.DS_Store
