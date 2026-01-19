@@ -157,8 +157,14 @@ locals {
 
   short_zone_map = {
     # Commercial
-    "dev.horizon.intterra.io"                 = "hrzdev"
-    "qa.horizon.intterra.io"                  = "hrzqa"
+    "dev.public.intterra.io"                  = "pubdev"
+    "qa.public.intterra.io"                   = "pubqa"
+    "internal.dev.public.intterra.io"         = "pubintdev"
+    "internal.qa.public.intterra.io"          = "pubintqa"
+    "public.intterra.io"                      = "pubprod"
+    "uat.public.intterra.io"                  = "pubuat"
+    "internal.public.intterra.io"             = "pubintprod"
+    "internal.uat.public.intterra.io"         = "pubintuat" 
     "privatelink.blob.core.windows.net"       = "plb"
     "privatelink.file.core.windows.net"       = "plf"
     "privatelink.queue.core.windows.net"      = "plq"
@@ -177,7 +183,13 @@ locals {
 
     # Gov
     "dev.horizon.intterra.io"                         = "hrzdev"
-    "qa.horizon.intterra.io"                         = "hrzqa"
+    "qa.horizon.intterra.io"                          = "hrzqa"
+    "internal.dev.horizon.intterra.io"                = "hrzintdev"
+    "internal.qa.horizon.intterra.io"                 = "hrzintqa" 
+    "horizon.intterra.io"                             = "hrzprod"
+    "uat.horizon.intterra.io"                         = "hrzuat"
+    "internal.horizon.intterra.io"                    = "hrzintprod"
+    "internal.uat.horizon.intterra.io"                = "hrzintuat" 
     "privatelink.blob.core.usgovcloudapi.net"         = "plb"
     "privatelink.file.core.usgovcloudapi.net"         = "plf"
     "privatelink.queue.core.usgovcloudapi.net"        = "plq"

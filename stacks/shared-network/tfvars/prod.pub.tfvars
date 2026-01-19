@@ -8,8 +8,8 @@ seq      = "01"                     # sequence in names
 # Private DNS zones (Azure Commercial)
 private_zones = [
   # App domains (dev + qa)
-  "dev.public.intterra.io",
-  "qa.public.intterra.io",
+  "public.intterra.io",
+  "uat.public.intterra.io",
   "internal.public.intterra.io",
   "internal.uat.public.intterra.io",
 
