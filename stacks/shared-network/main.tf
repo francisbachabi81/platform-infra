@@ -2653,7 +2653,10 @@ resource "azurerm_network_security_rule" "aks_allow_https_internet_hub" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_https_internet_dev" {
@@ -2670,7 +2673,10 @@ resource "azurerm_network_security_rule" "aks_allow_https_internet_dev" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_https_internet_qa" {
@@ -2687,7 +2693,10 @@ resource "azurerm_network_security_rule" "aks_allow_https_internet_qa" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_https_internet_prod" {
@@ -2704,7 +2713,10 @@ resource "azurerm_network_security_rule" "aks_allow_https_internet_prod" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_https_internet_uat" {
@@ -2721,7 +2733,10 @@ resource "azurerm_network_security_rule" "aks_allow_https_internet_uat" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_http_internet_hub" {
@@ -2737,7 +2752,10 @@ resource "azurerm_network_security_rule" "aks_allow_http_internet_hub" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_http_internet_dev" {
@@ -2754,7 +2772,10 @@ resource "azurerm_network_security_rule" "aks_allow_http_internet_dev" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_http_internet_qa" {
@@ -2771,7 +2792,10 @@ resource "azurerm_network_security_rule" "aks_allow_http_internet_qa" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_http_internet_prod" {
@@ -2788,7 +2812,10 @@ resource "azurerm_network_security_rule" "aks_allow_http_internet_prod" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_http_internet_uat" {
@@ -2805,7 +2832,10 @@ resource "azurerm_network_security_rule" "aks_allow_http_internet_uat" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_acr_hub" {
@@ -2821,7 +2851,10 @@ resource "azurerm_network_security_rule" "aks_allow_acr_hub" {
   destination_address_prefix  = "AzureContainerRegistry"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_acr_dev" {
@@ -2838,7 +2871,10 @@ resource "azurerm_network_security_rule" "aks_allow_acr_dev" {
   destination_address_prefix  = "AzureContainerRegistry"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_acr_qa" {
@@ -2855,7 +2891,10 @@ resource "azurerm_network_security_rule" "aks_allow_acr_qa" {
   destination_address_prefix  = "AzureContainerRegistry"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_acr_prod" {
@@ -2872,7 +2911,10 @@ resource "azurerm_network_security_rule" "aks_allow_acr_prod" {
   destination_address_prefix  = "AzureContainerRegistry"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_acr_uat" {
@@ -2889,7 +2931,10 @@ resource "azurerm_network_security_rule" "aks_allow_acr_uat" {
   destination_address_prefix  = "AzureContainerRegistry"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_servicebus_hub" {
@@ -2905,7 +2950,10 @@ resource "azurerm_network_security_rule" "aks_allow_servicebus_hub" {
   destination_address_prefix  = "ServiceBus"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_servicebus_dev" {
@@ -2922,7 +2970,10 @@ resource "azurerm_network_security_rule" "aks_allow_servicebus_dev" {
   destination_address_prefix  = "ServiceBus"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_servicebus_qa" {
@@ -2939,7 +2990,10 @@ resource "azurerm_network_security_rule" "aks_allow_servicebus_qa" {
   destination_address_prefix  = "ServiceBus"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_servicebus_prod" {
@@ -2956,7 +3010,10 @@ resource "azurerm_network_security_rule" "aks_allow_servicebus_prod" {
   destination_address_prefix  = "ServiceBus"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_servicebus_uat" {
@@ -2973,7 +3030,10 @@ resource "azurerm_network_security_rule" "aks_allow_servicebus_uat" {
   destination_address_prefix  = "ServiceBus"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 # ------------------------------------------------------------------------------
@@ -2993,7 +3053,10 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_hub" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_https_from_internet_dev" {
@@ -3010,7 +3073,10 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_dev" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_https_from_internet_qa" {
@@ -3027,7 +3093,10 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_qa" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_https_from_internet_prod" {
@@ -3044,7 +3113,10 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_prod" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
@@ -3061,7 +3133,10 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 # ------------------------------------------------------------------------------
