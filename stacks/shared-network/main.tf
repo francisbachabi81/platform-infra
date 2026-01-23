@@ -2526,13 +2526,124 @@ resource "azurerm_network_security_rule" "pe_deny_other_vnets_uat" {
   ]
 }
 
-# AKS egress (per subscription)
+# ------------------------------------------------------------------------------
+# AKS NSG rules (per subscription)
+# - Keeps all rules (no deletions)
+# - Makes priorities consistent via locals
+# - Reduces repetition via shared locals (names + depends_on + priorities)
+# ------------------------------------------------------------------------------
 
-# HTTPS to Internet
+locals {
+  aks_nsg_depends_on = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+
+  aks_rule_name = {
+    egress_https_internet = "allow-aks-https-internet"
+    egress_http_internet  = "allow-aks-http-internet"
+    egress_acr            = "allow-aks-acr"
+    egress_servicebus     = "allow-aks-servicebus"
+
+    ingress_https_internet = "allow-aks-https-from-internet"
+
+    intra_node_node_in  = "allow-aks-node-node-in"
+    intra_node_node_out = "allow-aks-node-node-out"
+    intra_pod_pod_in    = "allow-aks-pod-pod-in"
+    intra_pod_pod_out   = "allow-aks-pod-pod-out"
+    intra_node_pod_in   = "allow-aks-node-pod-in"
+    intra_node_pod_out  = "allow-aks-node-pod-out"
+    intra_node_svc_in   = "allow-aks-node-svc-in"
+    intra_node_svc_out  = "allow-aks-node-svc-out"
+    intra_pod_svc_in    = "allow-aks-pod-svc-in"
+    intra_pod_svc_out   = "allow-aks-pod-svc-out"
+    intra_dns_udp_azure = "allow-aks-dns-udp-azure"
+  }
+
+  # - Ingress Internet: 220
+  # - Intra-cluster:    230-239
+  # - Egress Internet:  340+
+  aks_rule_priority = {
+    ingress_https_internet = 220
+
+    intra_node_node = 230
+    intra_pod_pod   = 231
+    intra_node_pod  = 232
+    intra_node_svc  = 233
+    intra_pod_svc   = 234
+    intra_dns_udp   = 235
+
+    egress_https_internet = 340
+    egress_http_internet  = 341
+    egress_acr            = 342
+    egress_servicebus     = 343
+  }
+
+  # AKS ingress (per subscription)
+  aks_ingress_allowed_cidrs = local.is_nonprod ? var.aks_ingress_allowed_cidrs["nonprod"] : var.aks_ingress_allowed_cidrs["prod"]
+
+  # -------------------------------------------------------------------
+  # AKS intra-cluster allow rules (node/pod/service + DNS)
+  # - Nonprod: AKS only in dev (shared for dev+qa workloads)
+  # - Prod:    AKS in prod and uat
+  # -------------------------------------------------------------------
+  aks_enabled_dev  = local.is_nonprod
+  aks_enabled_qa   = false
+  aks_enabled_prod = local.is_prod
+  aks_enabled_uat  = local.is_prod
+
+  aks_cidrs_np = local.is_nonprod ? (
+    lower(var.product) == "pub"
+    ? { node = "172.10.2.0/24", pod = "172.210.0.0/16", svc = "172.110.0.0/16", dns = "172.110.0.10" }
+    : { node = "10.10.2.0/24",  pod = "10.210.0.0/16",  svc = "10.110.0.0/16",  dns = "10.110.0.10" }
+  ) : null
+
+  aks_cidrs_pr = local.is_prod ? (
+    lower(var.product) == "pub"
+    ? {
+        prod = { 
+          node = "172.14.2.0/24",
+          pod = "172.214.0.0/16",
+          svc = "172.114.0.0/16",
+          dns = "172.114.0.10" 
+        }
+        uat  = { 
+          node = "172.15.2.0/24",
+          pod = "172.215.0.0/16",
+          svc = "172.115.0.0/16",
+          dns = "172.115.0.10" 
+        }
+      }
+    : {
+        prod = { 
+          node = "10.14.2.0/24",
+          pod = "10.214.0.0/16",
+          svc = "10.114.0.0/16",
+          dns = "10.114.0.10" 
+        }
+        uat  = { 
+          node = "10.15.2.0/24",
+          pod = "10.215.0.0/16",
+          svc = "10.115.0.0/16",
+          dns = "10.115.0.10" 
+        }
+      }
+  ) : null
+
+  aks_targets_dev_effective  = local.aks_enabled_dev  ? local.aks_targets_dev  : {}
+  aks_targets_qa_effective   = local.aks_enabled_qa   ? local.aks_targets_qa   : {}
+  aks_targets_prod_effective = local.aks_enabled_prod ? local.aks_targets_prod : {}
+  aks_targets_uat_effective  = local.aks_enabled_uat  ? local.aks_targets_uat  : {}
+}
+
+# ------------------------------------------------------------------------------
+# AKS egress (per subscription)
+# ------------------------------------------------------------------------------
+
 resource "azurerm_network_security_rule" "aks_allow_https_internet_hub" {
   for_each                    = local.aks_targets_hub
-  name                        = "allow-aks-https-internet"
-  priority                    = 340
+  name                        = local.aks_rule_name.egress_https_internet
+  priority                    = local.aks_rule_priority.egress_https_internet
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2542,17 +2653,14 @@ resource "azurerm_network_security_rule" "aks_allow_https_internet_hub" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_https_internet_dev" {
   provider                    = azurerm.dev
   for_each                    = local.aks_targets_dev
-  name                        = "allow-aks-https-internet"
-  priority                    = 340
+  name                        = local.aks_rule_name.egress_https_internet
+  priority                    = local.aks_rule_priority.egress_https_internet
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2562,17 +2670,14 @@ resource "azurerm_network_security_rule" "aks_allow_https_internet_dev" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_https_internet_qa" {
   provider                    = azurerm.qa
   for_each                    = local.aks_targets_qa
-  name                        = "allow-aks-https-internet"
-  priority                    = 340
+  name                        = local.aks_rule_name.egress_https_internet
+  priority                    = local.aks_rule_priority.egress_https_internet
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2582,17 +2687,14 @@ resource "azurerm_network_security_rule" "aks_allow_https_internet_qa" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_https_internet_prod" {
   provider                    = azurerm.prod
   for_each                    = local.aks_targets_prod
-  name                        = "allow-aks-https-internet"
-  priority                    = 340
+  name                        = local.aks_rule_name.egress_https_internet
+  priority                    = local.aks_rule_priority.egress_https_internet
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2602,17 +2704,14 @@ resource "azurerm_network_security_rule" "aks_allow_https_internet_prod" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_https_internet_uat" {
   provider                    = azurerm.uat
   for_each                    = local.aks_targets_uat
-  name                        = "allow-aks-https-internet"
-  priority                    = 340
+  name                        = local.aks_rule_name.egress_https_internet
+  priority                    = local.aks_rule_priority.egress_https_internet
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2622,17 +2721,13 @@ resource "azurerm_network_security_rule" "aks_allow_https_internet_uat" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
-# HTTP to Internet
 resource "azurerm_network_security_rule" "aks_allow_http_internet_hub" {
   for_each                    = local.aks_targets_hub
-  name                        = "allow-aks-http-internet"
-  priority                    = 345
+  name                        = local.aks_rule_name.egress_http_internet
+  priority                    = local.aks_rule_priority.egress_http_internet
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2642,17 +2737,14 @@ resource "azurerm_network_security_rule" "aks_allow_http_internet_hub" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_http_internet_dev" {
   provider                    = azurerm.dev
   for_each                    = local.aks_targets_dev
-  name                        = "allow-aks-http-internet"
-  priority                    = 345
+  name                        = local.aks_rule_name.egress_http_internet
+  priority                    = local.aks_rule_priority.egress_http_internet
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2662,17 +2754,14 @@ resource "azurerm_network_security_rule" "aks_allow_http_internet_dev" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_http_internet_qa" {
   provider                    = azurerm.qa
   for_each                    = local.aks_targets_qa
-  name                        = "allow-aks-http-internet"
-  priority                    = 345
+  name                        = local.aks_rule_name.egress_http_internet
+  priority                    = local.aks_rule_priority.egress_http_internet
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2682,17 +2771,14 @@ resource "azurerm_network_security_rule" "aks_allow_http_internet_qa" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_http_internet_prod" {
   provider                    = azurerm.prod
   for_each                    = local.aks_targets_prod
-  name                        = "allow-aks-http-internet"
-  priority                    = 345
+  name                        = local.aks_rule_name.egress_http_internet
+  priority                    = local.aks_rule_priority.egress_http_internet
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2702,17 +2788,14 @@ resource "azurerm_network_security_rule" "aks_allow_http_internet_prod" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_http_internet_uat" {
   provider                    = azurerm.uat
   for_each                    = local.aks_targets_uat
-  name                        = "allow-aks-http-internet"
-  priority                    = 345
+  name                        = local.aks_rule_name.egress_http_internet
+  priority                    = local.aks_rule_priority.egress_http_internet
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2722,17 +2805,13 @@ resource "azurerm_network_security_rule" "aks_allow_http_internet_uat" {
   destination_address_prefix  = "Internet"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
-# ACR (Service Tag: AzureContainerRegistry)
 resource "azurerm_network_security_rule" "aks_allow_acr_hub" {
   for_each                    = local.aks_targets_hub
-  name                        = "allow-aks-acr"
-  priority                    = 350
+  name                        = local.aks_rule_name.egress_acr
+  priority                    = local.aks_rule_priority.egress_acr
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2742,17 +2821,14 @@ resource "azurerm_network_security_rule" "aks_allow_acr_hub" {
   destination_address_prefix  = "AzureContainerRegistry"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_acr_dev" {
   provider                    = azurerm.dev
   for_each                    = local.aks_targets_dev
-  name                        = "allow-aks-acr"
-  priority                    = 350
+  name                        = local.aks_rule_name.egress_acr
+  priority                    = local.aks_rule_priority.egress_acr
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2762,17 +2838,14 @@ resource "azurerm_network_security_rule" "aks_allow_acr_dev" {
   destination_address_prefix  = "AzureContainerRegistry"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_acr_qa" {
   provider                    = azurerm.qa
   for_each                    = local.aks_targets_qa
-  name                        = "allow-aks-acr"
-  priority                    = 350
+  name                        = local.aks_rule_name.egress_acr
+  priority                    = local.aks_rule_priority.egress_acr
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2782,17 +2855,14 @@ resource "azurerm_network_security_rule" "aks_allow_acr_qa" {
   destination_address_prefix  = "AzureContainerRegistry"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_acr_prod" {
   provider                    = azurerm.prod
   for_each                    = local.aks_targets_prod
-  name                        = "allow-aks-acr"
-  priority                    = 350
+  name                        = local.aks_rule_name.egress_acr
+  priority                    = local.aks_rule_priority.egress_acr
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2802,17 +2872,14 @@ resource "azurerm_network_security_rule" "aks_allow_acr_prod" {
   destination_address_prefix  = "AzureContainerRegistry"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_acr_uat" {
   provider                    = azurerm.uat
   for_each                    = local.aks_targets_uat
-  name                        = "allow-aks-acr"
-  priority                    = 350
+  name                        = local.aks_rule_name.egress_acr
+  priority                    = local.aks_rule_priority.egress_acr
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2822,17 +2889,13 @@ resource "azurerm_network_security_rule" "aks_allow_acr_uat" {
   destination_address_prefix  = "AzureContainerRegistry"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
-# ServiceBus (Service Tag: ServiceBus)
 resource "azurerm_network_security_rule" "aks_allow_servicebus_hub" {
   for_each                    = local.aks_targets_hub
-  name                        = "allow-aks-servicebus"
-  priority                    = 355
+  name                        = local.aks_rule_name.egress_servicebus
+  priority                    = local.aks_rule_priority.egress_servicebus
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2842,17 +2905,14 @@ resource "azurerm_network_security_rule" "aks_allow_servicebus_hub" {
   destination_address_prefix  = "ServiceBus"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_servicebus_dev" {
   provider                    = azurerm.dev
   for_each                    = local.aks_targets_dev
-  name                        = "allow-aks-servicebus"
-  priority                    = 355
+  name                        = local.aks_rule_name.egress_servicebus
+  priority                    = local.aks_rule_priority.egress_servicebus
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2862,17 +2922,14 @@ resource "azurerm_network_security_rule" "aks_allow_servicebus_dev" {
   destination_address_prefix  = "ServiceBus"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_servicebus_qa" {
   provider                    = azurerm.qa
   for_each                    = local.aks_targets_qa
-  name                        = "allow-aks-servicebus"
-  priority                    = 355
+  name                        = local.aks_rule_name.egress_servicebus
+  priority                    = local.aks_rule_priority.egress_servicebus
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2882,17 +2939,14 @@ resource "azurerm_network_security_rule" "aks_allow_servicebus_qa" {
   destination_address_prefix  = "ServiceBus"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_servicebus_prod" {
   provider                    = azurerm.prod
   for_each                    = local.aks_targets_prod
-  name                        = "allow-aks-servicebus"
-  priority                    = 355
+  name                        = local.aks_rule_name.egress_servicebus
+  priority                    = local.aks_rule_priority.egress_servicebus
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2902,17 +2956,14 @@ resource "azurerm_network_security_rule" "aks_allow_servicebus_prod" {
   destination_address_prefix  = "ServiceBus"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_servicebus_uat" {
   provider                    = azurerm.uat
   for_each                    = local.aks_targets_uat
-  name                        = "allow-aks-servicebus"
-  priority                    = 355
+  name                        = local.aks_rule_name.egress_servicebus
+  priority                    = local.aks_rule_priority.egress_servicebus
   direction                   = "Outbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2922,22 +2973,17 @@ resource "azurerm_network_security_rule" "aks_allow_servicebus_uat" {
   destination_address_prefix  = "ServiceBus"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
+# ------------------------------------------------------------------------------
 # AKS ingress (per subscription)
-locals {
-  aks_ingress_allowed_cidrs = local.is_nonprod ? var.aks_ingress_allowed_cidrs["nonprod"] : var.aks_ingress_allowed_cidrs["prod"]
-}
+# ------------------------------------------------------------------------------
 
-# HTTPS from Internet
 resource "azurerm_network_security_rule" "aks_allow_https_from_internet_hub" {
   for_each                    = local.aks_targets_hub
-  name                        = "allow-aks-https-from-internet"
-  priority                    = 220
+  name                        = local.aks_rule_name.ingress_https_internet
+  priority                    = local.aks_rule_priority.ingress_https_internet
   direction                   = "Inbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2947,17 +2993,14 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_hub" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_https_from_internet_dev" {
   provider                    = azurerm.dev
   for_each                    = local.aks_targets_dev
-  name                        = "allow-aks-https-from-internet"
-  priority                    = 220
+  name                        = local.aks_rule_name.ingress_https_internet
+  priority                    = local.aks_rule_priority.ingress_https_internet
   direction                   = "Inbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2967,17 +3010,14 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_dev" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_https_from_internet_qa" {
   provider                    = azurerm.qa
   for_each                    = local.aks_targets_qa
-  name                        = "allow-aks-https-from-internet"
-  priority                    = 220
+  name                        = local.aks_rule_name.ingress_https_internet
+  priority                    = local.aks_rule_priority.ingress_https_internet
   direction                   = "Inbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -2987,17 +3027,14 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_qa" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_https_from_internet_prod" {
   provider                    = azurerm.prod
   for_each                    = local.aks_targets_prod
-  name                        = "allow-aks-https-from-internet"
-  priority                    = 220
+  name                        = local.aks_rule_name.ingress_https_internet
+  priority                    = local.aks_rule_priority.ingress_https_internet
   direction                   = "Inbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -3007,17 +3044,14 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_prod" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
 resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
   provider                    = azurerm.uat
   for_each                    = local.aks_targets_uat
-  name                        = "allow-aks-https-from-internet"
-  priority                    = 220
+  name                        = local.aks_rule_name.ingress_https_internet
+  priority                    = local.aks_rule_priority.ingress_https_internet
   direction                   = "Inbound"
   access                      = "Allow"
   protocol                    = "Tcp"
@@ -3027,111 +3061,543 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
   destination_address_prefix  = "*"
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
+  depends_on                  = local.aks_nsg_depends_on
 }
 
-# HTTP from Internet
-# resource "azurerm_network_security_rule" "aks_allow_http_from_internet_hub" {
-#   for_each                    = local.aks_targets_hub
-#   name                        = "allow-aks-http-from-internet"
-#   priority                    = 225
-#   direction                   = "Inbound"
-#   access                      = "Allow"
-#   protocol                    = "Tcp"
-#   source_port_range           = "*"
-#   destination_port_range      = "80"
-#   source_address_prefixes     = local.aks_ingress_allowed_cidrs
-#   destination_address_prefix  = "*"
-#   resource_group_name         = each.value.rg
-#   network_security_group_name = each.value.name
-#   depends_on                  = [
-#     module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-#     module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-#   ]
-# }
+# ------------------------------------------------------------------------------
+# AKS intra-cluster allow rules (dev/prod/uat)
+# ------------------------------------------------------------------------------
 
-# resource "azurerm_network_security_rule" "aks_allow_http_from_internet_dev" {
-#   provider                    = azurerm.dev
-#   for_each                    = local.aks_targets_dev
-#   name                        = "allow-aks-http-from-internet"
-#   priority                    = 225
-#   direction                   = "Inbound"
-#   access                      = "Allow"
-#   protocol                    = "Tcp"
-#   source_port_range           = "*"
-#   destination_port_range      = "80"
-#   source_address_prefixes     = local.aks_ingress_allowed_cidrs
-#   destination_address_prefix  = "*"
-#   resource_group_name         = each.value.rg
-#   network_security_group_name = each.value.name
-#   depends_on                  = [
-#     module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-#     module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-#   ]
-# }
+# DEV (nonprod)
+resource "azurerm_network_security_rule" "aks_dev_allow_node_to_node_in" {
+  provider                    = azurerm.dev
+  for_each                    = local.aks_targets_dev_effective
+  name                        = local.aks_rule_name.intra_node_node_in
+  priority                    = local.aks_rule_priority.intra_node_node
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_np.node
+  destination_address_prefix  = local.aks_cidrs_np.node
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
 
-# resource "azurerm_network_security_rule" "aks_allow_http_from_internet_qa" {
-#   provider                    = azurerm.qa
-#   for_each                    = local.aks_targets_qa
-#   name                        = "allow-aks-http-from-internet"
-#   priority                    = 225
-#   direction                   = "Inbound"
-#   access                      = "Allow"
-#   protocol                    = "Tcp"
-#   source_port_range           = "*"
-#   destination_port_range      = "80"
-#   source_address_prefixes     = local.aks_ingress_allowed_cidrs
-#   destination_address_prefix  = "*"
-#   resource_group_name         = each.value.rg
-#   network_security_group_name = each.value.name
-#   depends_on                  = [
-#     module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-#     module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-#   ]
-# }
+resource "azurerm_network_security_rule" "aks_dev_allow_node_to_node_out" {
+  provider                    = azurerm.dev
+  for_each                    = local.aks_targets_dev_effective
+  name                        = local.aks_rule_name.intra_node_node_out
+  priority                    = local.aks_rule_priority.intra_node_node
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_np.node
+  destination_address_prefix  = local.aks_cidrs_np.node
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
 
-# resource "azurerm_network_security_rule" "aks_allow_http_from_internet_prod" {
-#   provider                    = azurerm.prod
-#   for_each                    = local.aks_targets_prod
-#   name                        = "allow-aks-http-from-internet"
-#   priority                    = 225
-#   direction                   = "Inbound"
-#   access                      = "Allow"
-#   protocol                    = "Tcp"
-#   source_port_range           = "*"
-#   destination_port_range      = "80"
-#   source_address_prefixes     = local.aks_ingress_allowed_cidrs
-#   destination_address_prefix  = "*"
-#   resource_group_name         = each.value.rg
-#   network_security_group_name = each.value.name
-#   depends_on                  = [
-#     module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-#     module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-#   ]
-# }
+resource "azurerm_network_security_rule" "aks_dev_allow_pod_to_pod_in" {
+  provider                    = azurerm.dev
+  for_each                    = local.aks_targets_dev_effective
+  name                        = local.aks_rule_name.intra_pod_pod_in
+  priority                    = local.aks_rule_priority.intra_pod_pod
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_np.pod
+  destination_address_prefix  = local.aks_cidrs_np.pod
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
 
-# resource "azurerm_network_security_rule" "aks_allow_http_from_internet_uat" {
-#   provider                    = azurerm.uat
-#   for_each                    = local.aks_targets_uat
-#   name                        = "allow-aks-http-from-internet"
-#   priority                    = 225
-#   direction                   = "Inbound"
-#   access                      = "Allow"
-#   protocol                    = "Tcp"
-#   source_port_range           = "*"
-#   destination_port_range      = "80"
-#   source_address_prefixes     = local.aks_ingress_allowed_cidrs
-#   destination_address_prefix  = "*"
-#   resource_group_name         = each.value.rg
-#   network_security_group_name = each.value.name
-#   depends_on                  = [
-#     module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-#     module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-#   ]
-# }
+resource "azurerm_network_security_rule" "aks_dev_allow_pod_to_pod_out" {
+  provider                    = azurerm.dev
+  for_each                    = local.aks_targets_dev_effective
+  name                        = local.aks_rule_name.intra_pod_pod_out
+  priority                    = local.aks_rule_priority.intra_pod_pod
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_np.pod
+  destination_address_prefix  = local.aks_cidrs_np.pod
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_dev_allow_node_to_pod_in" {
+  provider                    = azurerm.dev
+  for_each                    = local.aks_targets_dev_effective
+  name                        = local.aks_rule_name.intra_node_pod_in
+  priority                    = local.aks_rule_priority.intra_node_pod
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_np.node
+  destination_address_prefix  = local.aks_cidrs_np.pod
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_dev_allow_node_to_pod_out" {
+  provider                    = azurerm.dev
+  for_each                    = local.aks_targets_dev_effective
+  name                        = local.aks_rule_name.intra_node_pod_out
+  priority                    = local.aks_rule_priority.intra_node_pod
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_np.node
+  destination_address_prefix  = local.aks_cidrs_np.pod
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_dev_allow_node_to_svc_in" {
+  provider                    = azurerm.dev
+  for_each                    = local.aks_targets_dev_effective
+  name                        = local.aks_rule_name.intra_node_svc_in
+  priority                    = local.aks_rule_priority.intra_node_svc
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_np.node
+  destination_address_prefix  = local.aks_cidrs_np.svc
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_dev_allow_node_to_svc_out" {
+  provider                    = azurerm.dev
+  for_each                    = local.aks_targets_dev_effective
+  name                        = local.aks_rule_name.intra_node_svc_out
+  priority                    = local.aks_rule_priority.intra_node_svc
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_np.node
+  destination_address_prefix  = local.aks_cidrs_np.svc
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_dev_allow_pod_to_svc_in" {
+  provider                    = azurerm.dev
+  for_each                    = local.aks_targets_dev_effective
+  name                        = local.aks_rule_name.intra_pod_svc_in
+  priority                    = local.aks_rule_priority.intra_pod_svc
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_np.pod
+  destination_address_prefix  = local.aks_cidrs_np.svc
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_dev_allow_pod_to_svc_out" {
+  provider                    = azurerm.dev
+  for_each                    = local.aks_targets_dev_effective
+  name                        = local.aks_rule_name.intra_pod_svc_out
+  priority                    = local.aks_rule_priority.intra_pod_svc
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_np.pod
+  destination_address_prefix  = local.aks_cidrs_np.svc
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_dev_allow_dns_udp_out" {
+  provider                    = azurerm.dev
+  for_each                    = local.aks_targets_dev_effective
+  name                        = local.aks_rule_name.intra_dns_udp_azure
+  priority                    = local.aks_rule_priority.intra_dns_udp
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Udp"
+  source_port_range           = "*"
+  destination_port_range      = "53"
+  source_address_prefix       = local.aks_cidrs_np.node
+  destination_address_prefix  = "168.63.129.16"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+# PROD
+resource "azurerm_network_security_rule" "aks_prod_allow_node_to_node_in" {
+  provider                    = azurerm.prod
+  for_each                    = local.aks_targets_prod_effective
+  name                        = local.aks_rule_name.intra_node_node_in
+  priority                    = local.aks_rule_priority.intra_node_node
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.prod.node
+  destination_address_prefix  = local.aks_cidrs_pr.prod.node
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_prod_allow_node_to_node_out" {
+  provider                    = azurerm.prod
+  for_each                    = local.aks_targets_prod_effective
+  name                        = local.aks_rule_name.intra_node_node_out
+  priority                    = local.aks_rule_priority.intra_node_node
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.prod.node
+  destination_address_prefix  = local.aks_cidrs_pr.prod.node
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_prod_allow_pod_to_pod_in" {
+  provider                    = azurerm.prod
+  for_each                    = local.aks_targets_prod_effective
+  name                        = local.aks_rule_name.intra_pod_pod_in
+  priority                    = local.aks_rule_priority.intra_pod_pod
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.prod.pod
+  destination_address_prefix  = local.aks_cidrs_pr.prod.pod
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_prod_allow_pod_to_pod_out" {
+  provider                    = azurerm.prod
+  for_each                    = local.aks_targets_prod_effective
+  name                        = local.aks_rule_name.intra_pod_pod_out
+  priority                    = local.aks_rule_priority.intra_pod_pod
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.prod.pod
+  destination_address_prefix  = local.aks_cidrs_pr.prod.pod
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_prod_allow_node_to_pod_in" {
+  provider                    = azurerm.prod
+  for_each                    = local.aks_targets_prod_effective
+  name                        = local.aks_rule_name.intra_node_pod_in
+  priority                    = local.aks_rule_priority.intra_node_pod
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.prod.node
+  destination_address_prefix  = local.aks_cidrs_pr.prod.pod
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_prod_allow_node_to_pod_out" {
+  provider                    = azurerm.prod
+  for_each                    = local.aks_targets_prod_effective
+  name                        = local.aks_rule_name.intra_node_pod_out
+  priority                    = local.aks_rule_priority.intra_node_pod
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.prod.node
+  destination_address_prefix  = local.aks_cidrs_pr.prod.pod
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_prod_allow_node_to_svc_in" {
+  provider                    = azurerm.prod
+  for_each                    = local.aks_targets_prod_effective
+  name                        = local.aks_rule_name.intra_node_svc_in
+  priority                    = local.aks_rule_priority.intra_node_svc
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.prod.node
+  destination_address_prefix  = local.aks_cidrs_pr.prod.svc
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_prod_allow_node_to_svc_out" {
+  provider                    = azurerm.prod
+  for_each                    = local.aks_targets_prod_effective
+  name                        = local.aks_rule_name.intra_node_svc_out
+  priority                    = local.aks_rule_priority.intra_node_svc
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.prod.node
+  destination_address_prefix  = local.aks_cidrs_pr.prod.svc
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_prod_allow_pod_to_svc_in" {
+  provider                    = azurerm.prod
+  for_each                    = local.aks_targets_prod_effective
+  name                        = local.aks_rule_name.intra_pod_svc_in
+  priority                    = local.aks_rule_priority.intra_pod_svc
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.prod.pod
+  destination_address_prefix  = local.aks_cidrs_pr.prod.svc
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_prod_allow_pod_to_svc_out" {
+  provider                    = azurerm.prod
+  for_each                    = local.aks_targets_prod_effective
+  name                        = local.aks_rule_name.intra_pod_svc_out
+  priority                    = local.aks_rule_priority.intra_pod_svc
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.prod.pod
+  destination_address_prefix  = local.aks_cidrs_pr.prod.svc
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_prod_allow_dns_udp_out" {
+  provider                    = azurerm.prod
+  for_each                    = local.aks_targets_prod_effective
+  name                        = local.aks_rule_name.intra_dns_udp_azure
+  priority                    = local.aks_rule_priority.intra_dns_udp
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Udp"
+  source_port_range           = "*"
+  destination_port_range      = "53"
+  source_address_prefix       = local.aks_cidrs_pr.prod.node
+  destination_address_prefix  = "168.63.129.16"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+# UAT
+resource "azurerm_network_security_rule" "aks_uat_allow_node_to_node_in" {
+  provider                    = azurerm.uat
+  for_each                    = local.aks_targets_uat_effective
+  name                        = local.aks_rule_name.intra_node_node_in
+  priority                    = local.aks_rule_priority.intra_node_node
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.uat.node
+  destination_address_prefix  = local.aks_cidrs_pr.uat.node
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_uat_allow_node_to_node_out" {
+  provider                    = azurerm.uat
+  for_each                    = local.aks_targets_uat_effective
+  name                        = local.aks_rule_name.intra_node_node_out
+  priority                    = local.aks_rule_priority.intra_node_node
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.uat.node
+  destination_address_prefix  = local.aks_cidrs_pr.uat.node
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_uat_allow_pod_to_pod_in" {
+  provider                    = azurerm.uat
+  for_each                    = local.aks_targets_uat_effective
+  name                        = local.aks_rule_name.intra_pod_pod_in
+  priority                    = local.aks_rule_priority.intra_pod_pod
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.uat.pod
+  destination_address_prefix  = local.aks_cidrs_pr.uat.pod
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_uat_allow_pod_to_pod_out" {
+  provider                    = azurerm.uat
+  for_each                    = local.aks_targets_uat_effective
+  name                        = local.aks_rule_name.intra_pod_pod_out
+  priority                    = local.aks_rule_priority.intra_pod_pod
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.uat.pod
+  destination_address_prefix  = local.aks_cidrs_pr.uat.pod
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_uat_allow_node_to_pod_in" {
+  provider                    = azurerm.uat
+  for_each                    = local.aks_targets_uat_effective
+  name                        = local.aks_rule_name.intra_node_pod_in
+  priority                    = local.aks_rule_priority.intra_node_pod
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.uat.node
+  destination_address_prefix  = local.aks_cidrs_pr.uat.pod
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_uat_allow_node_to_pod_out" {
+  provider                    = azurerm.uat
+  for_each                    = local.aks_targets_uat_effective
+  name                        = local.aks_rule_name.intra_node_pod_out
+  priority                    = local.aks_rule_priority.intra_node_pod
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.uat.node
+  destination_address_prefix  = local.aks_cidrs_pr.uat.pod
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_uat_allow_node_to_svc_in" {
+  provider                    = azurerm.uat
+  for_each                    = local.aks_targets_uat_effective
+  name                        = local.aks_rule_name.intra_node_svc_in
+  priority                    = local.aks_rule_priority.intra_node_svc
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.uat.node
+  destination_address_prefix  = local.aks_cidrs_pr.uat.svc
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_uat_allow_node_to_svc_out" {
+  provider                    = azurerm.uat
+  for_each                    = local.aks_targets_uat_effective
+  name                        = local.aks_rule_name.intra_node_svc_out
+  priority                    = local.aks_rule_priority.intra_node_svc
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.uat.node
+  destination_address_prefix  = local.aks_cidrs_pr.uat.svc
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_uat_allow_pod_to_svc_in" {
+  provider                    = azurerm.uat
+  for_each                    = local.aks_targets_uat_effective
+  name                        = local.aks_rule_name.intra_pod_svc_in
+  priority                    = local.aks_rule_priority.intra_pod_svc
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.uat.pod
+  destination_address_prefix  = local.aks_cidrs_pr.uat.svc
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_uat_allow_pod_to_svc_out" {
+  provider                    = azurerm.uat
+  for_each                    = local.aks_targets_uat_effective
+  name                        = local.aks_rule_name.intra_pod_svc_out
+  priority                    = local.aks_rule_priority.intra_pod_svc
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = local.aks_cidrs_pr.uat.pod
+  destination_address_prefix  = local.aks_cidrs_pr.uat.svc
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
+
+resource "azurerm_network_security_rule" "aks_uat_allow_dns_udp_out" {
+  provider                    = azurerm.uat
+  for_each                    = local.aks_targets_uat_effective
+  name                        = local.aks_rule_name.intra_dns_udp_azure
+  priority                    = local.aks_rule_priority.intra_dns_udp
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "Udp"
+  source_port_range           = "*"
+  destination_port_range      = "53"
+  source_address_prefix       = local.aks_cidrs_pr.uat.node
+  destination_address_prefix  = "168.63.129.16"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+}
 
 # PE (Cosmos DB for PostgreSQL) - outbound baseline (per subscription) ─────
 resource "azurerm_network_security_rule" "pe_cdbpg_deny_internet_hub" {
