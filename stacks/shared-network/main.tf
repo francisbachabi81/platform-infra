@@ -2641,7 +2641,7 @@ locals {
 # ------------------------------------------------------------------------------
 
 resource "azurerm_network_security_rule" "aks_allow_https_internet_hub" {
-  provider                    = azurerm.hub
+#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_edge_effective
   name                        = local.aks_rule_name.egress_https_internet
   priority                    = local.aks_rule_priority.egress_https_internet
@@ -2741,7 +2741,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_internet_uat" {
 }
 
 resource "azurerm_network_security_rule" "aks_allow_http_internet_hub" {
-  provider                    = azurerm.hub
+#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_edge_effective
   name                        = local.aks_rule_name.egress_http_internet
   priority                    = local.aks_rule_priority.egress_http_internet
@@ -2841,7 +2841,7 @@ resource "azurerm_network_security_rule" "aks_allow_http_internet_uat" {
 }
 
 resource "azurerm_network_security_rule" "aks_allow_acr_hub" {
-  provider                    = azurerm.hub
+#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_edge_effective
   name                        = local.aks_rule_name.egress_acr
   priority                    = local.aks_rule_priority.egress_acr
@@ -2941,7 +2941,7 @@ resource "azurerm_network_security_rule" "aks_allow_acr_uat" {
 }
 
 resource "azurerm_network_security_rule" "aks_allow_servicebus_hub" {
-  provider                    = azurerm.hub
+#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_edge_effective
   name                        = local.aks_rule_name.egress_servicebus
   priority                    = local.aks_rule_priority.egress_servicebus
@@ -3045,7 +3045,7 @@ resource "azurerm_network_security_rule" "aks_allow_servicebus_uat" {
 # ------------------------------------------------------------------------------
 
 resource "azurerm_network_security_rule" "aks_allow_https_from_internet_hub" {
-  provider                    = azurerm.hub
+#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_edge_effective
   name                        = local.aks_rule_name.ingress_https_internet
   priority                    = local.aks_rule_priority.ingress_https_internet
@@ -3150,7 +3150,7 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
 
 # HUB
 resource "azurerm_network_security_rule" "aks_hub_allow_node_to_node_in" {
-  provider                    = azurerm.hub
+#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_node_node_in
   priority                    = local.aks_rule_priority.intra_node_node
@@ -3170,7 +3170,7 @@ resource "azurerm_network_security_rule" "aks_hub_allow_node_to_node_in" {
 }
 
 resource "azurerm_network_security_rule" "aks_hub_allow_node_to_node_out" {
-  provider                    = azurerm.hub
+#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_node_node_out
   priority                    = local.aks_rule_priority.intra_node_node
@@ -3190,7 +3190,7 @@ resource "azurerm_network_security_rule" "aks_hub_allow_node_to_node_out" {
 }
 
 resource "azurerm_network_security_rule" "aks_hub_allow_pod_to_pod_in" {
-  provider                    = azurerm.hub
+#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_pod_pod_in
   priority                    = local.aks_rule_priority.intra_pod_pod
@@ -3210,7 +3210,7 @@ resource "azurerm_network_security_rule" "aks_hub_allow_pod_to_pod_in" {
 }
 
 resource "azurerm_network_security_rule" "aks_hub_allow_pod_to_pod_out" {
-  provider                    = azurerm.hub
+#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_pod_pod_out
   priority                    = local.aks_rule_priority.intra_pod_pod
@@ -3230,7 +3230,7 @@ resource "azurerm_network_security_rule" "aks_hub_allow_pod_to_pod_out" {
 }
 
 resource "azurerm_network_security_rule" "aks_hub_allow_node_to_pod_in" {
-  provider                    = azurerm.hub
+#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_node_pod_in
   priority                    = local.aks_rule_priority.intra_node_pod
@@ -3250,7 +3250,7 @@ resource "azurerm_network_security_rule" "aks_hub_allow_node_to_pod_in" {
 }
 
 resource "azurerm_network_security_rule" "aks_hub_allow_node_to_pod_out" {
-  provider                    = azurerm.hub
+#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_node_pod_out
   priority                    = local.aks_rule_priority.intra_node_pod
@@ -3270,7 +3270,7 @@ resource "azurerm_network_security_rule" "aks_hub_allow_node_to_pod_out" {
 }
 
 resource "azurerm_network_security_rule" "aks_hub_allow_node_to_svc_in" {
-  provider                    = azurerm.hub
+#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_node_svc_in
   priority                    = local.aks_rule_priority.intra_node_svc
@@ -3290,7 +3290,7 @@ resource "azurerm_network_security_rule" "aks_hub_allow_node_to_svc_in" {
 }
 
 resource "azurerm_network_security_rule" "aks_hub_allow_node_to_svc_out" {
-  provider                    = azurerm.hub
+#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_node_svc_out
   priority                    = local.aks_rule_priority.intra_node_svc
@@ -3310,7 +3310,7 @@ resource "azurerm_network_security_rule" "aks_hub_allow_node_to_svc_out" {
 }
 
 resource "azurerm_network_security_rule" "aks_hub_allow_pod_to_svc_in" {
-  provider                    = azurerm.hub
+#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_pod_svc_in
   priority                    = local.aks_rule_priority.intra_pod_svc
@@ -3330,7 +3330,7 @@ resource "azurerm_network_security_rule" "aks_hub_allow_pod_to_svc_in" {
 }
 
 resource "azurerm_network_security_rule" "aks_hub_allow_pod_to_svc_out" {
-  provider                    = azurerm.hub
+#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_pod_svc_out
   priority                    = local.aks_rule_priority.intra_pod_svc
