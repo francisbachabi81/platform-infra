@@ -1941,100 +1941,100 @@ resource "azurerm_network_security_rule" "pgflex_allow_ha_outbound_uat" {
 }
 
 # baseline egress on workload nsgs (per subscription) ───────────────────────
-# resource "azurerm_network_security_rule" "allow_dns_to_azure_hub" {
-#   for_each                    = local.workload_targets_hub
-#   name                        = "allow-dns-azure"
-#   priority                    = 300
-#   direction                   = "Outbound"
-#   access                      = "Allow"
-#   protocol                    = "*"
-#   source_port_range           = "*"
-#   destination_port_ranges     = ["53"]
-#   source_address_prefix       = "*"
-#   destination_address_prefix  = "168.63.129.16"
-#   resource_group_name         = each.value.rg
-#   network_security_group_name = each.value.name
-#   depends_on                  = [
-#     module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-#     module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-#   ]
-# }
-# resource "azurerm_network_security_rule" "allow_dns_to_azure_dev" {
-#   provider                    = azurerm.dev
-#   for_each                    = local.workload_targets_dev
-#   name                        = "allow-dns-azure"
-#   priority                    = 300
-#   direction                   = "Outbound"
-#   access                      = "Allow"
-#   protocol                    = "*"
-#   source_port_range           = "*"
-#   destination_port_ranges     = ["53"]
-#   source_address_prefix       = "*"
-#   destination_address_prefix  = "168.63.129.16"
-#   resource_group_name         = each.value.rg
-#   network_security_group_name = each.value.name
-#   depends_on                  = [
-#     module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-#     module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-#   ]
-# }
-# resource "azurerm_network_security_rule" "allow_dns_to_azure_qa" {
-#   provider                    = azurerm.qa
-#   for_each                    = local.workload_targets_qa
-#   name                        = "allow-dns-azure"
-#   priority                    = 300
-#   direction                   = "Outbound"
-#   access                      = "Allow"
-#   protocol                    = "*"
-#   source_port_range           = "*"
-#   destination_port_ranges     = ["53"]
-#   source_address_prefix       = "*"
-#   destination_address_prefix  = "168.63.129.16"
-#   resource_group_name         = each.value.rg
-#   network_security_group_name = each.value.name
-#   depends_on                  = [
-#     module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-#     module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-#   ]
-# }
-# resource "azurerm_network_security_rule" "allow_dns_to_azure_prod" {
-#   provider                    = azurerm.prod
-#   for_each                    = local.workload_targets_prod
-#   name                        = "allow-dns-azure"
-#   priority                    = 300
-#   direction                   = "Outbound"
-#   access                      = "Allow"
-#   protocol                    = "*"
-#   source_port_range           = "*"
-#   destination_port_ranges     = ["53"]
-#   source_address_prefix       = "*"
-#   destination_address_prefix  = "168.63.129.16"
-#   resource_group_name         = each.value.rg
-#   network_security_group_name = each.value.name
-#   depends_on                  = [
-#     module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-#     module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-#   ]
-# }
-# resource "azurerm_network_security_rule" "allow_dns_to_azure_uat" {
-#   provider                    = azurerm.uat
-#   for_each                    = local.workload_targets_uat
-#   name                        = "allow-dns-azure"
-#   priority                    = 300
-#   direction                   = "Outbound"
-#   access                      = "Allow"
-#   protocol                    = "*"
-#   source_port_range           = "*"
-#   destination_port_ranges     = ["53"]
-#   source_address_prefix       = "*"
-#   destination_address_prefix  = "168.63.129.16"
-#   resource_group_name         = each.value.rg
-#   network_security_group_name = each.value.name
-#   depends_on                  = [
-#     module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-#     module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-#   ]
-# }
+resource "azurerm_network_security_rule" "allow_dns_to_azure_hub" {
+  for_each                    = local.workload_targets_hub
+  name                        = "allow-dns-azure"
+  priority                    = 300
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_ranges     = ["53"]
+  source_address_prefix       = "*"
+  destination_address_prefix  = "168.63.129.16"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+resource "azurerm_network_security_rule" "allow_dns_to_azure_dev" {
+  provider                    = azurerm.dev
+  for_each                    = local.workload_targets_dev
+  name                        = "allow-dns-azure"
+  priority                    = 300
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_ranges     = ["53"]
+  source_address_prefix       = "*"
+  destination_address_prefix  = "168.63.129.16"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+resource "azurerm_network_security_rule" "allow_dns_to_azure_qa" {
+  provider                    = azurerm.qa
+  for_each                    = local.workload_targets_qa
+  name                        = "allow-dns-azure"
+  priority                    = 300
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_ranges     = ["53"]
+  source_address_prefix       = "*"
+  destination_address_prefix  = "168.63.129.16"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+resource "azurerm_network_security_rule" "allow_dns_to_azure_prod" {
+  provider                    = azurerm.prod
+  for_each                    = local.workload_targets_prod
+  name                        = "allow-dns-azure"
+  priority                    = 300
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_ranges     = ["53"]
+  source_address_prefix       = "*"
+  destination_address_prefix  = "168.63.129.16"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
+resource "azurerm_network_security_rule" "allow_dns_to_azure_uat" {
+  provider                    = azurerm.uat
+  for_each                    = local.workload_targets_uat
+  name                        = "allow-dns-azure"
+  priority                    = 300
+  direction                   = "Outbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_ranges     = ["53"]
+  source_address_prefix       = "*"
+  destination_address_prefix  = "168.63.129.16"
+  resource_group_name         = each.value.rg
+  network_security_group_name = each.value.name
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
+}
 
 resource "azurerm_network_security_rule" "allow_ntp_to_azure_hub" {
   for_each                    = local.workload_targets_hub
@@ -2560,7 +2560,7 @@ locals {
     intra_node_svc_out  = "allow-aks-node-svc-out"
     intra_pod_svc_in    = "allow-aks-pod-svc-in"
     intra_pod_svc_out   = "allow-aks-pod-svc-out"
-    intra_dns_azure_out = "allow-aks-dns-azure-out"
+    # intra_dns_azure_out = "allow-aks-dns-azure-out"
   }
 
   aks_rule_priority = {
@@ -3331,25 +3331,25 @@ resource "azurerm_network_security_rule" "aks_hub_allow_pod_to_svc_out" {
   ]
 }
 
-resource "azurerm_network_security_rule" "aks_hub_allow_dns_udp_out" {
-  for_each                    = local.aks_targets_hub_intra_effective
-  name                        = local.aks_rule_name.intra_dns_azure_out
-  priority                    = local.aks_rule_priority.intra_dns_udp
-  direction                   = "Outbound"
-  access                      = "Allow"
-  protocol                    = "*"
-  source_port_range           = "*"
-  destination_port_range      = "53"
-  # source_address_prefix       = local.aks_cidrs_hub.node
-  source_address_prefix       = "*"
-  destination_address_prefix  = "168.63.129.16"
-  resource_group_name         = each.value.rg
-  network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
-}
+# resource "azurerm_network_security_rule" "aks_hub_allow_dns_udp_out" {
+#   for_each                    = local.aks_targets_hub_intra_effective
+#   name                        = local.aks_rule_name.intra_dns_azure_out
+#   priority                    = local.aks_rule_priority.intra_dns_udp
+#   direction                   = "Outbound"
+#   access                      = "Allow"
+#   protocol                    = "*"
+#   source_port_range           = "*"
+#   destination_port_range      = "53"
+#   # source_address_prefix       = local.aks_cidrs_hub.node
+#   source_address_prefix       = "*"
+#   destination_address_prefix  = "168.63.129.16"
+#   resource_group_name         = each.value.rg
+#   network_security_group_name = each.value.name
+#   depends_on                  = [
+#     module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+#     module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+#   ]
+# }
 
 resource "azurerm_network_security_rule" "aks_dev_allow_node_to_node_in" {
   provider                    = azurerm.dev
@@ -3551,26 +3551,26 @@ resource "azurerm_network_security_rule" "aks_dev_allow_pod_to_svc_out" {
   ]
 }
 
-resource "azurerm_network_security_rule" "aks_dev_allow_dns_udp_out" {
-  provider                    = azurerm.dev
-  for_each                    = local.aks_targets_dev_intra_effective
-  name                        = local.aks_rule_name.intra_dns_azure_out
-  priority                    = local.aks_rule_priority.intra_dns_udp
-  direction                   = "Outbound"
-  access                      = "Allow"
-  protocol                    = "*"
-  source_port_range           = "*"
-  destination_port_range      = "53"
-  # source_address_prefix       = local.aks_cidrs_dev.node
-  source_address_prefix       = "*"
-  destination_address_prefix  = "168.63.129.16"
-  resource_group_name         = each.value.rg
-  network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
-}
+# resource "azurerm_network_security_rule" "aks_dev_allow_dns_udp_out" {
+#   provider                    = azurerm.dev
+#   for_each                    = local.aks_targets_dev_intra_effective
+#   name                        = local.aks_rule_name.intra_dns_azure_out
+#   priority                    = local.aks_rule_priority.intra_dns_udp
+#   direction                   = "Outbound"
+#   access                      = "Allow"
+#   protocol                    = "*"
+#   source_port_range           = "*"
+#   destination_port_range      = "53"
+#   # source_address_prefix       = local.aks_cidrs_dev.node
+#   source_address_prefix       = "*"
+#   destination_address_prefix  = "168.63.129.16"
+#   resource_group_name         = each.value.rg
+#   network_security_group_name = each.value.name
+#   depends_on                  = [
+#     module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+#     module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+#   ]
+# }
 
 resource "azurerm_network_security_rule" "aks_prod_allow_node_to_node_in" {
   provider                    = azurerm.prod
@@ -3772,26 +3772,26 @@ resource "azurerm_network_security_rule" "aks_prod_allow_pod_to_svc_out" {
   ]
 }
 
-resource "azurerm_network_security_rule" "aks_prod_allow_dns_udp_out" {
-  provider                    = azurerm.prod
-  for_each                    = local.aks_targets_prod_intra_effective
-  name                        = local.aks_rule_name.intra_dns_azure_out
-  priority                    = local.aks_rule_priority.intra_dns_udp
-  direction                   = "Outbound"
-  access                      = "Allow"
-  protocol                    = "*"
-  source_port_range           = "*"
-  destination_port_range      = "53"
-  # source_address_prefix       = local.aks_cidrs_prod.node
-  source_address_prefix       = "*"
-  destination_address_prefix  = "168.63.129.16"
-  resource_group_name         = each.value.rg
-  network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
-}
+# resource "azurerm_network_security_rule" "aks_prod_allow_dns_udp_out" {
+#   provider                    = azurerm.prod
+#   for_each                    = local.aks_targets_prod_intra_effective
+#   name                        = local.aks_rule_name.intra_dns_azure_out
+#   priority                    = local.aks_rule_priority.intra_dns_udp
+#   direction                   = "Outbound"
+#   access                      = "Allow"
+#   protocol                    = "*"
+#   source_port_range           = "*"
+#   destination_port_range      = "53"
+#   # source_address_prefix       = local.aks_cidrs_prod.node
+#   source_address_prefix       = "*"
+#   destination_address_prefix  = "168.63.129.16"
+#   resource_group_name         = each.value.rg
+#   network_security_group_name = each.value.name
+#   depends_on                  = [
+#     module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+#     module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+#   ]
+# }
 
 resource "azurerm_network_security_rule" "aks_uat_allow_node_to_node_in" {
   provider                    = azurerm.uat
@@ -3993,26 +3993,26 @@ resource "azurerm_network_security_rule" "aks_uat_allow_pod_to_svc_out" {
   ]
 }
 
-resource "azurerm_network_security_rule" "aks_uat_allow_dns_udp_out" {
-  provider                    = azurerm.uat
-  for_each                    = local.aks_targets_uat_intra_effective
-  name                        = local.aks_rule_name.intra_dns_azure_out
-  priority                    = local.aks_rule_priority.intra_dns_udp
-  direction                   = "Outbound"
-  access                      = "Allow"
-  protocol                    = "*"
-  source_port_range           = "*"
-  destination_port_range      = "53"
-  # source_address_prefix       = local.aks_cidrs_uat.node
-  source_address_prefix       = "*"
-  destination_address_prefix  = "168.63.129.16"
-  resource_group_name         = each.value.rg
-  network_security_group_name = each.value.name
-  depends_on                  = [
-    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  ]
-}
+# resource "azurerm_network_security_rule" "aks_uat_allow_dns_udp_out" {
+#   provider                    = azurerm.uat
+#   for_each                    = local.aks_targets_uat_intra_effective
+#   name                        = local.aks_rule_name.intra_dns_azure_out
+#   priority                    = local.aks_rule_priority.intra_dns_udp
+#   direction                   = "Outbound"
+#   access                      = "Allow"
+#   protocol                    = "*"
+#   source_port_range           = "*"
+#   destination_port_range      = "53"
+#   # source_address_prefix       = local.aks_cidrs_uat.node
+#   source_address_prefix       = "*"
+#   destination_address_prefix  = "168.63.129.16"
+#   resource_group_name         = each.value.rg
+#   network_security_group_name = each.value.name
+#   depends_on                  = [
+#     module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+#     module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+#   ]
+# }
 
 # PE (Cosmos DB for PostgreSQL) - outbound baseline (per subscription) ─────
 resource "azurerm_network_security_rule" "pe_cdbpg_deny_internet_hub" {
