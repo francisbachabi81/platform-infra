@@ -124,8 +124,8 @@ pg_replica_enabled = false # no replica
 # - Azure Government (e.g. usgovarizona):
 #   • Many SKUs have supportedZones behavior that varies by region/SKU.
 #   • If zones are not supported for your chosen SKU, set pg_zone/pg_ha_zone to null and use SameZone HA only.
-pg_zone    = null # no explicit AZ in Gov for this SKU
-pg_ha_zone = null # ignored while HA is off and no explicit AZ
+pg_zone    = "1" # no explicit AZ in Gov for this SKU
+pg_ha_zone = "2" # ignored while HA is off and no explicit AZ
 
 pg_firewall_rules = []
 pg_databases      = ["appdb", "citus"]

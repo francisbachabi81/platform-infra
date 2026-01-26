@@ -23,13 +23,13 @@ policy_alert_email              = "cloudops@intterragroup.com"
 
 policy_source_subscriptions = {
   prod-core = {
-    subscription_id = "641d3872-8322-4bdb-83ce-bfbc119fa3cd"
+    subscription_id = "7043433f-e23e-4206-9930-314695d94a6c"
   }
   core = {
-    subscription_id = "d072f6c1-7c2d-4d27-8ffb-fd96f828c3b6"
+    subscription_id = "ec41aef1-269c-4633-8637-924c395ad181"
   }
   uat-core = {
-    subscription_id = "4d2bdae0-9da9-4657-827d-d44867ec2f0a"
+    subscription_id = "11494ded-2cf5-44b7-9b1c-58fd64125c20"
   }
 }
 
