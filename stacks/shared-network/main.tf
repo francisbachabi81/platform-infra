@@ -159,12 +159,8 @@ locals {
     # Commercial
     "dev.public.intterra.io"                  = "pubdev"
     "qa.public.intterra.io"                   = "pubqa"
-    "internal.dev.public.intterra.io"         = "pubintdev"
-    "internal.qa.public.intterra.io"          = "pubintqa"
     "public.intterra.io"                      = "pubprod"
     "uat.public.intterra.io"                  = "pubuat"
-    "internal.public.intterra.io"             = "pubintprod"
-    "internal.uat.public.intterra.io"         = "pubintuat" 
     "privatelink.blob.core.windows.net"       = "plb"
     "privatelink.file.core.windows.net"       = "plf"
     "privatelink.queue.core.windows.net"      = "plq"
@@ -184,12 +180,8 @@ locals {
     # Gov
     "dev.horizon.intterra.io"                         = "hrzdev"
     "qa.horizon.intterra.io"                          = "hrzqa"
-    "internal.dev.horizon.intterra.io"                = "hrzintdev"
-    "internal.qa.horizon.intterra.io"                 = "hrzintqa" 
     "horizon.intterra.io"                             = "hrzprod"
     "uat.horizon.intterra.io"                         = "hrzuat"
-    "internal.horizon.intterra.io"                    = "hrzintprod"
-    "internal.uat.horizon.intterra.io"                = "hrzintuat" 
     "privatelink.blob.core.usgovcloudapi.net"         = "plb"
     "privatelink.file.core.usgovcloudapi.net"         = "plf"
     "privatelink.queue.core.usgovcloudapi.net"        = "plq"
@@ -848,17 +840,8 @@ resource "azurerm_subnet_network_security_group_association" "appgw_assoc" {
   ]
 }
 
-# -------------------------------------------------------------------
 # Application Gateway (BAREBONES) + User Assigned Managed Identity
-# -------------------------------------------------------------------
-# NOTE:
-# - Azure Application Gateway cannot be created truly "empty" via azurerm; Azure
-#   requires a minimal set of objects (frontend port, listener, backend pool,
-#   http settings, routing rule). We create *placeholder* objects here and then
-#   IGNORE changes to all runtime config so the app-gateway-config stack can
-#   manage the real configuration without drift.
-#
-# - The app-gateway-config stack should PATCH/UPDATE the gateway configuration
+# - The app-gateway-config stack will PATCH/UPDATE the gateway configuration
 #   and will grant this UAMI permissions to read the Key Vault secret used
 #   for SSL certificates.
 
@@ -1399,13 +1382,7 @@ locals {
   # ghrunner_targets_uat  = { for k, v in local.ghrunner_targets_all : k => v if can(regex("^uat-",  k)) }
 }
 
-# GitHub Actions runner egress
-
-# locals {
-#   # HRZ keeps the real runner egress; PUB uses fixed 1.1.1.1
-#   ghrunner_egress_ip = lower(var.product) == "pub" ? "172.10.13.10" : "10.10.13.10"
-# }
-
+# GitHub Actions runner egress rules ────────────────────────────────
 locals {
   # HRZ + PUB use the standard hub egress IPs; PUB uses its own
   ghrunner_egress_ip = lower(var.product) == "pub" ? (local.is_nonprod ? "172.10.13.10" : "172.13.13.10") : (local.is_nonprod ? "10.10.13.10"  : "10.13.13.10")
@@ -2526,15 +2503,8 @@ resource "azurerm_network_security_rule" "pe_deny_other_vnets_uat" {
   ]
 }
 
-# ------------------------------------------------------------------------------
-# AKS NSG rules (per subscription)
-# - Keeps all rules (no deletions)
-# - Consistent priorities + naming
-# - Explicit provider per env (hub/dev/qa/prod/uat)
-# - Plane-aware targets:
-#     nonprod: hub + dev + qa
-#     prod:    hub + prod + uat
-# ------------------------------------------------------------------------------
+
+# AKS NSG rules (per subscription) ─────────────────────────────
 
 locals {
   aks_nsg_depends_on = [
@@ -2636,9 +2606,8 @@ locals {
   aks_cidrs_uat  = local.is_prod    ? local.aks_cidrs_pr.uat  : null
 }
 
-# ------------------------------------------------------------------------------
-# AKS egress (plane-aware per subscription)
-# ------------------------------------------------------------------------------
+
+# AKS egress (plane-aware per subscription) ────────────────────────────
 
 resource "azurerm_network_security_rule" "aks_allow_https_internet_hub" {
 #  provider                    = azurerm.hub
@@ -3040,9 +3009,9 @@ resource "azurerm_network_security_rule" "aks_allow_servicebus_uat" {
   ]
 }
 
-# ------------------------------------------------------------------------------
+
 # AKS ingress (plane-aware per subscription)
-# ------------------------------------------------------------------------------
+
 
 resource "azurerm_network_security_rule" "aks_allow_https_from_internet_hub" {
 #  provider                    = azurerm.hub
@@ -3144,13 +3113,10 @@ resource "azurerm_network_security_rule" "aks_allow_https_from_internet_uat" {
   ]
 }
 
-# ------------------------------------------------------------------------------
 # AKS intra-cluster allow rules (hub + dev + qa + prod + uat)
-# ------------------------------------------------------------------------------
 
 # HUB
 resource "azurerm_network_security_rule" "aks_hub_allow_node_to_node_in" {
-#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_node_node_in
   priority                    = local.aks_rule_priority.intra_node_node
@@ -3170,7 +3136,6 @@ resource "azurerm_network_security_rule" "aks_hub_allow_node_to_node_in" {
 }
 
 resource "azurerm_network_security_rule" "aks_hub_allow_node_to_node_out" {
-#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_node_node_out
   priority                    = local.aks_rule_priority.intra_node_node
@@ -3190,7 +3155,6 @@ resource "azurerm_network_security_rule" "aks_hub_allow_node_to_node_out" {
 }
 
 resource "azurerm_network_security_rule" "aks_hub_allow_pod_to_pod_in" {
-#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_pod_pod_in
   priority                    = local.aks_rule_priority.intra_pod_pod
@@ -3210,7 +3174,6 @@ resource "azurerm_network_security_rule" "aks_hub_allow_pod_to_pod_in" {
 }
 
 resource "azurerm_network_security_rule" "aks_hub_allow_pod_to_pod_out" {
-#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_pod_pod_out
   priority                    = local.aks_rule_priority.intra_pod_pod
@@ -3230,7 +3193,6 @@ resource "azurerm_network_security_rule" "aks_hub_allow_pod_to_pod_out" {
 }
 
 resource "azurerm_network_security_rule" "aks_hub_allow_node_to_pod_in" {
-#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_node_pod_in
   priority                    = local.aks_rule_priority.intra_node_pod
@@ -3250,7 +3212,6 @@ resource "azurerm_network_security_rule" "aks_hub_allow_node_to_pod_in" {
 }
 
 resource "azurerm_network_security_rule" "aks_hub_allow_node_to_pod_out" {
-#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_node_pod_out
   priority                    = local.aks_rule_priority.intra_node_pod
@@ -3270,7 +3231,6 @@ resource "azurerm_network_security_rule" "aks_hub_allow_node_to_pod_out" {
 }
 
 resource "azurerm_network_security_rule" "aks_hub_allow_node_to_svc_in" {
-#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_node_svc_in
   priority                    = local.aks_rule_priority.intra_node_svc
@@ -3290,7 +3250,6 @@ resource "azurerm_network_security_rule" "aks_hub_allow_node_to_svc_in" {
 }
 
 resource "azurerm_network_security_rule" "aks_hub_allow_node_to_svc_out" {
-#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_node_svc_out
   priority                    = local.aks_rule_priority.intra_node_svc
@@ -3310,7 +3269,6 @@ resource "azurerm_network_security_rule" "aks_hub_allow_node_to_svc_out" {
 }
 
 resource "azurerm_network_security_rule" "aks_hub_allow_pod_to_svc_in" {
-#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_pod_svc_in
   priority                    = local.aks_rule_priority.intra_pod_svc
@@ -3330,7 +3288,6 @@ resource "azurerm_network_security_rule" "aks_hub_allow_pod_to_svc_in" {
 }
 
 resource "azurerm_network_security_rule" "aks_hub_allow_pod_to_svc_out" {
-#  provider                    = azurerm.hub
   for_each                    = local.aks_targets_hub_intra_effective
   name                        = local.aks_rule_name.intra_pod_svc_out
   priority                    = local.aks_rule_priority.intra_pod_svc
@@ -3348,26 +3305,6 @@ resource "azurerm_network_security_rule" "aks_hub_allow_pod_to_svc_out" {
     module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
   ]
 }
-
-# resource "azurerm_network_security_rule" "aks_hub_allow_dns_udp_out" {
-#   provider                    = azurerm.hub
-#   for_each                    = local.aks_targets_hub_intra_effective
-#   name                        = local.aks_rule_name.intra_dns_udp_azure
-#   priority                    = local.aks_rule_priority.intra_dns_udp
-#   direction                   = "Outbound"
-#   access                      = "Allow"
-#   protocol                    = "Udp"
-#   source_port_range           = "*"
-#   destination_port_range      = "53"
-#   source_address_prefix       = local.aks_cidrs_hub.node
-#   destination_address_prefix  = local.aks_dns_azure_ip
-#   resource_group_name         = each.value.rg
-#   network_security_group_name = each.value.name
-#   depends_on                  = [
-  #   module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-  #   module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  # ]
-# }
 
 # DEV
 resource "azurerm_network_security_rule" "aks_dev_allow_node_to_node_in" {
@@ -3570,26 +3507,6 @@ resource "azurerm_network_security_rule" "aks_dev_allow_pod_to_svc_out" {
   ]
 }
 
-# resource "azurerm_network_security_rule" "aks_dev_allow_dns_udp_out" {
-#   provider                    = azurerm.dev
-#   for_each                    = local.aks_targets_dev_intra_effective
-#   name                        = local.aks_rule_name.intra_dns_udp_azure
-#   priority                    = local.aks_rule_priority.intra_dns_udp
-#   direction                   = "Outbound"
-#   access                      = "Allow"
-#   protocol                    = "Udp"
-#   source_port_range           = "*"
-#   destination_port_range      = "53"
-#   source_address_prefix       = local.aks_cidrs_dev.node
-#   destination_address_prefix  = local.aks_dns_azure_ip
-#   resource_group_name         = each.value.rg
-#   network_security_group_name = each.value.name
-#   depends_on                  = [
-  #   module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-  #   module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  # ]
-# }
-
 # QA
 resource "azurerm_network_security_rule" "aks_qa_allow_node_to_node_in" {
   provider                    = azurerm.qa
@@ -3791,29 +3708,7 @@ resource "azurerm_network_security_rule" "aks_qa_allow_pod_to_svc_out" {
   ]
 }
 
-# resource "azurerm_network_security_rule" "aks_qa_allow_dns_udp_out" {
-#   provider                    = azurerm.qa
-#   for_each                    = local.aks_targets_qa_intra_effective
-#   name                        = local.aks_rule_name.intra_dns_udp_azure
-#   priority                    = local.aks_rule_priority.intra_dns_udp
-#   direction                   = "Outbound"
-#   access                      = "Allow"
-#   protocol                    = "Udp"
-#   source_port_range           = "*"
-#   destination_port_range      = "53"
-#   source_address_prefix       = local.aks_cidrs_qa.node
-#   destination_address_prefix  = local.aks_dns_azure_ip
-#   resource_group_name         = each.value.rg
-#   network_security_group_name = each.value.name
-#   depends_on                  = [
-  #   module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-  #   module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  # ]
-# }
-
 # PROD + UAT
-# (unchanged structure — now includes DNS rule and uses locals for depends_on / cidrs)
-
 resource "azurerm_network_security_rule" "aks_prod_allow_node_to_node_in" {
   provider                    = azurerm.prod
   for_each                    = local.aks_targets_prod_intra_effective
@@ -4013,26 +3908,6 @@ resource "azurerm_network_security_rule" "aks_prod_allow_pod_to_svc_out" {
     module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
   ]
 }
-
-# resource "azurerm_network_security_rule" "aks_prod_allow_dns_udp_out" {
-#   provider                    = azurerm.prod
-#   for_each                    = local.aks_targets_prod_intra_effective
-#   name                        = local.aks_rule_name.intra_dns_udp_azure
-#   priority                    = local.aks_rule_priority.intra_dns_udp
-#   direction                   = "Outbound"
-#   access                      = "Allow"
-#   protocol                    = "Udp"
-#   source_port_range           = "*"
-#   destination_port_range      = "53"
-#   source_address_prefix       = local.aks_cidrs_prod.node
-#   destination_address_prefix  = local.aks_dns_azure_ip
-#   resource_group_name         = each.value.rg
-#   network_security_group_name = each.value.name
-#   depends_on                  = [
-  #   module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-  #   module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  # ]
-# }
 
 resource "azurerm_network_security_rule" "aks_uat_allow_node_to_node_in" {
   provider                    = azurerm.uat
@@ -4234,27 +4109,7 @@ resource "azurerm_network_security_rule" "aks_uat_allow_pod_to_svc_out" {
   ]
 }
 
-# resource "azurerm_network_security_rule" "aks_uat_allow_dns_udp_out" {
-#   provider                    = azurerm.uat
-#   for_each                    = local.aks_targets_uat_intra_effective
-#   name                        = local.aks_rule_name.intra_dns_udp_azure
-#   priority                    = local.aks_rule_priority.intra_dns_udp
-#   direction                   = "Outbound"
-#   access                      = "Allow"
-#   protocol                    = "Udp"
-#   source_port_range           = "*"
-#   destination_port_range      = "53"
-#   source_address_prefix       = local.aks_cidrs_uat.node
-#   destination_address_prefix  = local.aks_dns_azure_ip
-#   resource_group_name         = each.value.rg
-#   network_security_group_name = each.value.name
-#   depends_on                  = [
-  #   module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
-  #   module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
-  # ]
-# }
-
-# PE (Cosmos DB for PostgreSQL) - outbound baseline (per subscription) ─────
+# PE (Cosmos DB for PostgreSQL) - outbound baseline (per subscription)
 resource "azurerm_network_security_rule" "pe_cdbpg_deny_internet_hub" {
   for_each                    = local.pe_cdbpg_hub
   name                        = "deny-internet-egress"

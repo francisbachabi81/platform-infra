@@ -10,8 +10,6 @@ private_zones = [
   # App domains (prod + uat)
   "horizon.intterra.io",
   "uat.horizon.intterra.io",
-  "internal.horizon.intterra.io",
-  "internal.uat.horizon.intterra.io",
 
   # Storage
   "privatelink.blob.core.usgovcloudapi.net",

@@ -10,8 +10,6 @@ private_zones = [
   # App domains (dev + qa)
   "public.intterra.io",
   "uat.public.intterra.io",
-  "internal.public.intterra.io",
-  "internal.uat.public.intterra.io",
 
   # Storage
   "privatelink.blob.core.windows.net",
