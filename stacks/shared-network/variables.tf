@@ -317,7 +317,7 @@ variable "create_vpng_public_ip" {
 variable "create_app_gateway" {
   description = "create application gateway and waf policy"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "waf_mode" {

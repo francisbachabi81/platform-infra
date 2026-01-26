@@ -888,13 +888,19 @@ resource "azurerm_public_ip" "appgw" {
 }
 
 locals {
-  appgw_public_ip_id = (local.appgw_enabled && var.appgw_public_ip_enabled) ? azurerm_public_ip.appgw[0].id : null
+  appgw_enabled = var.create_app_gateway
+
+  # Safe even when count = 0
+  appgw_public_ip_id = try(azurerm_public_ip.appgw[0].id, null)
 
   appgw_public_feip_name  = "feip-public"
   appgw_private_feip_name = "feip-private"
 
-  # Bootstrap listener must reference a frontend config that exists.
-  bootstrap_feip_name = (var.appgw_public_ip_enabled ? local.appgw_public_feip_name : local.appgw_private_feip_name)
+  bootstrap_feip_name = (
+    var.appgw_public_ip_enabled
+    ? local.appgw_public_feip_name
+    : local.appgw_private_feip_name
+  )
 
   bootstrap_http_listeners = merge(
     (var.appgw_public_ip_enabled ? {
