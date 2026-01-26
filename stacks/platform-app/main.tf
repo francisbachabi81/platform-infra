@@ -411,27 +411,76 @@ locals {
 }
 
 # UAI used for storage encryption
-resource "azurerm_user_assigned_identity" "sa1_cmk" {
-  provider            = local.is_prod ? azurerm.prod : local.is_uat ? azurerm.uat : azurerm
-  name                = "uai-${var.product}-${var.env}-${var.region}-sta-cmk-01" # your updated name
+# resource "azurerm_user_assigned_identity" "sa1_cmk" {
+#   provider            = local.is_prod ? azurerm.prod : local.is_uat ? azurerm.uat : azurerm
+#   name                = "uai-${var.product}-${var.env}-${var.region}-sta-cmk-01" # your updated name
+#   location            = var.location
+#   resource_group_name = local.env_rg_name
+#   tags                = local.tags_common
+
+#   depends_on = [
+#     module.rg_dev,
+#     module.rg_qa,
+#     module.rg_uat,
+#     module.rg_prod
+#   ]
+# }
+
+resource "azurerm_user_assigned_identity" "sa1_cmk_default" {
+  count               = (!local.is_prod && !local.is_uat) ? 1 : 0
+  name                = "uai-${var.product}-${var.env}-${var.region}-sta-cmk-01"
+  location            = var.location
+  resource_group_name = local.env_rg_name
+  tags                = local.tags_common
+}
+
+resource "azurerm_user_assigned_identity" "sa1_cmk_prod" {
+  count               = local.is_prod ? 1 : 0
+  provider            = azurerm.prod
+  name                = "uai-${var.product}-${var.env}-${var.region}-sta-cmk-01"
   location            = var.location
   resource_group_name = local.env_rg_name
   tags                = local.tags_common
 
-  depends_on = [
-    module.rg_dev,
-    module.rg_qa,
-    module.rg_uat,
-    module.rg_prod
-  ]
+  depends_on = [module.rg_prod]
+}
+
+resource "azurerm_user_assigned_identity" "sa1_cmk_uat" {
+  count               = local.is_uat ? 1 : 0
+  provider            = azurerm.uat
+  name                = "uai-${var.product}-${var.env}-${var.region}-sta-cmk-01"
+  location            = var.location
+  resource_group_name = local.env_rg_name
+  tags                = local.tags_common
+
+  depends_on = [module.rg_uat]
+}
+
+locals {
+  sa1_cmk_id = coalesce(
+    try(azurerm_user_assigned_identity.sa1_cmk_prod[0].id, null),
+    try(azurerm_user_assigned_identity.sa1_cmk_uat[0].id, null),
+    try(azurerm_user_assigned_identity.sa1_cmk_default[0].id, null)
+  )
+
+  sa1_cmk_principal_id = coalesce(
+    try(azurerm_user_assigned_identity.sa1_cmk_prod[0].principal_id, null),
+    try(azurerm_user_assigned_identity.sa1_cmk_uat[0].principal_id, null),
+    try(azurerm_user_assigned_identity.sa1_cmk_default[0].principal_id, null)
+  )
 }
 
 # Grant KV permissions to that identity
 resource "azurerm_role_assignment" "sa1_cmk_kv_crypto" {
   scope                = local.core_kv_id
   role_definition_name = "Key Vault Crypto Service Encryption User"
-  principal_id         = azurerm_user_assigned_identity.sa1_cmk.principal_id
+  principal_id         = local.sa1_cmk_principal_id
 }
+# resource "azurerm_role_assignment" "sa1_cmk_kv_crypto" {
+#   scope                = local.core_kv_id
+#   role_definition_name = "Key Vault Crypto Service Encryption User"
+#   principal_id         = azurerm_user_assigned_identity.sa1_cmk.principal_id
+# }
 
 module "sa1" {
   count               = local.enable_both ? 1 : 0
@@ -450,7 +499,8 @@ module "sa1" {
   restrict_network_access = true
 
   identity_type = "UserAssigned"
-  identity_ids  = [azurerm_user_assigned_identity.sa1_cmk.id]
+  # identity_ids  = [azurerm_user_assigned_identity.sa1_cmk.id]
+  identity_ids  = [local.sa1_cmk_id]
 
   pe_blob_name         = "pep-${local.sa1_name_cleaned}-blob"
   psc_blob_name        = "psc-${local.sa1_name_cleaned}-blob"
@@ -461,9 +511,9 @@ module "sa1" {
 
   tags = merge(local.tags_common, local.tags_sa, var.tags)
   depends_on = [
-    data.azurerm_resource_group.env,
+    # data.azurerm_resource_group.env,
     module.kv1,
-    azurerm_user_assigned_identity.sa1_cmk,
+    # azurerm_user_assigned_identity.sa1_cmk,
     azurerm_role_assignment.sa1_cmk_kv_crypto
   ]
 }
