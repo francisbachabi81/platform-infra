@@ -412,10 +412,18 @@ locals {
 
 # UAI used for storage encryption
 resource "azurerm_user_assigned_identity" "sa1_cmk" {
+  provider            = local.is_prod ? azurerm.prod : local.is_uat ? azurerm.uat : azurerm
   name                = "uai-${var.product}-${var.env}-${var.region}-sta-cmk-01" # your updated name
   location            = var.location
   resource_group_name = local.env_rg_name
   tags                = local.tags_common
+
+  depends_on = [
+    module.rg_dev,
+    module.rg_qa,
+    module.rg_uat,
+    module.rg_prod
+  ]
 }
 
 # Grant KV permissions to that identity
