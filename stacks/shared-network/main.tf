@@ -734,7 +734,7 @@ locals {
   appgw_hub_rg     = local.hub_rg_name
   has_appgw_subnet = local.is_nonprod ? contains(keys(var.nonprod_hub.subnets), "appgw") : contains(keys(var.prod_hub.subnets), "appgw")
   appgw_subnet_id  = try(module.vnet_hub.subnet_ids["appgw"], null)
-  appgw_enabled    = var.create_app_gateway && local.has_appgw_subnet && local.appgw_subnet_id != null
+  # appgw_enabled    = var.create_app_gateway && local.has_appgw_subnet && local.appgw_subnet_id != null
 }
 
 module "waf" {
