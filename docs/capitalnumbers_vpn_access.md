@@ -52,6 +52,7 @@ C:\Windows\System32\drivers\etc\hosts
 
 ```
 10.11.3.4 pgflex-hrz-dev-usaz-01.postgres.database.usgovcloudapi.net
+10.10.2.8 internal.dev.horizon.intterra.io
 ```
 
 4. Save and close Notepad.
