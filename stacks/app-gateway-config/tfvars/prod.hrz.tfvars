@@ -29,7 +29,7 @@ waf_policies = {
     mode             = "Prevention"
     vpn_cidrs        = ["192.168.1.0/24"]
     restricted_paths = ["/admin"]
-    blocked_countries = ["CN", "RU", "IR"]    # https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/web-application-firewall/ag/geomatch-custom-rules.md
+    allowed_countries = ["US"]    # https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/web-application-firewall/ag/geomatch-custom-rules.md
 
     # Disable managed rules by rule group + IDs
     disabled_rules_by_group = {
