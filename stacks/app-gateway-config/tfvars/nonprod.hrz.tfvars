@@ -25,7 +25,7 @@ core_state = {
 }
 
 waf_policies = {
-  dev = {
+  app_public = {
     mode             = "Prevention"
     vpn_cidrs        = ["192.168.1.0/24"]
     restricted_paths = ["/admin"]
@@ -33,9 +33,23 @@ waf_policies = {
 
     # Disable managed rules by rule group + IDs
     disabled_rules_by_group = {
-      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260","942340", "942370"]
-      "REQUEST-931-APPLICATION-ATTACK-RFI" = ["931130"]
-      # "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300"]
+      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260","942340", "942370","942330","942440"]
+      "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
+      "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
+    }
+  }
+  # NEW: internal endpoint policy (US-only + VPN-only for ALL paths)
+  app_logging = {
+    mode                      = "Prevention"
+    vpn_cidrs                 = ["192.168.1.0/24"]
+    restricted_paths          = []          # not used when vpn_required_for_all_paths=true
+    allowed_countries         = ["US"]
+    vpn_required_for_all_paths = true
+
+    disabled_rules_by_group = {
+      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260","942340", "942370","942330","942440"]
+      "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
+      "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
     }
   }
 
@@ -47,9 +61,9 @@ waf_policies = {
   # 
   # Disable managed rules by rule group + IDs
     # disabled_rules_by_group = {
-    #   "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260","942340", "942370"]
-    #   "REQUEST-931-APPLICATION-ATTACK-RFI" = ["931130"]
-    #   # "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300"]
+    #   "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260","942340", "942370","942330","942440"]
+    #   "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
+    #   "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
     # }
   # }
 }
@@ -74,6 +88,7 @@ frontend_ports = {
 
 backend_pools = {
   bepool-dev = { ip_addresses = ["62.10.212.49"] }
+  bepool-internal-dev = { ip_addresses = ["1.1.1.1"] }
   # bepool-qa  = { ip_addresses = ["62.10.212.50"] }
 }
 
@@ -82,6 +97,16 @@ probes = {
     protocol            = "Https"
     host                = "dev.horizon.intterra.io"
     path                = "/api/identity/health/ready"
+    interval            = 30
+    timeout             = 30
+    unhealthy_threshold = 3
+    match_status_codes  = ["200-399"]
+  }
+
+  probe-internal-dev = {
+    protocol            = "Https"
+    host                = "internal.dev.horizon.intterra.io"
+    path                = "/logs/login"
     interval            = 30
     timeout             = 30
     unhealthy_threshold = 3
@@ -110,6 +135,16 @@ backend_http_settings = {
     pick_host_name_from_backend_address = false
   }
 
+  bhs-internal-dev-https = {
+    port                = 443
+    protocol            = "Https"
+    request_timeout     = 20
+    cookie_based_affinity = "Disabled"
+    probe_name          = "probe-internal-dev"
+    host_name           = "internal.dev.horizon.intterra.io"
+    pick_host_name_from_backend_address = false
+  }
+
   # bhs-qa-https = {
   #   port                = 443
   #   protocol            = "Https"
@@ -128,7 +163,7 @@ listeners = {
     protocol                       = "Http"
     host_name                      = "dev.horizon.intterra.io"
     frontend                       = "public"
-    waf_policy_key                 = "dev"
+    waf_policy_key                 = "app_public"
   }
 
   listener-dev-https-public = {
@@ -138,7 +173,7 @@ listeners = {
     ssl_certificate_name           = "appgw-gateway-cert-horizon-dev"
     require_sni                    = true
     frontend                       = "public"
-    waf_policy_key                 = "dev"
+    waf_policy_key                 = "app_public"
   }
 
   # PRIVATE
@@ -147,7 +182,7 @@ listeners = {
     protocol                       = "Http"
     host_name                      = "dev.horizon.intterra.io"
     frontend                       = "private"
-    waf_policy_key                 = "dev"
+    waf_policy_key                 = "app_public"
   }
 
   listener-dev-https-private = {
@@ -157,7 +192,26 @@ listeners = {
     ssl_certificate_name           = "appgw-gateway-cert-horizon-dev"
     require_sni                    = true
     frontend                       = "private"
-    waf_policy_key                 = "dev"
+    waf_policy_key                 = "app_public"
+  }
+
+  # INTERNAL (PRIVATE ONLY)
+  listener-internal-dev-http-private = {
+    frontend_port_name = "feport-80"
+    protocol           = "Http"
+    host_name          = "internal.dev.horizon.intterra.io"
+    frontend           = "private"
+    waf_policy_key     = "app_logging"
+  }
+
+  listener-internal-dev-https-private = {
+    frontend_port_name   = "feport-443"
+    protocol             = "Https"
+    host_name            = "internal.dev.horizon.intterra.io"
+    ssl_certificate_name = "appgw-gateway-cert-horizon-dev"  # SAME CERT
+    require_sni          = true
+    frontend             = "private"
+    waf_policy_key       = "app_logging"
   }
 
   # PUBLIC
@@ -214,6 +268,13 @@ redirect_configurations = {
     include_query_string = true
   }
 
+  redir-internal-dev-http-to-https-private = {
+    target_listener_name = "listener-internal-dev-https-private"
+    redirect_type        = "Permanent"
+    include_path         = true
+    include_query_string = true
+  }
+
   # redir-qa-http-to-https-public = {
   #   target_listener_name = "listener-qa-https-public"
   #   redirect_type        = "Permanent"
@@ -259,6 +320,21 @@ routing_rules = [
     http_listener_name         = "listener-dev-https-private"
     backend_address_pool_name  = "bepool-dev"
     backend_http_settings_name = "bhs-dev-https"
+  }
+
+  # INTERNAL (PRIVATE)
+  {
+    name                        = "rule-internal-dev-http-redirect-private"
+    priority                    = 210
+    http_listener_name          = "listener-internal-dev-http-private"
+    redirect_configuration_name = "redir-internal-dev-http-to-https-private"
+  },
+  {
+    name                       = "rule-internal-dev-https-private"
+    priority                   = 220
+    http_listener_name         = "listener-internal-dev-https-private"
+    backend_address_pool_name  = "bepool-internal-dev"
+    backend_http_settings_name = "bhs-internal-dev-https"
   }
   
   # qa

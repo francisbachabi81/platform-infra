@@ -32,9 +32,9 @@ waf_policies = {
 
     # Disable managed rules by rule group + IDs
     disabled_rules_by_group = {
-      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260","942340", "942370"]
-      "REQUEST-931-APPLICATION-ATTACK-RFI" = ["931130"]
-      # "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300"]
+      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260","942340", "942370","942330","942440"]
+      "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
+      "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
     }
   }
 
@@ -46,9 +46,9 @@ waf_policies = {
   # 
   # Disable managed rules by rule group + IDs
     # disabled_rules_by_group = {
-    #   "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260","942340", "942370"]
-    #   "REQUEST-931-APPLICATION-ATTACK-RFI" = ["931130"]
-    #   # "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300"]
+    #   "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260","942340", "942370","942330","942440"]
+    #   "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
+    #   "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
     # }
   # }
 }

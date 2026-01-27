@@ -415,21 +415,61 @@ resource "azurerm_web_application_firewall_policy" "this" {
   }
 
   # Block traffic from configured countries (evaluated first)
+  # dynamic "custom_rules" {
+  #   for_each = length(try(each.value.blocked_countries, [])) > 0 ? [1] : []
+  #   content {
+  #     name      = "blockCountries"
+  #     priority  = 5
+  #     rule_type = "MatchRule"
+  #     action    = "Block"
+
+  #     match_conditions {
+  #       match_variables {
+  #         variable_name = "RequestHeaders"
+  #         selector      = "GeoLocation"
+  #       }
+  #       operator     = "Equal"
+  #       match_values = each.value.blocked_countries
+  #     }
+  #   }
+  # }
+
+    # Block traffic NOT from allowed countries (evaluated first)
   dynamic "custom_rules" {
-    for_each = length(try(each.value.blocked_countries, [])) > 0 ? [1] : []
+    for_each = length(try(each.value.allowed_countries, ["US"])) > 0 ? [1] : []
     content {
-      name      = "blockCountries"
+      name      = "blockNonAllowedCountries"
       priority  = 5
       rule_type = "MatchRule"
       action    = "Block"
 
       match_conditions {
         match_variables {
-          variable_name = "RequestHeaders"
-          selector      = "GeoLocation"
+          variable_name = "RemoteAddr"
         }
-        operator     = "Equal"
-        match_values = each.value.blocked_countries
+        operator           = "GeoMatch"
+        match_values       = each.value.allowed_countries
+        negation_condition = true # NOT in allowed country list
+      }
+    }
+  }
+
+    # If vpn_required_for_all_paths=true, block ANY request not coming from vpn_cidrs
+  dynamic "custom_rules" {
+    for_each = try(each.value.vpn_required_for_all_paths, false) ? [1] : []
+    content {
+      name      = "blockNonVpnAllPaths"
+      priority  = 8
+      rule_type = "MatchRule"
+      action    = "Block"
+
+      match_conditions {
+        match_variables {
+          variable_name = "RemoteAddr"
+        }
+        operator           = "IPMatch"
+        match_values       = each.value.vpn_cidrs
+        negation_condition = true # NOT in VPN range
       }
     }
   }
