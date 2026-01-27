@@ -292,7 +292,7 @@ routing_rules = [
     name                       = "rule-internal-dev-https-private"
     priority                   = 220
     http_listener_name         = "listener-internal-dev-https-private"
-    backend_address_pool_name  = "bepool-dev"
+    backend_address_pool_name  = "bepool-internal-dev"
     backend_http_settings_name = "bhs-internal-dev-https"
   }
   

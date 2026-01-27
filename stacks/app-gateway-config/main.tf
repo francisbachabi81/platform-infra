@@ -456,12 +456,40 @@ resource "azurerm_web_application_firewall_policy" "this" {
 
     # If vpn_required_for_all_paths=true, block ANY request not coming from vpn_cidrs
   dynamic "custom_rules" {
-    for_each = try(each.value.vpn_required_for_all_paths, false) ? [1] : []
+    for_each = (try(each.value.vpn_required_for_all_paths, false) && length(try(each.value.vpn_cidrs, [])) > 0) ? [1] : []
     content {
       name      = "blockNonVpnAllPaths"
       priority  = 8
       rule_type = "MatchRule"
       action    = "Block"
+
+      match_conditions {
+        match_variables { variable_name = "RemoteAddr" }
+        operator           = "IPMatch"
+        match_values       = each.value.vpn_cidrs
+        negation_condition = true
+      }
+    }
+  }
+
+    # Block non-VPN traffic when URI matches restricted paths
+  # (Only create if restricted_paths is non-empty)
+  dynamic "custom_rules" {
+    for_each = length(try(each.value.restricted_paths, [])) > 0 ? [1] : []
+    content {
+      name      = "blockNonvpnRestrictedPaths"
+      priority  = 10
+      rule_type = "MatchRule"
+      action    = "Block"
+
+      match_conditions {
+        match_variables {
+          variable_name = "RequestUri"
+        }
+        operator     = "BeginsWith"
+        match_values = each.value.restricted_paths
+        transforms   = ["Lowercase"]
+      }
 
       match_conditions {
         match_variables {
@@ -471,32 +499,6 @@ resource "azurerm_web_application_firewall_policy" "this" {
         match_values       = each.value.vpn_cidrs
         negation_condition = true # NOT in VPN range
       }
-    }
-  }
-
-  # Block non-VPN traffic when URI matches restricted paths
-  custom_rules {
-    name      = "blockNonvpnRestrictedPaths"
-    priority  = 10
-    rule_type = "MatchRule"
-    action    = "Block"
-
-    match_conditions {
-      match_variables {
-        variable_name = "RequestUri"
-      }
-      operator = "BeginsWith"
-      match_values = each.value.restricted_paths
-      transforms = ["Lowercase"]
-    }
-
-    match_conditions {
-      match_variables {
-        variable_name = "RemoteAddr"
-      }
-      operator           = "IPMatch"
-      match_values       = each.value.vpn_cidrs
-      negation_condition = true # NOT in VPN range
     }
   }
 }
