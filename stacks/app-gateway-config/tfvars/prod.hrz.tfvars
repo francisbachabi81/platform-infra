@@ -320,7 +320,7 @@ routing_rules = [
     http_listener_name         = "listener-prod-https-private"
     backend_address_pool_name  = "bepool-prod"
     backend_http_settings_name = "bhs-prod-https"
-  }
+  },
 
   # INTERNAL (PRIVATE)
   {
