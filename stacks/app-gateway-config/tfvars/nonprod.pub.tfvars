@@ -23,60 +23,74 @@ core_state = {
   key                  = "core/pub/cus/np.tfstate"
 }
 
+# WAF policies
 waf_policies = {
-  app_public = {
-    mode             = "Prevention"
-    vpn_cidrs        = ["192.168.1.0/24"]
-    restricted_paths = ["/admin"]         # not used when vpn_required_for_all_paths=true
-    allowed_countries         = ["US"]
+  # DEV (current)
+  "app-main-dev" = {
+    mode              = "Prevention"
+    vpn_cidrs         = ["192.168.1.0/24"]
+    restricted_paths  = ["/admin"]
+    allowed_countries = ["US"]
 
-    # Disable managed rules by rule group + IDs
     disabled_rules_by_group = {
-      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260","942340", "942370","942330","942440"]
+      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260", "942330", "942340", "942370", "942440"]
       "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
       "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
     }
   }
-  # NEW: internal endpoint policy (US-only + VPN-only for ALL paths)
-  app_logging = {
-    mode                      = "Prevention"
-    vpn_cidrs                 = ["192.168.1.0/24"]
-    restricted_paths          = []          # not used when vpn_required_for_all_paths=true
-    allowed_countries         = ["US"]
+
+  "obs-internal-dev" = {
+    mode                       = "Prevention"
+    vpn_cidrs                  = ["192.168.1.0/24"]
+    allowed_countries          = ["US"]
     vpn_required_for_all_paths = true
 
     disabled_rules_by_group = {
-      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260","942340", "942370","942330","942440"]
+      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260", "942330", "942340", "942370", "942440"]
       "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
       "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
     }
   }
 
-  # qa = {
-  #   mode             = "Prevention"
-  #   vpn_cidrs        = ["192.168.1.0/24"]
-  #   restricted_paths = ["/admin"]           # ["/admin", "/ops"]
-  #   blocked_countries = ["CN", "RU", "IR"]  # https://github.com/MicrosoftDocs/azure-docs/blob/main/articles/web-application-firewall/ag/geomatch-custom-rules.md
-  # 
-  # Disable managed rules by rule group + IDs
-    # disabled_rules_by_group = {
-    #   "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260","942340", "942370","942330","942440"]
-    #   "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
-    #   "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
-    # }
+
+  # QA (copies of DEV) - enable when you add QA listeners
+  # NOTE: keys must be unique so the policy names are unique
+
+  # "app-main-qa" = {
+  #   mode              = "Prevention"
+  #   vpn_cidrs         = ["192.168.1.0/24"]
+  #   restricted_paths  = ["/admin"]
+  #   allowed_countries = ["US"]
+  #
+  #   disabled_rules_by_group = {
+  #     "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260", "942330", "942340", "942370", "942440"]
+  #     "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
+  #     "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
+  #   }
+  # }
+  #
+  # "obs-internal-qa" = {
+  #   mode                       = "Prevention"
+  #   vpn_cidrs                  = ["192.168.1.0/24"]
+  #   allowed_countries          = ["US"]
+  #   vpn_required_for_all_paths = true
+  #
+  #   disabled_rules_by_group = {
+  #     "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260", "942330", "942340", "942370", "942440"]
+  #     "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
+  #     "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
+  #   }
   # }
 }
 
-# Distinct cert per listener but if multiple listeners use same cert, they can reference same sslCertificate element
+# certs (dev now; qa later)
 ssl_certificates = {
-  appgw-gateway-cert-public-dev = {
-    secret_name    = "appgw-gateway-cert-public-dev" # or whatever your wildcard secret is - wildcard-public-intterra-io
-    secret_version = null
+  appgw-cert-pub-dev = {
+    secret_name = "appgw-gateway-cert-public-dev"
   }
 
-  # appgw-gateway-cert-public-qa = {
-  #   secret_name    = "appgw-gateway-cert-public-dev"
-  #   secret_version = null
+  # appgw-cert-pub-qa = {
+  #   secret_name = "appgw-gateway-cert-public-qa"
   # }
 }
 
@@ -85,14 +99,19 @@ frontend_ports = {
   feport-443 = 443
 }
 
+# Backends
 backend_pools = {
-  bepool-dev = { ip_addresses = ["20.84.250.156"] }
-  bepool-internal-dev = { ip_addresses = ["1.1.1.1"] }
-  # bepool-qa  = { ip_addresses = ["62.10.212.50"] }
+  be-dev-app = { ip_addresses = ["20.84.250.156"] }
+  be-dev-obs = { ip_addresses = ["1.1.1.1"] }
+
+  # # QA
+  # be-qa-app = { ip_addresses = ["<QA_APP_IP>"] }
+  # be-qa-obs = { ip_addresses = ["<QA_OBS_IP>"] }
 }
 
+# Probes
 probes = {
-  probe-dev = {
+  probe-dev-app = {
     protocol            = "Https"
     host                = "public.dev.public.intterra.io"
     path                = "/health/ready"
@@ -102,7 +121,7 @@ probes = {
     match_status_codes  = ["200-399"]
   }
 
-  probe-internal-dev = {
+  probe-dev-obs = {
     protocol            = "Https"
     host                = "internal.dev.public.intterra.io"
     path                = "/logs/login"
@@ -112,10 +131,21 @@ probes = {
     match_status_codes  = ["200-399"]
   }
 
-  # probe-qa = {
+  # # QA
+  # probe-qa-app = {
   #   protocol            = "Https"
-  #   host                = "qa.public.intterra.io"
-  #   path                = "/api/identity/health/ready"
+  #   host                = "public.qa.public.intterra.io"
+  #   path                = "/health/ready"
+  #   interval            = 30
+  #   timeout             = 30
+  #   unhealthy_threshold = 3
+  #   match_status_codes  = ["200-399"]
+  # }
+  #
+  # probe-qa-obs = {
+  #   protocol            = "Https"
+  #   host                = "internal.qa.public.intterra.io"
+  #   path                = "/logs/login"
   #   interval            = 30
   #   timeout             = 30
   #   unhealthy_threshold = 3
@@ -123,207 +153,220 @@ probes = {
   # }
 }
 
+# Backend HTTP settings
 backend_http_settings = {
-  bhs-dev-https = {
-    port                = 443
-    protocol            = "Https"
-    request_timeout     = 20
-    cookie_based_affinity = "Disabled"
-    probe_name          = "probe-dev"
-    host_name           = "dev.public.intterra.io"
+  bhs-dev-app-https = {
+    port                                = 443
+    protocol                            = "Https"
+    request_timeout                     = 20
+    cookie_based_affinity               = "Disabled"
+    probe_name                          = "probe-dev-app"
+    host_name                           = "public.dev.public.intterra.io"
     pick_host_name_from_backend_address = false
   }
 
-  bhs-internal-dev-https = {
-    port                = 443
-    protocol            = "Https"
-    request_timeout     = 20
-    cookie_based_affinity = "Disabled"
-    probe_name          = "probe-internal-dev"
-    host_name           = "internal.dev.public.intterra.io"
+  bhs-dev-obs-https = {
+    port                                = 443
+    protocol                            = "Https"
+    request_timeout                     = 20
+    cookie_based_affinity               = "Disabled"
+    probe_name                          = "probe-dev-obs"
+    host_name                           = "internal.dev.public.intterra.io"
     pick_host_name_from_backend_address = false
   }
 
-  # bhs-qa-https = {
-  #   port                = 443
-  #   protocol            = "Https"
-  #   request_timeout     = 20
-  #   cookie_based_affinity = "Disabled"
-  #   probe_name          = "probe-qa"
-  #   host_name           = "qa.public.intterra.io"
+  # # QA
+  # bhs-qa-app-https = {
+  #   port                                = 443
+  #   protocol                            = "Https"
+  #   request_timeout                     = 20
+  #   cookie_based_affinity               = "Disabled"
+  #   probe_name                          = "probe-qa-app"
+  #   host_name                           = "public.qa.public.intterra.io"
+  #   pick_host_name_from_backend_address = false
+  # }
+  #
+  # bhs-qa-obs-https = {
+  #   port                                = 443
+  #   protocol                            = "Https"
+  #   request_timeout                     = 20
+  #   cookie_based_affinity               = "Disabled"
+  #   probe_name                          = "probe-qa-obs"
+  #   host_name                           = "internal.qa.public.intterra.io"
   #   pick_host_name_from_backend_address = false
   # }
 }
 
+# Listeners
 listeners = {
-  # PUBLIC
-  listener-dev-http-public = {
-    frontend_port_name             = "feport-80"
-    protocol                       = "Http"
-    host_name                      = "public.dev.public.intterra.io"
-    frontend                       = "public"
-    waf_policy_key                 = "app_public"
+  # DEV APP (PUBLIC)
+  lis-dev-app-http-public = {
+    frontend_port_name = "feport-80"
+    protocol           = "Http"
+    host_name          = "public.dev.public.intterra.io"
+    frontend           = "public"
+    waf_policy_key     = "app-main-dev"
   }
 
-  listener-dev-https-public = {
-    frontend_port_name             = "feport-443"
-    protocol                       = "Https"
-    host_name                      = "public.dev.public.intterra.io"
-    ssl_certificate_name           = "appgw-gateway-cert-public-dev"
-    require_sni                    = true
-    frontend                       = "public"
-    waf_policy_key                 = "app_public"
+  lis-dev-app-https-public = {
+    frontend_port_name   = "feport-443"
+    protocol             = "Https"
+    host_name            = "public.dev.public.intterra.io"
+    ssl_certificate_name = "appgw-cert-pub-dev"
+    require_sni          = true
+    frontend             = "public"
+    waf_policy_key       = "app-main-dev"
   }
 
-  # INTERNAL (PRIVATE ONLY)
-  listener-internal-dev-http-private = {
+  # DEV OBS (PRIVATE ONLY)
+  lis-dev-obs-http-private = {
     frontend_port_name = "feport-80"
     protocol           = "Http"
     host_name          = "internal.dev.public.intterra.io"
     frontend           = "private"
-    waf_policy_key     = "app_logging"
+    waf_policy_key     = "obs-internal-dev"
   }
 
-  listener-internal-dev-https-private = {
+  lis-dev-obs-https-private = {
     frontend_port_name   = "feport-443"
     protocol             = "Https"
     host_name            = "internal.dev.public.intterra.io"
-    ssl_certificate_name = "appgw-gateway-cert-public-dev"  # SAME CERT
+    ssl_certificate_name = "appgw-cert-pub-dev"
     require_sni          = true
     frontend             = "private"
-    waf_policy_key       = "app_logging"
+    waf_policy_key       = "obs-internal-dev"
   }
 
-  # PUBLIC
-  # listener-qa-http-public = {
-  #   frontend_port_name             = "feport-80"
-  #   protocol                       = "Http"
-  #   host_name                      = "qa.public.intterra.io"
-  #   frontend                       = "public"
-  #   waf_policy_key                 = "qa"
+  # QA (enable when ready)
+  # # QA APP (PUBLIC)
+  # lis-qa-app-http-public = {
+  #   frontend_port_name = "feport-80"
+  #   protocol           = "Http"
+  #   host_name          = "public.qa.public.intterra.io"
+  #   frontend           = "public"
+  #   waf_policy_key     = "app-main-qa"
   # }
-
-  # listener-qa-https-public = {
-  #   frontend_port_name             = "feport-443"
-  #   protocol                       = "Https"
-  #   host_name                      = "qa.public.intterra.io"
-  #   ssl_certificate_name           = "appgw-gateway-cert-public-qa"
-  #   require_sni                    = true
-  #   frontend                       = "public"
-  #   waf_policy_key                 = "qa"
+  #
+  # lis-qa-app-https-public = {
+  #   frontend_port_name   = "feport-443"
+  #   protocol             = "Https"
+  #   host_name            = "public.qa.public.intterra.io"
+  #   ssl_certificate_name = "appgw-cert-pub-qa"
+  #   require_sni          = true
+  #   frontend             = "public"
+  #   waf_policy_key       = "app-main-qa"
   # }
-
-  # # PRIVATE
-  # listener-qa-http-private = {
-  #   frontend_port_name             = "feport-80"
-  #   protocol                       = "Http"
-  #   host_name                      = "qa.public.intterra.io"
-  #   frontend                       = "private"
-  #   waf_policy_key                 = "qa"
+  #
+  # # QA OBS (PRIVATE ONLY)
+  # lis-qa-obs-http-private = {
+  #   frontend_port_name = "feport-80"
+  #   protocol           = "Http"
+  #   host_name          = "internal.qa.public.intterra.io"
+  #   frontend           = "private"
+  #   waf_policy_key     = "obs-internal-qa"
   # }
-
-  # listener-qa-https-private = {
-  #   frontend_port_name             = "feport-443"
-  #   protocol                       = "Https"
-  #   host_name                      = "qa.public.intterra.io"
-  #   ssl_certificate_name           = "appgw-gateway-cert-public-qa"
-  #   require_sni                    = true
-  #   frontend                       = "private"
-  #   waf_policy_key                 = "qa"
+  #
+  # lis-qa-obs-https-private = {
+  #   frontend_port_name   = "feport-443"
+  #   protocol             = "Https"
+  #   host_name            = "internal.qa.public.intterra.io"
+  #   ssl_certificate_name = "appgw-cert-pub-qa"
+  #   require_sni          = true
+  #   frontend             = "private"
+  #   waf_policy_key       = "obs-internal-qa"
   # }
 }
 
+# Redirects
 redirect_configurations = {
-  redir-dev-http-to-https-public = {
-    target_listener_name = "listener-dev-https-public"
+  redir-dev-app-http-to-https-public = {
+    target_listener_name = "lis-dev-app-https-public"
     redirect_type        = "Permanent"
     include_path         = true
     include_query_string = true
   }
 
-  redir-internal-dev-http-to-https-private = {
-    target_listener_name = "listener-internal-dev-https-private"
+  redir-dev-obs-http-to-https-private = {
+    target_listener_name = "lis-dev-obs-https-private"
     redirect_type        = "Permanent"
     include_path         = true
     include_query_string = true
   }
 
-
-  # redir-qa-http-to-https-public = {
-  #   target_listener_name = "listener-qa-https-public"
+  # # QA
+  # redir-qa-app-http-to-https-public = {
+  #   target_listener_name = "lis-qa-app-https-public"
   #   redirect_type        = "Permanent"
   #   include_path         = true
   #   include_query_string = true
   # }
-
-  # redir-qa-http-to-https-private = {
-  #   target_listener_name = "listener-qa-https-private"
+  #
+  # redir-qa-obs-http-to-https-private = {
+  #   target_listener_name = "lis-qa-obs-https-private"
   #   redirect_type        = "Permanent"
   #   include_path         = true
   #   include_query_string = true
   # }
 }
 
+# Routing rules
 routing_rules = [
-  # dev
-  # PUBLIC
+  # DEV APP (PUBLIC)
   {
-    name                        = "rule-dev-http-redirect-public"
+    name                        = "rule-dev-app-http-redirect-public"
     priority                    = 90
-    http_listener_name          = "listener-dev-http-public"
-    redirect_configuration_name = "redir-dev-http-to-https-public"
+    http_listener_name          = "lis-dev-app-http-public"
+    redirect_configuration_name = "redir-dev-app-http-to-https-public"
   },
   {
-    name                       = "rule-dev-https-public"
+    name                       = "rule-dev-app-https-public"
     priority                   = 100
-    http_listener_name         = "listener-dev-https-public"
-    backend_address_pool_name  = "bepool-dev"
-    backend_http_settings_name = "bhs-dev-https"
+    http_listener_name         = "lis-dev-app-https-public"
+    backend_address_pool_name  = "be-dev-app"
+    backend_http_settings_name = "bhs-dev-app-https"
   },
 
-  # INTERNAL (PRIVATE)
+  # DEV OBS (PRIVATE)
   {
-    name                        = "rule-internal-dev-http-redirect-private"
+    name                        = "rule-dev-obs-http-redirect-private"
     priority                    = 210
-    http_listener_name          = "listener-internal-dev-http-private"
-    redirect_configuration_name = "redir-internal-dev-http-to-https-private"
+    http_listener_name          = "lis-dev-obs-http-private"
+    redirect_configuration_name = "redir-dev-obs-http-to-https-private"
   },
   {
-    name                       = "rule-internal-dev-https-private"
+    name                       = "rule-dev-obs-https-private"
     priority                   = 220
-    http_listener_name         = "listener-internal-dev-https-private"
-    backend_address_pool_name  = "bepool-internal-dev"
-    backend_http_settings_name = "bhs-internal-dev-https"
+    http_listener_name         = "lis-dev-obs-https-private"
+    backend_address_pool_name  = "be-dev-obs"
+    backend_http_settings_name = "bhs-dev-obs-https"
   }
-  
-  # qa
-  # PUBLIC
-  # {
-  #   name                        = "rule-qa-http-redirect-public"
-  #   priority                    = 90
-  #   http_listener_name          = "listener-qa-http-public"
-  #   redirect_configuration_name = "redir-qa-http-to-https-public"
-  # },
-  # {
-  #   name                       = "rule-qa-https-public"
-  #   priority                   = 100
-  #   http_listener_name         = "listener-qa-https-public"
-  #   backend_address_pool_name  = "bepool-qa"
-  #   backend_http_settings_name = "bhs-qa-https"
-  # },
 
-  # # PRIVATE
+  # QA (enable when ready)
+  # ,
   # {
-  #   name                        = "rule-qa-http-redirect-private"
-  #   priority                    = 190
-  #   http_listener_name          = "listener-qa-http-private"
-  #   redirect_configuration_name = "redir-qa-http-to-https-private"
+  #   name                        = "rule-qa-app-http-redirect-public"
+  #   priority                    = 110
+  #   http_listener_name          = "lis-qa-app-http-public"
+  #   redirect_configuration_name = "redir-qa-app-http-to-https-public"
   # },
   # {
-  #   name                       = "rule-qa-https-private"
-  #   priority                   = 200
-  #   http_listener_name         = "listener-qa-https-private"
-  #   backend_address_pool_name  = "bepool-qa"
-  #   backend_http_settings_name = "bhs-qa-https"
+  #   name                       = "rule-qa-app-https-public"
+  #   priority                   = 120
+  #   http_listener_name         = "lis-qa-app-https-public"
+  #   backend_address_pool_name  = "be-qa-app"
+  #   backend_http_settings_name = "bhs-qa-app-https"
+  # },
+  # {
+  #   name                        = "rule-qa-obs-http-redirect-private"
+  #   priority                    = 230
+  #   http_listener_name          = "lis-qa-obs-http-private"
+  #   redirect_configuration_name = "redir-qa-obs-http-to-https-private"
+  # },
+  # {
+  #   name                       = "rule-qa-obs-https-private"
+  #   priority                   = 240
+  #   http_listener_name         = "lis-qa-obs-https-private"
+  #   backend_address_pool_name  = "be-qa-obs"
+  #   backend_http_settings_name = "bhs-qa-obs-https"
   # }
 ]
