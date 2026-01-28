@@ -8,8 +8,8 @@ seq      = "01"                     # sequence in names
 # Private DNS zones (Azure Commercial)
 private_zones = [
   # App domains (dev + qa)
-  "dev.public.intterra.io",
-  "qa.public.intterra.io",
+  # "dev.public.intterra.io",
+  # "qa.public.intterra.io",
 
   # Storage
   "privatelink.blob.core.windows.net",
