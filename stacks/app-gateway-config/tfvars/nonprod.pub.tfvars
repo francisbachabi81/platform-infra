@@ -104,7 +104,7 @@ frontend_ports = {
 # Backends
 backend_pools = {
   be-dev-app = { ip_addresses = ["20.84.250.156"] }
-  be-dev-obs = { ip_addresses = ["1.1.1.1"] }
+  be-dev-obs = { ip_addresses = ["20.84.250.156"] }
 
   # # QA
   # be-qa-app = { ip_addresses = ["<QA_APP_IP>"] }
