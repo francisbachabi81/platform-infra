@@ -500,7 +500,7 @@ module "sa1" {
 
   identity_type = "UserAssigned"
   # identity_ids  = [azurerm_user_assigned_identity.sa1_cmk.id]
-  identity_ids  = [local.sa1_cmk_id]
+  identity_ids = [local.sa1_cmk_id]
 
   pe_blob_name         = "pep-${local.sa1_name_cleaned}-blob"
   psc_blob_name        = "psc-${local.sa1_name_cleaned}-blob"
@@ -1118,48 +1118,48 @@ module "eventhub_cgs" {
 }
 
 # Cosmos DB for PostgreSQL (Citus) (env)
-locals {
-  cdbpg_name         = "cdbpg-${var.product}-${var.env}-${var.region}-01"
-  cdbpg_name_cleaned = replace(lower(trimspace(local.cdbpg_name)), "-", "")
-}
+# locals {
+#   cdbpg_name         = "cdbpg-${var.product}-${var.env}-${var.region}-01"
+#   cdbpg_name_cleaned = replace(lower(trimspace(local.cdbpg_name)), "-", "")
+# }
 
-module "cdbpg1" {
-  count  = (var.product == "pub" && var.create_cdbpg) ? 1 : 0
-  source = "../../modules/cosmosdb-postgresql"
+# module "cdbpg1" {
+#   count  = (var.product == "pub" && var.create_cdbpg) ? 1 : 0
+#   source = "../../modules/cosmosdb-postgresql"
 
-  name                = local.cdbpg_name
-  location            = var.location
-  resource_group_name = local.env_rg_name
+#   name                = local.cdbpg_name
+#   location            = var.location
+#   resource_group_name = local.env_rg_name
 
-  coordinator_vcore_count         = var.cdbpg_coordinator_vcore_count
-  coordinator_storage_quota_in_mb = var.cdbpg_coordinator_storage_quota_in_mb
-  coordinator_server_edition      = var.cdbpg_coordinator_server_edition
+#   coordinator_vcore_count         = var.cdbpg_coordinator_vcore_count
+#   coordinator_storage_quota_in_mb = var.cdbpg_coordinator_storage_quota_in_mb
+#   coordinator_server_edition      = var.cdbpg_coordinator_server_edition
 
-  node_count               = var.cdbpg_node_count
-  node_vcore_count         = var.cdbpg_node_vcore_count
-  node_server_edition      = var.cdbpg_node_server_edition
-  node_storage_quota_in_mb = var.cdbpg_node_storage_quota_in_mb
+#   node_count               = var.cdbpg_node_count
+#   node_vcore_count         = var.cdbpg_node_vcore_count
+#   node_server_edition      = var.cdbpg_node_server_edition
+#   node_storage_quota_in_mb = var.cdbpg_node_storage_quota_in_mb
 
-  citus_version                = var.cdbpg_citus_version
-  preferred_primary_zone       = var.cdbpg_preferred_primary_zone
-  administrator_login_password = var.cdbpg_admin_password
+#   citus_version                = var.cdbpg_citus_version
+#   preferred_primary_zone       = var.cdbpg_preferred_primary_zone
+#   administrator_login_password = var.cdbpg_admin_password
 
-  enable_private_endpoint = var.cdbpg_enable_private_endpoint && local.pe_subnet_id_effective != null
-  privatelink_subnet_id   = local.pe_subnet_id_effective
-  private_dns_zone_id     = try(local.zone_ids_effective["privatelink.postgres.cosmos.azure.com"], null)
+#   enable_private_endpoint = var.cdbpg_enable_private_endpoint && local.pe_subnet_id_effective != null
+#   privatelink_subnet_id   = local.pe_subnet_id_effective
+#   private_dns_zone_id     = try(local.zone_ids_effective["privatelink.postgres.cosmos.azure.com"], null)
 
-  pe_coordinator_name         = "pep-${local.cdbpg_name_cleaned}-coordinator"
-  psc_coordinator_name        = "psc-${local.cdbpg_name_cleaned}-coordinator"
-  coordinator_zone_group_name = "pdns-${local.cdbpg_name_cleaned}-coordinator"
+#   pe_coordinator_name         = "pep-${local.cdbpg_name_cleaned}-coordinator"
+#   psc_coordinator_name        = "psc-${local.cdbpg_name_cleaned}-coordinator"
+#   coordinator_zone_group_name = "pdns-${local.cdbpg_name_cleaned}-coordinator"
 
-  tags = merge(local.tags_common, { component = "cosmosdb-postgresql" }, var.tags)
+#   tags = merge(local.tags_common, { component = "cosmosdb-postgresql" }, var.tags)
 
-  depends_on = [
-    data.azurerm_resource_group.env,
-    module.eventhub,
-    module.sbns1
-  ]
-}
+#   depends_on = [
+#     data.azurerm_resource_group.env,
+#     module.eventhub,
+#     module.sbns1
+#   ]
+# }
 
 # PostgreSQL Flexible (env)
 locals {
@@ -1219,7 +1219,11 @@ module "postgres" {
 
   tags = merge(local.tags_common, local.tags_postgres, var.tags, { role = "primary" })
 
-  depends_on = [data.azurerm_resource_group.env, module.cdbpg1]
+  depends_on = [
+    data.azurerm_resource_group.env,
+    module.eventhub,
+    module.sbns1
+  ]
 }
 
 module "postgres_replica" {
@@ -1249,6 +1253,58 @@ module "postgres_replica" {
   tags = merge(local.tags_common, local.tags_postgres, var.tags, { role = "replica" })
 
   depends_on = [data.azurerm_resource_group.env, module.postgres]
+}
+
+# PostgreSQL Elastic Cluster (env)
+locals {
+  # Keep DNS zone resolution pattern, but separate the PDZ name so you can adjust later if needed
+  _pg_elastic_pdz_pub  = "privatelink.postgres.database.azure.com"
+  _pg_elastic_pdz_gov  = "privatelink.postgres.database.usgovcloudapi.net"
+  _pg_elastic_pdz_name = var.product == "hrz" ? local._pg_elastic_pdz_gov : local._pg_elastic_pdz_pub
+
+  # Elastic cluster uses Private Endpoint subnet (NOT delegated subnet)
+  pg_elastic_pe_subnet_id    = try(local.subnet_ids_from_state[var.pg_elastic_private_endpoint_subnet_name], null)
+  pg_elastic_private_zone_id = try(local.zone_ids_effective[local._pg_elastic_pdz_name], null)
+
+  pg_elastic_name1 = "pgelc-${var.product}-${var.env}-${var.region}-01"
+}
+
+module "postgres_elastic" {
+  count               = local.enable_both ? 1 : 0
+  source              = "../../modules/postgres-elastic"
+  name                = local.pg_elastic_name1
+  resource_group_name = local.env_rg_name
+  location            = var.location
+
+  # Core
+  pg_version                   = var.pg_version
+  administrator_login_password = var.pg_admin_password
+
+  # Sizing (elastic-specific)
+  coordinator_vcores     = var.pg_elastic_coordinator_vcores
+  coordinator_storage_mb = var.pg_elastic_coordinator_storage_mb
+  worker_count           = var.pg_elastic_worker_count
+  worker_vcores          = var.pg_elastic_worker_vcores
+  worker_storage_mb      = var.pg_elastic_worker_storage_mb
+
+  ha_enabled = var.pg_ha_enabled
+
+  # Networking (private via PE)
+  network_mode = "private"
+  private_endpoint_subnet_id = coalesce(
+    local.pg_elastic_pe_subnet_id,
+    var.pg_elastic_private_endpoint_subnet_id,
+    null
+  )
+  private_dns_zone_id = local.pg_elastic_private_zone_id
+
+  # Private endpoint groupIds can differ; keep configurable
+  private_endpoint_subresource_names = var.pg_elastic_private_endpoint_subresource_names
+
+  # Tags
+  tags = merge(local.tags_common, local.tags_postgres, var.tags, { role = "primary" })
+
+  depends_on = [data.azurerm_resource_group.env, module.cdbpg1]
 }
 
 # Redis (env)

@@ -1,6 +1,6 @@
 # Core env / provider
 env      = "prod" # dev | qa | uat | prod
-product  = " pub"  # hrz (Azure Gov) | pub (Azure Commercial)
+product  = " pub" # hrz (Azure Gov) | pub (Azure Commercial)
 location = "Central US"
 region   = "cus"
 

@@ -569,3 +569,54 @@ variable "servicebus_authorization_rules_override" {
 #   type        = bool
 #   default     = false
 # }
+
+# Elastic Cluster subnet lookup (preferred: name that exists in your state subnet map)
+variable "pg_elastic_private_endpoint_subnet_name" {
+  type        = string
+  default     = "privatelink-pg"
+  description = "Subnet name (key in subnet_ids_from_state) for PostgreSQL Elastic private endpoint."
+}
+
+# Or allow passing an ID directly (fallback)
+variable "pg_elastic_private_endpoint_subnet_id" {
+  type        = string
+  default     = null
+  description = "Subnet ID for PostgreSQL Elastic private endpoint (used if subnet name lookup is null)."
+}
+
+variable "pg_elastic_private_endpoint_subresource_names" {
+  type        = list(string)
+  default     = ["coordinator"]
+  description = "Private endpoint subresource names (groupIds) for PostgreSQL Elastic."
+}
+
+# Elastic sizing
+variable "pg_elastic_coordinator_vcores" {
+  type        = number
+  default     = 4
+  description = "Elastic coordinator vCores."
+}
+
+variable "pg_elastic_coordinator_storage_mb" {
+  type        = number
+  default     = 131072
+  description = "Elastic coordinator storage in MB."
+}
+
+variable "pg_elastic_worker_count" {
+  type        = number
+  default     = 2
+  description = "Elastic worker node count."
+}
+
+variable "pg_elastic_worker_vcores" {
+  type        = number
+  default     = 4
+  description = "Elastic worker vCores."
+}
+
+variable "pg_elastic_worker_storage_mb" {
+  type        = number
+  default     = 131072
+  description = "Elastic worker storage in MB."
+}

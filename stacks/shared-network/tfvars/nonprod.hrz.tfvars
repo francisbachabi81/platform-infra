@@ -191,6 +191,11 @@ dev_spoke = {
       address_prefixes                  = ["10.11.31.0/27"]
       private_endpoint_network_policies = "Disabled"
     }
+
+    "privatelink-pg" = {
+      address_prefixes                  = ["10.11.32.0/27"]
+      private_endpoint_network_policies = "Disabled"
+    }
   }
 }
 
@@ -283,6 +288,11 @@ qa_spoke = {
 
     "privatelink-cdbpg" = {
       address_prefixes                  = ["10.12.31.0/27"]
+      private_endpoint_network_policies = "Disabled"
+    }
+
+    "privatelink-pg" = {
+      address_prefixes                  = ["10.12.32.0/27"]
       private_endpoint_network_policies = "Disabled"
     }
   }

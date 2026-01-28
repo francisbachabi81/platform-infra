@@ -1,6 +1,6 @@
 # Core env / provider
 env      = "uat" # dev | qa | uat | prod
-product  = "hrz"  # hrz (Azure Gov) | pub (Azure Commercial)
+product  = "hrz" # hrz (Azure Gov) | pub (Azure Commercial)
 location = "USGov Arizona"
 region   = "usaz"
 
@@ -147,7 +147,7 @@ cosno_total_throughput_limit = 1200
 # Redis (env)
 redis_sku_name   = "Standard" # Basic | Standard | Premium
 redis_sku_family = "C"        # C | P
-redis_capacity   = 1 # 0–6 depending on SKU
+redis_capacity   = 1          # 0–6 depending on SKU
 
 # App Service Plan / Functions (env)
 asp_os_type              = "Linux" # Linux | Windows

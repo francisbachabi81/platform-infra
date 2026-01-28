@@ -1,5 +1,5 @@
 # Core env / provider
-env      = "qa" # dev | qa | uat | prod
+env      = "qa"  # dev | qa | uat | prod
 product  = "hrz" # hrz (Azure Gov) | pub (Azure Commercial)
 location = "USGov Arizona"
 region   = "usaz"
