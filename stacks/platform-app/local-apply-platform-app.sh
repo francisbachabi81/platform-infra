@@ -108,10 +108,10 @@ echo " - state key: $STATE_KEY"
 echo " - tfplan:    $TFPLAN_PATH"
 echo
 
-if [ "$APPLY" != "yes" ]; then
-  echo "Dry-run mode: set APPLY=yes to actually apply."
-  exit 0
-fi
+# if [ "$APPLY" != "yes" ]; then
+#   echo "Dry-run mode: set APPLY=yes to actually apply."
+#   exit 0
+# fi
 
 # if [ "$AUTO_APPROVE" = "yes" ]; then
 #   terraform apply -input=false -lock-timeout="$LOCK_TIMEOUT" -auto-approve "$TFPLAN_PATH"

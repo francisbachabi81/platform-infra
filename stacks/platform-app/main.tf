@@ -1304,7 +1304,7 @@ module "postgres_elastic" {
   # Tags
   tags = merge(local.tags_common, local.tags_postgres, var.tags, { role = "primary" })
 
-  depends_on = [data.azurerm_resource_group.env, module.cdbpg1]
+  depends_on = [data.azurerm_resource_group.env, module.postgres]
 }
 
 # Redis (env)

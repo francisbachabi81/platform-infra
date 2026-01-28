@@ -190,6 +190,11 @@ prod_spoke = {
       address_prefixes                  = ["172.14.31.0/27"]
       private_endpoint_network_policies = "Disabled"
     }
+
+    "privatelink-pg" = {
+      address_prefixes                  = ["172.14.32.0/27"]
+      private_endpoint_network_policies = "Disabled"
+    }
   }
 }
 
@@ -282,6 +287,11 @@ uat_spoke = {
 
     "privatelink-cdbpg" = {
       address_prefixes                  = ["172.15.31.0/27"]
+      private_endpoint_network_policies = "Disabled"
+    }
+
+    "privatelink-pg" = {
+      address_prefixes                  = ["172.15.32.0/27"]
       private_endpoint_network_policies = "Disabled"
     }
   }

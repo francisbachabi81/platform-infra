@@ -76,11 +76,23 @@ export TF_VAR_hub_subscription_id="$HUB_SUB"
 export TF_VAR_cdbpg_admin_password="$CDBPG_ADMIN_PASSWORD"
 export TF_VAR_pg_admin_password="$PG_ADMIN_PASSWORD"
 
+
+# ---------------------------
+# Cloud selection
+# ---------------------------
+echo "☁️ Setting Azure cloud based on product..."
+if [ "$PRODUCT_IN" = "hrz" ]; then
+  az cloud set --name AzureUSGovernment
+else
+  az cloud set --name AzureCloud
+fi
+az cloud show --query name -o tsv
+
 # ---------------------------
 # Login + INIT on STATE subscription (backend)
 # ---------------------------
 echo "🔐 az login (STATE_SUB=$STATE_SUB)"
-az cloud set --name AzureUSGovernment
+# az cloud set --name AzureUSGovernment
 # az account clear 2>/dev/null || true
 az cloud show --query name -o tsv
 az account show --query "{tenantId:tenantId, subscriptionId:id, name:name}" -o json
@@ -89,7 +101,7 @@ az account set --subscription "$STATE_SUB"
 # pushd "$STACK_DIR" >/dev/null
 
 terraform init -input=false -reconfigure \
-  -backend-config="environment=usgovernment" \
+  -backend-config="environment=${ARM_ENVIRONMENT}" \
   -backend-config="tenant_id=${TENANT_ID}" \
   -backend-config="subscription_id=${STATE_SUB}" \
   -backend-config="resource_group_name=${STATE_RG}" \
@@ -141,6 +153,16 @@ exit "$ec"
 # export TARGET_SUB="62ae6908-cbcb-40cb-8773-54bd318ff7f9"
 # export CDBPG_ADMIN_PASSWORD='8XrAEg9YnExLcB_E'
 # export PG_ADMIN_PASSWORD='MYGNjDo9Gf9Vye!c'
+
+
+# export ENV_IN=dev
+# export PRODUCT_IN=pub
+# export TENANT_ID="dd58f16c-b85a-4d66-99e1-f86905453853"
+# export STATE_SUB="ee8a4693-54d4-4de8-842b-b6f35fc0674d"
+# export HUB_SUB="ee8a4693-54d4-4de8-842b-b6f35fc0674d"
+# export TARGET_SUB="57f8aa30-981c-4764-94f6-6691c4d5c01c"
+# export CDBPG_ADMIN_PASSWORD='zs3vh7Jsz_ZBbEEn'
+# export PG_ADMIN_PASSWORD='h9DkVHcJhFx!3!UG'
 
 # env | grep -E '^(ENV_IN|PRODUCT_IN|TENANT_ID|STATE_SUB|HUB_SUB|TARGET_SUB|CDBPG_ADMIN_PASSWORD|PG_ADMIN_PASSWORD)='
 

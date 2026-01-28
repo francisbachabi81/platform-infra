@@ -5,6 +5,7 @@ terraform {
     }
     azapi = {
       source = "Azure/azapi"
+      version = "~> 2.0"
     }
   }
 }
@@ -19,7 +20,9 @@ locals {
 
   cluster_body = {
     properties = {
-      administratorLogin         = var.administrator_login
+      # NOTE:
+      # AzAPI embedded schema may treat administratorLogin as read-only in some versions.
+      # So we omit it and only send the password.
       administratorLoginPassword = var.administrator_login_password
 
       postgresqlVersion = var.pg_version
@@ -63,7 +66,12 @@ resource "azapi_resource" "cluster" {
   parent_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${var.resource_group_name}"
 
   tags = var.tags
-  body = jsonencode(local.cluster_body_pruned)
+
+  # AzAPI v2+: body must be an object (NOT jsonencoded string)
+  body = local.cluster_body_pruned
+
+  # If you still run into schema drift, uncomment this:
+  # schema_validation_enabled = false
 
   lifecycle {
     precondition {
@@ -73,9 +81,6 @@ resource "azapi_resource" "cluster" {
   }
 }
 
-# ----------------------------
-# Optional: Private Endpoint
-# ----------------------------
 resource "azurerm_private_endpoint" "pe" {
   count               = local.is_private ? 1 : 0
   name                = coalesce(var.private_endpoint_name, "pe-${var.name}")
@@ -90,6 +95,7 @@ resource "azurerm_private_endpoint" "pe" {
     subresource_names              = var.private_endpoint_subresource_names
   }
 
+  # Prefer this over azurerm_private_dns_zone_group resource for compatibility
   private_dns_zone_group {
     name                 = coalesce(var.private_dns_zone_group_name, "pdzg-${var.name}")
     private_dns_zone_ids = [var.private_dns_zone_id]
@@ -98,9 +104,6 @@ resource "azurerm_private_endpoint" "pe" {
   tags = var.tags
 }
 
-# ----------------------------
-# Optional: Firewall rules (public mode)
-# ----------------------------
 resource "azapi_resource" "firewall_rule" {
   for_each = (!local.is_private && length(var.firewall_rules) > 0) ? { for r in var.firewall_rules : r.name => r } : {}
 
@@ -108,10 +111,10 @@ resource "azapi_resource" "firewall_rule" {
   name      = each.key
   parent_id = azapi_resource.cluster.id
 
-  body = jsonencode({
+  body = {
     properties = {
       startIpAddress = each.value.start_ip
       endIpAddress   = each.value.end_ip
     }
-  })
+  }
 }

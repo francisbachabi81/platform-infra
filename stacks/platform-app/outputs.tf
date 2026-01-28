@@ -30,23 +30,23 @@ output "features" {
     )
     postgres_created = try(length(module.postgres) > 0, false)
     redis_created    = try(length(module.redis1) > 0, false)
-    cdbpg_created    = try(length(module.cdbpg1) > 0, false)
-    cosmos_created   = try(length(module.cosmos1) > 0, false)
+    # cdbpg_created    = try(length(module.cdbpg1) > 0, false)
+    cosmos_created = try(length(module.cosmos1) > 0, false)
   }
 }
 
 output "ids" {
   value = {
-    kv1        = try(module.kv1[0].id, null)
-    sa1        = try(module.sa1[0].id, null)
-    cosmos1    = try(module.cosmos1[0].id, null)
-    aks1       = local.aks_id
-    aks        = local.aks_id
-    sbns1      = try(module.sbns1[0].id, null)
-    eventhub   = try(module.eventhub[0].id, null)
-    postgres   = try(module.postgres[0].id, null)
-    redis      = try(module.redis1[0].id, null)
-    cdbpg1     = try(module.cdbpg1[0].id, null)
+    kv1      = try(module.kv1[0].id, null)
+    sa1      = try(module.sa1[0].id, null)
+    cosmos1  = try(module.cosmos1[0].id, null)
+    aks1     = local.aks_id
+    aks      = local.aks_id
+    sbns1    = try(module.sbns1[0].id, null)
+    eventhub = try(module.eventhub[0].id, null)
+    postgres = try(module.postgres[0].id, null)
+    redis    = try(module.redis1[0].id, null)
+    # cdbpg1     = try(module.cdbpg1[0].id, null)
     funcapp1   = try(module.funcapp1[0].id, null)
     funcapp2   = try(module.funcapp2[0].id, null)
     plan1_func = try(module.plan1_func[0].id, null)
@@ -68,10 +68,10 @@ output "names" {
     eventhub    = try(module.eventhub[0].eventhub_name, null)
     postgres    = try(module.postgres[0].name, null)
     redis       = try(module.redis1[0].name, null)
-    cdbpg1      = try(module.cdbpg1[0].name, null)
-    funcapp1    = try(module.funcapp1[0].name, null)
-    funcapp2    = try(module.funcapp2[0].name, null)
-    plan1_func  = try(module.plan1_func[0].name, null)
+    # cdbpg1      = try(module.cdbpg1[0].name, null)
+    funcapp1   = try(module.funcapp1[0].name, null)
+    funcapp2   = try(module.funcapp2[0].name, null)
+    plan1_func = try(module.plan1_func[0].name, null)
   }
 }
 
@@ -198,12 +198,12 @@ output "postgres_replica" {
   }, null)
 }
 
-output "cosmosdb_postgresql" {
-  value = try({
-    id   = module.cdbpg1[0].id
-    name = module.cdbpg1[0].name
-  }, null)
-}
+# output "cosmosdb_postgresql" {
+#   value = try({
+#     id   = module.cdbpg1[0].id
+#     name = module.cdbpg1[0].name
+#   }, null)
+# }
 
 output "redis" {
   value = try({
