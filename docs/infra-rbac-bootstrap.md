@@ -101,11 +101,15 @@ az role definition update --role-definition ./kv-keys-creator.json
 
 ---
 
-## Delegated UAA (Key Vault — CMK only)
+## Delegated UAA (Key Vault — CMK + Secrets User only)
 
 ```bash
 KV_CRYPTO_ROLE_ID="$(az role definition list --name "Key Vault Crypto Service Encryption User" --query "[0].name" -o tsv)"
 ```
+
+````bash
+KV_SECRETS_USER_ROLE_ID="$(az role definition list --name "Key Vault Secrets User" --query "[0].name" -o tsv)"
+````
 
 ```bash
 az role assignment create --assignee-object-id "091b0bfa-694c-4bbf-8ebf-75c90cd2940b" --assignee-principal-type ServicePrincipal --role "User Access Administrator" --scope "/subscriptions/ec41aef1-269c-4633-8637-924c395ad181/resourceGroups/rg-pub-pr-cus-core-01/providers/Microsoft.KeyVault/vaults/kvt-pub-pr-cus-core-01"  --condition-version "2.0" --condition "(
@@ -113,7 +117,7 @@ az role assignment create --assignee-object-id "091b0bfa-694c-4bbf-8ebf-75c90cd2
       !(ActionMatches{'Microsoft.Authorization/roleAssignments/write'})
       OR (
         @Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId]
-          ForAnyOfAnyValues:GuidEquals { $KV_CRYPTO_ROLE_ID }
+          ForAnyOfAnyValues:GuidEquals { $KV_CRYPTO_ROLE_ID, $KV_SECRETS_USER_ROLE_ID }
       )
     )
     AND
@@ -121,7 +125,7 @@ az role assignment create --assignee-object-id "091b0bfa-694c-4bbf-8ebf-75c90cd2
       !(ActionMatches{'Microsoft.Authorization/roleAssignments/delete'})
       OR (
         @Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId]
-          ForAnyOfAnyValues:GuidEquals { $KV_CRYPTO_ROLE_ID }
+          ForAnyOfAnyValues:GuidEquals { $KV_CRYPTO_ROLE_ID, $KV_SECRETS_USER_ROLE_ID }
       )
     )
   )"
