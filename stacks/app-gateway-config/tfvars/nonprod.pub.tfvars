@@ -42,6 +42,7 @@ waf_policies = {
   "obs-internal-dev" = {
     mode                       = "Prevention"
     vpn_cidrs                  = ["192.168.1.0/24"]
+    restricted_paths           = []  
     allowed_countries          = ["US"]
     vpn_required_for_all_paths = true
 
@@ -72,6 +73,7 @@ waf_policies = {
   # "obs-internal-qa" = {
   #   mode                       = "Prevention"
   #   vpn_cidrs                  = ["192.168.1.0/24"]
+  #   restricted_paths           = []
   #   allowed_countries          = ["US"]
   #   vpn_required_for_all_paths = true
   #
