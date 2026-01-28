@@ -161,6 +161,10 @@ locals {
     # "qa.public.intterra.io"                   = "pubqa"
     # "public.intterra.io"                      = "pubprod"
     # "uat.public.intterra.io"                  = "pubuat"
+    "internal.dev.public.intterra.io"         = "pubintdev"      
+    "internal.qa.public.intterra.io"          = "pubintqa"   
+    "internal.uat.public.intterra.io"         = "pubintuat"
+    "internal.public.intterra.io"             = "pubintprod"   
     "privatelink.blob.core.windows.net"       = "plb"
     "privatelink.file.core.windows.net"       = "plf"
     "privatelink.queue.core.windows.net"      = "plq"
@@ -180,8 +184,12 @@ locals {
     # Gov
     "dev.horizon.intterra.io"                         = "hrzdev"
     "qa.horizon.intterra.io"                          = "hrzqa"
-    "horizon.intterra.io"                             = "hrzprod"
     "uat.horizon.intterra.io"                         = "hrzuat"
+    "horizon.intterra.io"                             = "hrzprod"
+    "internal.dev.horizon.intterra.io"                = "hrzintdev"      
+    "internal.qa.horizon.intterra.io"                 = "hrzintqa"      
+    "internal.uat.horizon.intterra.io"                = "hrzintuat"
+    "internal.horizon.intterra.io"                    = "hrzintprod"
     "privatelink.blob.core.usgovcloudapi.net"         = "plb"
     "privatelink.file.core.usgovcloudapi.net"         = "plf"
     "privatelink.queue.core.usgovcloudapi.net"        = "plq"
@@ -3097,7 +3105,7 @@ resource "azurerm_network_security_rule" "aks_allow_hub_to_privatelink_any_out" 
   priority                    = local.aks_hub_to_privatelink_priority[each.value.env]
   direction                   = "Outbound"
   access                      = "Allow"
-  protocol                    = "*"
+  protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "*"
   source_address_prefix       = local.aks_hub_node_cidr
@@ -3140,7 +3148,7 @@ resource "azurerm_network_security_rule" "aks_allow_dev_to_dev_privatelink_any_o
   priority                    = 352
   direction                   = "Outbound"
   access                      = "Allow"
-  protocol                    = "*"
+  protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "*"
   source_address_prefix       = local.aks_cidrs_dev.node
@@ -3182,7 +3190,7 @@ resource "azurerm_network_security_rule" "aks_allow_qa_to_qa_privatelink_any_out
   priority                    = 353
   direction                   = "Outbound"
   access                      = "Allow"
-  protocol                    = "*"
+  protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "*"
   source_address_prefix       = local.aks_cidrs_qa.node
@@ -3224,7 +3232,7 @@ resource "azurerm_network_security_rule" "aks_allow_prod_to_prod_privatelink_any
   priority                    = 352
   direction                   = "Outbound"
   access                      = "Allow"
-  protocol                    = "*"
+  protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "*"
   source_address_prefix       = local.aks_cidrs_prod.node
@@ -3266,7 +3274,7 @@ resource "azurerm_network_security_rule" "aks_allow_uat_to_uat_privatelink_any_o
   priority                    = 353
   direction                   = "Outbound"
   access                      = "Allow"
-  protocol                    = "*"
+  protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "*"
   source_address_prefix       = local.aks_cidrs_uat.node
