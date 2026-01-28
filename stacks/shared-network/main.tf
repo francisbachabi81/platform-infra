@@ -3147,7 +3147,10 @@ resource "azurerm_network_security_rule" "aks_allow_dev_to_dev_privatelink_any_o
   destination_address_prefix  = local.privatelink_subnet_cidrs_np.dev
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_dev_to_dev_pgflex_5432_out" {
@@ -3165,7 +3168,10 @@ resource "azurerm_network_security_rule" "aks_allow_dev_to_dev_pgflex_5432_out" 
   destination_address_prefix  = local.pgflex_subnet_cidrs_np.dev
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_qa_to_qa_privatelink_any_out" {
@@ -3183,7 +3189,10 @@ resource "azurerm_network_security_rule" "aks_allow_qa_to_qa_privatelink_any_out
   destination_address_prefix  = local.privatelink_subnet_cidrs_np.qa
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_qa_to_qa_pgflex_5432_out" {
@@ -3201,7 +3210,10 @@ resource "azurerm_network_security_rule" "aks_allow_qa_to_qa_pgflex_5432_out" {
   destination_address_prefix  = local.pgflex_subnet_cidrs_np.qa
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_prod_to_prod_privatelink_any_out" {
@@ -3219,7 +3231,10 @@ resource "azurerm_network_security_rule" "aks_allow_prod_to_prod_privatelink_any
   destination_address_prefix  = local.privatelink_subnet_cidrs_pr.prod
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_prod_to_prod_pgflex_5432_out" {
@@ -3237,7 +3252,10 @@ resource "azurerm_network_security_rule" "aks_allow_prod_to_prod_pgflex_5432_out
   destination_address_prefix  = local.pgflex_subnet_cidrs_pr.prod
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_uat_to_uat_privatelink_any_out" {
@@ -3255,7 +3273,10 @@ resource "azurerm_network_security_rule" "aks_allow_uat_to_uat_privatelink_any_o
   destination_address_prefix  = local.privatelink_subnet_cidrs_pr.uat
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 resource "azurerm_network_security_rule" "aks_allow_uat_to_uat_pgflex_5432_out" {
@@ -3273,7 +3294,10 @@ resource "azurerm_network_security_rule" "aks_allow_uat_to_uat_pgflex_5432_out" 
   destination_address_prefix  = local.pgflex_subnet_cidrs_pr.uat
   resource_group_name         = each.value.rg
   network_security_group_name = each.value.name
-  depends_on                  = local.aks_nsg_depends_on
+  depends_on                  = [
+    module.rg_hub,  module.rg_dev,  module.rg_qa,  module.rg_prod,  module.rg_uat,
+    module.nsg_hub, module.nsg_dev, module.nsg_qa, module.nsg_prod, module.nsg_uat
+  ]
 }
 
 # AKS ingress (plane-aware per subscription)
