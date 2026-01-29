@@ -177,7 +177,7 @@ jobs:
           [ -n "${TFVARS_PATH}" ] || { echo "❌ Missing tfvars. Tried: ${candidates[*]}"; exit 1; }
 
           write_output TFVARS_PATH     "$TFVARS_PATH"
-          write_output STATE_RG        "rg-core-infra-state"
+          write_output STATE_RG        "rg-core-tfstate-01"
           write_output STATE_SA        "sacoretfstateinfra"
           write_output STATE_CONTAINER "tfstate"
           write_output STATE_KEY       "afd-config/${PRODUCT}/${PLANE}/terraform.tfstate"
