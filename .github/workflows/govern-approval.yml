@@ -154,6 +154,9 @@ jobs:
             } else if (stack === "core") {
               workflow_id = "core-apply.yml";
               inputs = { product, plane: third, plan_run_id: planRunId };
+            } else if (stack === "afd-config") {
+              workflow_id = "afd-config-apply.yml";
+              inputs = { product, plane: third, plan_run_id: planRunId };
             } else if (stack === "platform-app") {
               workflow_id = "platform-apply.yml";
               inputs = { product, env: third, plan_run_id: planRunId }; // platform-app uses env
