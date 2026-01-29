@@ -114,8 +114,6 @@ terraform plan -input=false -lock-timeout=5m \
   -var-file="${TFVARS_PATH}" \
   -var "product=${PRODUCT_IN}" \
   -var "plane=${PLANE}" \
-  -var "hub_subscription_id=${HUB_SUB}" \
-  -var "tenant_id=${TENANT_ID}" \
   -detailed-exitcode -out=tfplan \
   2>&1 | tee plan-raw.txt
 ec=${PIPESTATUS[0]}
@@ -139,12 +137,12 @@ exit "$ec"
 # export HUB_SUB="df6dc63f-c4dc-4590-ba4b-f2ce9639ca6c"
 # export TARGET_SUB="62ae6908-cbcb-40cb-8773-54bd318ff7f9"
 
-export PLANE_IN=nonprod
-export PRODUCT_IN=pub
-export TENANT_ID="dd58f16c-b85a-4d66-99e1-f86905453853"
-export STATE_SUB="ee8a4693-54d4-4de8-842b-b6f35fc0674d"
-export HUB_SUB="ee8a4693-54d4-4de8-842b-b6f35fc0674d"
-export TARGET_SUB="ee8a4693-54d4-4de8-842b-b6f35fc0674d"
+# export PLANE_IN=nonprod
+# export PRODUCT_IN=pub
+# export TENANT_ID="dd58f16c-b85a-4d66-99e1-f86905453853"
+# export STATE_SUB="ee8a4693-54d4-4de8-842b-b6f35fc0674d"
+# export HUB_SUB="ee8a4693-54d4-4de8-842b-b6f35fc0674d"
+# export TARGET_SUB="ee8a4693-54d4-4de8-842b-b6f35fc0674d"
 
 # env | grep -E '^(ENV_IN|PRODUCT_IN|TENANT_ID|STATE_SUB|HUB_SUB|TARGET_SUB)='
 

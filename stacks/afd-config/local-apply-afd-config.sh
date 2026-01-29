@@ -4,40 +4,39 @@ set -euo pipefail
 # ---------------------------
 # INPUTS
 # ---------------------------
-ENV_IN="${ENV_IN:-dev}"          # dev|qa|uat|prod
-PRODUCT_IN="${PRODUCT_IN:-hrz}"  # hrz|pub
-TFPLAN_PATH="${TFPLAN_PATH:-tfplan}"  # path to existing plan file
+PLANE_IN="${PLANE_IN:-nonprod}"        # nonprod|prod|np|pr
+PRODUCT_IN="${PRODUCT_IN:-hrz}"        # hrz|pub
+TFPLAN_PATH="${TFPLAN_PATH:-tfplan}"   # path to existing plan file
+
+LOCK_TIMEOUT="${LOCK_TIMEOUT:-10m}"
+APPLY="${APPLY:-no}"                   # set APPLY=yes to actually apply
+AUTO_APPROVE="${AUTO_APPROVE:-no}"     # set AUTO_APPROVE=yes to skip prompt
 
 # ---------------------------
 # REQUIRED LOCAL SECRETS
 # ---------------------------
 : "${TENANT_ID:?set TENANT_ID}"
-: "${STATE_SUB:?set STATE_SUB}"      # backend/state subscription
-: "${HUB_SUB:?set HUB_SUB}"          # core/hub subscription for lookups
-: "${TARGET_SUB:?set TARGET_SUB}"    # target subscription for apply
-: "${CDBPG_ADMIN_PASSWORD:?set CDBPG_ADMIN_PASSWORD}"
-: "${PG_ADMIN_PASSWORD:?set PG_ADMIN_PASSWORD}"
-
-LOCK_TIMEOUT="${LOCK_TIMEOUT:-10m}"
-APPLY="${APPLY:-no}"                 # set APPLY=yes to actually apply
-AUTO_APPROVE="${AUTO_APPROVE:-no}"   # set AUTO_APPROVE=yes to skip prompt
+: "${STATE_SUB:?set STATE_SUB}"        # backend/state subscription
+: "${HUB_SUB:?set HUB_SUB}"            # core/hub subscription for lookups
+: "${TARGET_SUB:?set TARGET_SUB}"      # target subscription for apply
 
 # ---------------------------
-# Derive plane from env (same logic)
+# Validate / normalize PLANE
 # ---------------------------
-case "$ENV_IN" in
-  dev|qa|np)   PLANE="nonprod" ;;
-  uat|prod|pr) PLANE="prod" ;;
-  *) echo "Unknown env: $ENV_IN"; exit 1 ;;
+case "$PLANE_IN" in
+  nonprod|prod) PLANE="$PLANE_IN" ;;
+  np) PLANE="nonprod" ;;
+  pr) PLANE="prod" ;;
+  *) echo "❌ Unknown plane: $PLANE_IN (expected nonprod|prod|np|pr)"; exit 1 ;;
 esac
 
 # ---------------------------
-# Backend config (same values as workflow)
+# Backend config (plane-based)
 # ---------------------------
 STATE_RG="rg-core-tfstate-01"
 STATE_SA="sacoretfstateinfra"
 STATE_CONTAINER="tfstate"
-STATE_KEY="platform-app/${PRODUCT_IN}/${ENV_IN}/terraform.tfstate"
+STATE_KEY="app-config/${PRODUCT_IN}/${PLANE}/terraform.tfstate"
 
 # ---------------------------
 # Export env vars (same as workflow)
@@ -49,13 +48,10 @@ export ARM_TENANT_ID="$TENANT_ID"
 
 export TF_VAR_tenant_id="$TENANT_ID"
 export TF_VAR_product="$PRODUCT_IN"
-export TF_VAR_env="$ENV_IN"
 export TF_VAR_plane="$PLANE"
 export TF_VAR_subscription_id="$TARGET_SUB"
 export TF_VAR_hub_tenant_id="$TENANT_ID"
 export TF_VAR_hub_subscription_id="$HUB_SUB"
-export TF_VAR_cdbpg_admin_password="$CDBPG_ADMIN_PASSWORD"
-export TF_VAR_pg_admin_password="$PG_ADMIN_PASSWORD"
 
 # ---------------------------
 # Preflight: ensure tfplan exists
@@ -102,22 +98,21 @@ az account set --subscription "$TARGET_SUB"
 
 echo
 echo "🚨 About to APPLY existing plan:"
-echo " - product:   $PRODUCT_IN"
-echo " - env:       $ENV_IN"
-echo " - state key: $STATE_KEY"
-echo " - tfplan:    $TFPLAN_PATH"
+echo " - product:      $PRODUCT_IN"
+echo " - plane:        $PLANE"
+echo " - state key:    $STATE_KEY"
+echo " - tfplan:       $TFPLAN_PATH"
+echo " - lock timeout: $LOCK_TIMEOUT"
 echo
 
-# if [ "$APPLY" != "yes" ]; then
-#   echo "Dry-run mode: set APPLY=yes to actually apply."
-#   exit 0
-# fi
+if [ "$APPLY" != "yes" ]; then
+  echo "Dry-run mode: set APPLY=yes to actually apply."
+  exit 0
+fi
 
-# if [ "$AUTO_APPROVE" = "yes" ]; then
-#   terraform apply -input=false -lock-timeout="$LOCK_TIMEOUT" -auto-approve "$TFPLAN_PATH"
-# else
-#   terraform apply -input=false -lock-timeout="$LOCK_TIMEOUT" "$TFPLAN_PATH"
-# fi
-
-# terraform apply -input=false "$TFPLAN_PATH"
-terraform apply -input=false tfplan
+if [ "$AUTO_APPROVE" = "yes" ]; then
+  terraform apply -input=false -lock-timeout="$LOCK_TIMEOUT" -auto-approve "$TFPLAN_PATH"
+else
+  terraform apply -input=false -lock-timeout="$LOCK_TIMEOUT" "$TFPLAN_PATH"
+fi
+echo "✅ Apply complete."

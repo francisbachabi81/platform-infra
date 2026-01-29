@@ -39,18 +39,18 @@ locals {
 
   frontdoor = try(local.shared_outputs.frontdoor, null)
 
-  afd_profile_id       = try(local.frontdoor.profile_id, null)
-  afd_endpoint_id      = try(local.frontdoor.endpoint_id, null)
-  afd_profile_name     = try(local.frontdoor.profile_name, null)
-  afd_endpoint_name    = try(local.frontdoor.endpoint_name, null)
-  afd_sku_name         = try(local.frontdoor.sku_name, null)
+  afd_profile_id    = try(local.frontdoor.profile_id, null)
+  afd_endpoint_id   = try(local.frontdoor.endpoint_id, null)
+  afd_profile_name  = try(local.frontdoor.profile_name, null)
+  afd_endpoint_name = try(local.frontdoor.endpoint_name, null)
+  afd_sku_name      = try(local.frontdoor.sku_name, null)
 
   afd_profile_principal_id = try(local.frontdoor.profile_principal_id, null)
 
   # Core KV lookup (match your existing output naming patterns)
   core_kv = (
     lookup(local.core_outputs, "core_key_vault", null) != null ? lookup(local.core_outputs, "core_key_vault", null) :
-    lookup(local.core_outputs, "core_kvt", null)       != null ? lookup(local.core_outputs, "core_kvt", null) :
+    lookup(local.core_outputs, "core_kvt", null) != null ? lookup(local.core_outputs, "core_kvt", null) :
     null
   )
 
@@ -127,6 +127,7 @@ resource "azurerm_cdn_frontdoor_origin_group" "this" {
     successful_samples_required        = try(each.value.successful_samples_required, 3)
   }
 
+  # health_probe has required fields -> render explicitly with safe defaults
   health_probe {
     interval_in_seconds = try(each.value.probe.interval_in_seconds, 30)
     path                = try(each.value.probe.path, "/")
@@ -149,7 +150,7 @@ resource "azurerm_cdn_frontdoor_origin" "this" {
   origin_host_header             = try(each.value.origin_host_header, each.value.host_name)
   priority                       = try(each.value.priority, 1)
   weight                         = try(each.value.weight, 1000)
-  certificate_name_check_enabled = try(each.value.certificate_name_check_enabled, true)
+  certificate_name_check_enabled = each.value.certificate_name_check_enabled
 }
 
 # Rule sets
@@ -244,25 +245,35 @@ resource "azurerm_cdn_frontdoor_route" "this" {
   forwarding_protocol    = try(each.value.forwarding_protocol, "HttpsOnly")
   https_redirect_enabled = try(each.value.https_redirect_enabled, true)
 
-  patterns_to_match = try(each.value.patterns_to_match, ["/*"])
+  patterns_to_match   = try(each.value.patterns_to_match, ["/*"])
   supported_protocols = try(each.value.supported_protocols, ["Http", "Https"])
 
   # Attach domains (so the hostnames work)
   cdn_frontdoor_custom_domain_ids = [
-    for dk in try(each.value.custom_domain_keys, []) : azurerm_cdn_frontdoor_custom_domain.this[dk].id
+    for dk in coalesce(try(each.value.custom_domain_keys, null), []) :
+    azurerm_cdn_frontdoor_custom_domain.this[dk].id
   ]
 
   # Optional: attach rule sets
   cdn_frontdoor_rule_set_ids = [
-    for rk in try(each.value.rule_set_keys, []) : azurerm_cdn_frontdoor_rule_set.this[rk].id
+    for rk in coalesce(try(each.value.rule_set_keys, null), []) :
+    azurerm_cdn_frontdoor_rule_set.this[rk].id
   ]
+}
+
+locals {
+  waf_name = substr(
+    replace("wafafd${var.product}${local.plane_code}${var.region}01", "/[^0-9A-Za-z]/", ""),
+    0,
+    128
+  )
 }
 
 # WAF (Front Door) + Security Policy association
 resource "azurerm_cdn_frontdoor_firewall_policy" "this" {
   count = (local.afd_ready && var.waf_policy != null) ? 1 : 0
 
-  name                = "waf-afd-${var.product}-${local.plane_code}-${var.region}-01"
+  name                = local.waf_name
   resource_group_name = var.waf_resource_group_name
   sku_name            = var.waf_policy.sku_name
 
@@ -270,10 +281,10 @@ resource "azurerm_cdn_frontdoor_firewall_policy" "this" {
   mode    = var.waf_policy.mode
 
   managed_rule {
-  type    = var.waf_policy.managed_rule.type
-  version = var.waf_policy.managed_rule.version
-  action  = "Block"
-}
+    type    = var.waf_policy.managed_rule.type
+    version = var.waf_policy.managed_rule.version
+    action  = "Block"
+  }
 
   dynamic "custom_rule" {
     for_each = try(var.waf_policy.custom_rules, [])

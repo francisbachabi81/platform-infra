@@ -1,6 +1,6 @@
-product  = "pub"
-plane    = "nonprod"
-env      = "dev"
+product = "pub"
+plane   = "nonprod"
+env     = "dev"
 
 location = "Central US"
 region   = "cus"
@@ -33,8 +33,10 @@ origin_groups = {
   # DEV
   app-dev = {
     probe = {
-      protocol = "Https"
-      path     = "/health/ready"
+      interval_in_seconds = 30
+      path                = "/health/ready"
+      protocol            = "Https"
+      request_type        = "GET"
     }
   }
 
@@ -56,10 +58,11 @@ origin_groups = {
 origins = {
   # DEV
   app-dev-origin = {
-    origin_group_key   = "app-dev"
-    host_name          = "<APPGW_PUBLIC_IP_OR_FQDN>" #appgw.dev.public.intterra.io → A record to AppGW Public IP (origin target)
-    https_port         = 443
-    origin_host_header = "public.dev.public.intterra.io" # may change later
+    origin_group_key               = "app-dev"
+    host_name                      = "20.1.1.1" #appgw.dev.public.intterra.io → A record to AppGW Public IP (origin target)
+    https_port                     = 443
+    origin_host_header             = "public.dev.public.intterra.io" # may change later
+    certificate_name_check_enabled = false
   }
 
   # QA (enable when ready)

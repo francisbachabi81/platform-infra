@@ -425,3 +425,16 @@ stacks/platform-app/tfplan
 stacks/platform-app/plan.json
 scripts/.DS_Store
 .DS_Store
+stacks/afd-config/.terraform.lock.hcl
+stacks/afd-config/.terraform/providers/registry.terraform.io/hashicorp/azurerm/3.117.1/darwin_arm64/LICENSE.txt
+stacks/afd-config/.terraform/providers/registry.terraform.io/hashicorp/azurerm/3.117.1/darwin_arm64/terraform-provider-azurerm_v3.117.1_x5
+stacks/afd-config/local-apply-afd-config.sh
+stacks/afd-config/local-plan-afd-config.sh
+stacks/afd-config/plan-raw.txt
+stacks/afd-config/plan.json
+stacks/afd-config/plan.txt
+stacks/afd-config/tfplan
+stacks/afd-config/local-apply-afd-config.sh
+stacks/afd-config/local-plan-afd-config.sh
+stacks/afd-config/local-apply-afd-config.sh
+stacks/afd-config/local-plan-afd-config.sh

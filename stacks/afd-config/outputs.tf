@@ -1,27 +1,47 @@
-# shared-network/outputs.tf (add these)
-
 output "afd" {
+  description = "AFD shell identifiers from shared-network remote state (profile/endpoint)."
   value = {
     profile = {
-      id           = azurerm_cdn_frontdoor_profile.this.id
-      name         = azurerm_cdn_frontdoor_profile.this.name
-      principal_id = try(azurerm_cdn_frontdoor_profile.this.identity[0].principal_id, null)
+      id           = local.afd_profile_id
+      name         = local.afd_profile_name
+      principal_id = local.afd_profile_principal_id
+      sku_name     = local.afd_sku_name
     }
     endpoint = {
-      id       = azurerm_cdn_frontdoor_endpoint.this.id
-      name     = azurerm_cdn_frontdoor_endpoint.this.name
-      hostname = azurerm_cdn_frontdoor_endpoint.this.host_name
+      id   = local.afd_endpoint_id
+      name = local.afd_endpoint_name
+      # hostname is not currently exposed by shared-network output; keep null-safe
+      hostname = try(local.frontdoor.endpoint_hostname, null)
     }
   }
 }
 
-output "dns_zones" {
-  # adapt to your actual zone resources
-  value = {
-    public_intterra_io = {
-      name                = azurerm_dns_zone.public_intterra_io.name
-      resource_group_name = azurerm_dns_zone.public_intterra_io.resource_group_name
-      id                  = azurerm_dns_zone.public_intterra_io.id
-    }
-  }
+output "origin_groups" {
+  description = "Origin groups created by afd-config."
+  value       = { for k, v in azurerm_cdn_frontdoor_origin_group.this : k => v.id }
+}
+
+output "origins" {
+  description = "Origins created by afd-config."
+  value       = { for k, v in azurerm_cdn_frontdoor_origin.this : k => v.id }
+}
+
+output "custom_domains" {
+  description = "Custom domains created by afd-config."
+  value       = { for k, v in azurerm_cdn_frontdoor_custom_domain.this : k => v.id }
+}
+
+output "routes" {
+  description = "Routes created by afd-config."
+  value       = { for k, v in azurerm_cdn_frontdoor_route.this : k => v.id }
+}
+
+output "waf_policy_id" {
+  description = "Front Door WAF policy ID (if enabled)."
+  value       = try(azurerm_cdn_frontdoor_firewall_policy.this[0].id, null)
+}
+
+output "security_policy_id" {
+  description = "Front Door security policy ID (if enabled)."
+  value       = try(azurerm_cdn_frontdoor_security_policy.this[0].id, null)
 }

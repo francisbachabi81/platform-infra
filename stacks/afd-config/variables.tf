@@ -1,7 +1,7 @@
-variable "product" { type = string }  # hrz|pub (matches your convention)
-variable "plane"   { type = string }  # nonprod|prod
-variable "env"     { type = string }  # dev|qa|uat|prod (optional but useful for naming patterns)
-variable "region"  { type = string }  # usaz|cus|...
+variable "product" { type = string } # hrz|pub (matches your convention)
+variable "plane" { type = string }   # nonprod|prod
+variable "env" { type = string }     # dev|qa|uat|prod (optional but useful for naming patterns)
+variable "region" { type = string }  # usaz|cus|...
 variable "location" { type = string }
 
 variable "tags" {
@@ -38,8 +38,8 @@ variable "waf_resource_group_name" {
 # -------------------------
 variable "origin_groups" {
   type = map(object({
-    additional_latency_in_ms   = optional(number)
-    sample_size                = optional(number)
+    additional_latency_in_ms    = optional(number)
+    sample_size                 = optional(number)
     successful_samples_required = optional(number)
     probe = object({
       interval_in_seconds = optional(number)
@@ -53,15 +53,17 @@ variable "origin_groups" {
 
 variable "origins" {
   type = map(object({
-    origin_group_key                = string
-    host_name                       = string
-    origin_host_header              = optional(string)
-    http_port                       = optional(number)
-    https_port                      = optional(number)
-    enabled                         = optional(bool)
-    priority                        = optional(number)
-    weight                          = optional(number)
-    certificate_name_check_enabled  = optional(bool)
+    origin_group_key = string
+    host_name        = string
+
+    enabled            = optional(bool, true)
+    http_port          = optional(number, 80)
+    https_port         = optional(number, 443)
+    origin_host_header = optional(string)
+    priority           = optional(number, 1)
+    weight             = optional(number, 1000)
+
+    certificate_name_check_enabled = optional(bool, true)
   }))
   default = {}
 }
@@ -80,15 +82,15 @@ variable "rules" {
     match_https_only = optional(bool)
 
     url_redirect = optional(object({
-      destination_hostname = string            # REQUIRED
-      redirect_type        = optional(string)  # Moved | Found | TemporaryRedirect
+      destination_hostname = string           # REQUIRED
+      redirect_type        = optional(string) # Moved | Found | TemporaryRedirect
       destination_path     = optional(string)
       query_string         = optional(string)
       destination_fragment = optional(string)
     }))
 
     response_headers = optional(list(object({
-      action = string   # Append | Overwrite | Delete
+      action = string # Append | Overwrite | Delete
       name   = string
       value  = optional(string)
     })))
@@ -106,28 +108,28 @@ variable "customer_certificates" {
 
 variable "custom_domains" {
   type = map(object({
-    host_name               = string
-    certificate_type        = string # ManagedCertificate|CustomerCertificate
+    host_name                = string
+    certificate_type         = string # ManagedCertificate|CustomerCertificate
     customer_certificate_key = optional(string)
-    minimum_tls_version     = optional(string)
+    minimum_tls_version      = optional(string)
   }))
   default = {}
 }
 
 variable "routes" {
   type = map(object({
-    origin_group_key       = string
-    origin_keys            = list(string)
+    origin_group_key = string
+    origin_keys      = list(string)
 
     enabled                = optional(bool)
     forwarding_protocol    = optional(string) # HttpOnly|HttpsOnly|MatchRequest
     https_redirect_enabled = optional(bool)
 
-    patterns_to_match      = optional(list(string))
-    supported_protocols    = optional(list(string))
+    patterns_to_match   = optional(list(string))
+    supported_protocols = optional(list(string))
 
-    custom_domain_keys     = optional(list(string))
-    rule_set_keys          = optional(list(string))
+    custom_domain_keys = optional(list(string))
+    rule_set_keys      = optional(list(string))
   }))
   default = {}
 }
