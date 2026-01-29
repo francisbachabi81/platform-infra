@@ -140,6 +140,7 @@ output "frontdoor" {
     # IDs are module-defined; will be null if not exposed
     profile_id    = try(module.fd[0].profile_id, null)
     endpoint_id   = try(module.fd[0].endpoint_id, null)
+    profile_principal_id = try(module.fd[0].profile_principal_id, null)
     sku_name      = var.fd_sku_name
   }, null)
 }

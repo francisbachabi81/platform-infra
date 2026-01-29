@@ -958,7 +958,7 @@ module "funcapp1" {
   psc_scm_name         = "psc-${local.funcapp1_name_clean}-scm"
   scm_zone_group_name  = "pdns-${local.funcapp1_name_clean}-scm"
 
-  stack = { node_version = "20" }
+  stack = { node_version = "22" }
   app_settings = {
     FUNCTIONS_WORKER_RUNTIME = "node"
     WEBSITE_RUN_FROM_PACKAGE = "1"
@@ -1001,7 +1001,7 @@ module "funcapp2" {
   psc_scm_name         = "psc-${local.funcapp2_name_clean}-scm"
   scm_zone_group_name  = "pdns-${local.funcapp2_name_clean}-scm"
 
-  stack = { node_version = "20" }
+  stack = { node_version = "22" }
   app_settings = {
     FUNCTIONS_WORKER_RUNTIME = "node"
     WEBSITE_RUN_FROM_PACKAGE = "1"
@@ -1256,56 +1256,56 @@ module "postgres_replica" {
 }
 
 # PostgreSQL Elastic Cluster (env)
-locals {
-  # Keep DNS zone resolution pattern, but separate the PDZ name so you can adjust later if needed
-  _pg_elastic_pdz_pub  = "privatelink.postgres.database.azure.com"
-  _pg_elastic_pdz_gov  = "privatelink.postgres.database.usgovcloudapi.net"
-  _pg_elastic_pdz_name = var.product == "hrz" ? local._pg_elastic_pdz_gov : local._pg_elastic_pdz_pub
+# locals {
+#   # Keep DNS zone resolution pattern, but separate the PDZ name so you can adjust later if needed
+#   _pg_elastic_pdz_pub  = "privatelink.postgres.database.azure.com"
+#   _pg_elastic_pdz_gov  = "privatelink.postgres.database.usgovcloudapi.net"
+#   _pg_elastic_pdz_name = var.product == "hrz" ? local._pg_elastic_pdz_gov : local._pg_elastic_pdz_pub
 
-  # Elastic cluster uses Private Endpoint subnet (NOT delegated subnet)
-  pg_elastic_pe_subnet_id    = try(local.subnet_ids_from_state[var.pg_elastic_private_endpoint_subnet_name], null)
-  pg_elastic_private_zone_id = try(local.zone_ids_effective[local._pg_elastic_pdz_name], null)
+#   # Elastic cluster uses Private Endpoint subnet (NOT delegated subnet)
+#   pg_elastic_pe_subnet_id    = try(local.subnet_ids_from_state[var.pg_elastic_private_endpoint_subnet_name], null)
+#   pg_elastic_private_zone_id = try(local.zone_ids_effective[local._pg_elastic_pdz_name], null)
 
-  pg_elastic_name1 = "pgelc-${var.product}-${var.env}-${var.region}-01"
-}
+#   pg_elastic_name1 = "pgelc-${var.product}-${var.env}-${var.region}-01"
+# }
 
-module "postgres_elastic" {
-  count               = local.enable_both ? 1 : 0
-  source              = "../../modules/postgres-elastic"
-  name                = local.pg_elastic_name1
-  resource_group_name = local.env_rg_name
-  location            = var.location
+# module "postgres_elastic" {
+#   count               = local.enable_both ? 1 : 0
+#   source              = "../../modules/postgres-elastic"
+#   name                = local.pg_elastic_name1
+#   resource_group_name = local.env_rg_name
+#   location            = var.location
 
-  # Core
-  pg_version                   = var.pg_version
-  administrator_login_password = var.pg_admin_password
+#   # Core
+#   pg_version                   = var.pg_version
+#   administrator_login_password = var.pg_admin_password
 
-  # Sizing (elastic-specific)
-  coordinator_vcores     = var.pg_elastic_coordinator_vcores
-  coordinator_storage_mb = var.pg_elastic_coordinator_storage_mb
-  worker_count           = var.pg_elastic_worker_count
-  worker_vcores          = var.pg_elastic_worker_vcores
-  worker_storage_mb      = var.pg_elastic_worker_storage_mb
+#   # Sizing (elastic-specific)
+#   coordinator_vcores     = var.pg_elastic_coordinator_vcores
+#   coordinator_storage_mb = var.pg_elastic_coordinator_storage_mb
+#   worker_count           = var.pg_elastic_worker_count
+#   worker_vcores          = var.pg_elastic_worker_vcores
+#   worker_storage_mb      = var.pg_elastic_worker_storage_mb
 
-  ha_enabled = var.pg_ha_enabled
+#   ha_enabled = var.pg_ha_enabled
 
-  # Networking (private via PE)
-  network_mode = "private"
-  private_endpoint_subnet_id = coalesce(
-    local.pg_elastic_pe_subnet_id,
-    var.pg_elastic_private_endpoint_subnet_id,
-    null
-  )
-  private_dns_zone_id = local.pg_elastic_private_zone_id
+#   # Networking (private via PE)
+#   network_mode = "private"
+#   private_endpoint_subnet_id = coalesce(
+#     local.pg_elastic_pe_subnet_id,
+#     var.pg_elastic_private_endpoint_subnet_id,
+#     null
+#   )
+#   private_dns_zone_id = local.pg_elastic_private_zone_id
 
-  # Private endpoint groupIds can differ; keep configurable
-  private_endpoint_subresource_names = var.pg_elastic_private_endpoint_subresource_names
+#   # Private endpoint groupIds can differ; keep configurable
+#   private_endpoint_subresource_names = var.pg_elastic_private_endpoint_subresource_names
 
-  # Tags
-  tags = merge(local.tags_common, local.tags_postgres, var.tags, { role = "primary" })
+#   # Tags
+#   tags = merge(local.tags_common, local.tags_postgres, var.tags, { role = "primary" })
 
-  depends_on = [data.azurerm_resource_group.env, module.postgres]
-}
+#   depends_on = [data.azurerm_resource_group.env, module.postgres]
+# }
 
 # Redis (env)
 locals {
