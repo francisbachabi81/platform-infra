@@ -116,7 +116,7 @@ jobs:
           PLANE="${{ steps.sel.outputs.PLANE }}"
           PRODUCT="${{ steps.sel.outputs.PRODUCT }}"
 
-          echo "STATE_RG=rg-core-infra-state"     >> "$GITHUB_OUTPUT"
+          echo "STATE_RG=rg-core-tfstate-01"     >> "$GITHUB_OUTPUT"
           echo "STATE_SA=sacoretfstateinfra"      >> "$GITHUB_OUTPUT"
           echo "STATE_CONTAINER=tfstate"          >> "$GITHUB_OUTPUT"
           echo "STATE_KEY=afd-config/${PRODUCT}/${PLANE}/terraform.tfstate" >> "$GITHUB_OUTPUT"
