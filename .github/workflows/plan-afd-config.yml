@@ -213,6 +213,10 @@ jobs:
           ARM_SUBSCRIPTION_ID: ${{ steps.sel.outputs.STATE_SUB }}
           ARM_ENVIRONMENT:     ${{ steps.sel.outputs.ARM_ENV }}
         run: |
+          echo "STATE_RG=${{ steps.paths.outputs.STATE_RG }}"
+          echo "STATE_SA=${{ steps.paths.outputs.STATE_SA }}"
+          echo "STATE_CONTAINER=${{ steps.paths.outputs.STATE_CONTAINER }}"
+          echo "STATE_KEY=${{ steps.paths.outputs.STATE_KEY }}"
           terraform init -input=false -reconfigure \
             -backend-config="environment=${{ steps.sel.outputs.ARM_ENV }}" \
             -backend-config="tenant_id=${{ steps.sel.outputs.TENANT }}" \
