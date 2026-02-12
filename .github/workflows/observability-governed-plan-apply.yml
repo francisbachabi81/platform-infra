@@ -1,0 +1,832 @@
+name: "Deploy • Observability"
+run-name: >-
+  ${{
+    inputs.mode == 'apply'
+      && format('🚀 Observability | APPLY | {0}-{1} | {2} | #{3}', inputs.product, inputs.env, github.ref_name, github.run_number)
+      || format('🚀 Observability | PLAN  | {0}-{1} | {2} | #{3}', inputs.product, inputs.env, github.ref_name, github.run_number)
+  }}
+# run-name: "${{ format('🧩 {0} | {1}-{2} | {3} | #{4}', github.workflow, inputs.product, inputs.env, github.ref_name, github.run_number) }}"
+
+concurrency:
+  group: obs-governed-${{ inputs.mode }}-${{ inputs.product }}-${{ inputs.env }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "mode=plan (creates approval issue) or mode=apply (uses approved plan artifact)"
+        type: choice
+        options: [plan, apply]
+        default: plan
+      env:
+        description: "Environment"
+        type: choice
+        options: [dev, qa, uat, prod]
+        default: dev
+      product:
+        description: "Product"
+        type: choice
+        options: [hrz, pub]
+        default: hrz
+      plan_run_id:
+        description: "Required when mode=apply (Actions run id from the approved plan)"
+        type: string
+        required: false
+      terraform_version:
+        description: "Terraform version (plan only)"
+        type: string
+        default: "1.13.3"
+
+permissions:
+  id-token: write
+  contents: read
+  issues: write
+  actions: read
+
+env:
+  # ARM_USE_OIDC: true
+  TF_IN_AUTOMATION: true
+  APPROVERS_CSV: "francisbachabi1206,gessnerda"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # MODE=PLAN (creates plan artifact + approval issue)
+  # ---------------------------------------------------------------------------
+  plan:
+    if: ${{ inputs.mode == 'plan' }}
+    # name: "Plan (observability: ${{ inputs.env }}.${{ inputs.product }})"
+    name: "Plan (observability)"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.env }}
+    defaults:
+      run:
+        working-directory: stacks/observability
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine Terraform version
+        id: tfver
+        shell: bash
+        run: |
+          set -euo pipefail
+          write_output() { printf '%s<<__OUT__\n%s\n__OUT__\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
+          TV="${{ inputs.terraform_version }}"
+          if [ -z "${TV}" ]; then TV="1.13.3"; fi
+          write_output version "$TV"
+
+      - name: Cache Terraform plugins
+        uses: actions/cache@v4
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: tf-${{ runner.os }}-${{ steps.tfver.outputs.version }}
+
+      - name: Configure Terraform plugin cache dir
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.terraform.d/plugin-cache
+          echo 'plugin_cache_dir="~/.terraform.d/plugin-cache"' > ~/.terraformrc
+
+      - name: Select cloud + subscriptions
+        id: sel
+        shell: bash
+        run: |
+          set -euo pipefail
+          write_env()    { printf '%s<<__ENV__\n%s\n__ENV__\n' "$1" "$2" >> "$GITHUB_ENV"; }
+          write_output() { printf '%s<<__OUT__\n%s\n__OUT__\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
+          trim(){ printf "%s" "$1" | tr -d '[:space:]'; }
+
+          ENV_IN="${{ inputs.env }}"
+          PRODUCT="${{ inputs.product }}"
+
+          case "$ENV_IN" in
+            dev|qa)   PLANE="nonprod" ;;
+            uat|prod) PLANE="prod"    ;;
+            *) echo "Unknown env: $ENV_IN"; exit 1 ;;
+          esac
+
+          if [ "$PRODUCT" = "hrz" ]; then
+            CLOUD_ENV="AzureUSGovernment"; ARM_ENV="usgovernment"
+            TENANT_RAW='${{ secrets.AZ_TENANT_HRZ }}'
+            CLIENT_ID_RAW='${{ secrets.AZURE_CLIENT_ID_HRZ }}'
+            AUDIENCE="api://AzureADTokenExchangeUSGov"
+
+            STATE_SUB_RAW='${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}'
+            CORE_SUB_RAW='${{ secrets.AZ_SUB_HRZ_CORE }}'
+
+            DEV_SUB_RAW='${{ secrets.AZ_SUB_HRZ_DEV }}'
+            QA_SUB_RAW='${{ secrets.AZ_SUB_HRZ_QA }}'
+            UAT_SUB_RAW='${{ secrets.AZ_SUB_HRZ_UAT }}'
+            PROD_SUB_RAW='${{ secrets.AZ_SUB_HRZ_PROD }}'
+
+            TARGET_SUB_RAW=$([ "$PLANE" = "prod" ] && echo '${{ secrets.AZ_SUB_HRZ_PROD }}' || echo '${{ secrets.AZ_SUB_HRZ_NONPROD }}')
+
+            case "$ENV_IN" in
+              dev)  ENV_SUB_RAW="$DEV_SUB_RAW"  ;;
+              qa)   ENV_SUB_RAW="$QA_SUB_RAW"   ;;
+              uat)  ENV_SUB_RAW="$UAT_SUB_RAW"  ;;
+              prod) ENV_SUB_RAW="$PROD_SUB_RAW" ;;
+              *) echo "Unknown env for ENV_SUB mapping: $ENV_IN"; exit 1 ;;
+            esac
+          else
+            CLOUD_ENV="AzureCloud"; ARM_ENV="public"
+            TENANT_RAW='${{ secrets.AZ_TENANT_PUB }}'
+            CLIENT_ID_RAW='${{ secrets.AZURE_CLIENT_ID_PUB }}'
+            AUDIENCE="api://AzureADTokenExchange"
+
+            STATE_SUB_RAW='${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}'
+            CORE_SUB_RAW='${{ secrets.AZ_SUB_PUB_CORE }}'
+
+            DEV_SUB_RAW='${{ secrets.AZ_SUB_PUB_DEV }}'
+            QA_SUB_RAW='${{ secrets.AZ_SUB_PUB_QA }}'
+            UAT_SUB_RAW='${{ secrets.AZ_SUB_PUB_UAT }}'
+            PROD_SUB_RAW='${{ secrets.AZ_SUB_PUB_PROD }}'
+
+            TARGET_SUB_RAW=$([ "$PLANE" = "prod" ] && echo '${{ secrets.AZ_SUB_PUB_PROD }}' || echo '${{ secrets.AZ_SUB_PUB_NONPROD }}')
+
+            case "$ENV_IN" in
+              dev)  ENV_SUB_RAW="$DEV_SUB_RAW"  ;;
+              qa)   ENV_SUB_RAW="$QA_SUB_RAW"   ;;
+              uat)  ENV_SUB_RAW="$UAT_SUB_RAW"  ;;
+              prod) ENV_SUB_RAW="$PROD_SUB_RAW" ;;
+              *) echo "Unknown env for ENV_SUB mapping: $ENV_IN"; exit 1 ;;
+            esac
+          fi
+
+          TENANT=$(trim "$TENANT_RAW")
+          CLIENT_ID=$(trim "$CLIENT_ID_RAW")
+          STATE_SUB=$(trim "$STATE_SUB_RAW")
+          CORE_SUB=$(trim "$CORE_SUB_RAW")
+          TARGET_SUB=$(trim "$TARGET_SUB_RAW")
+          ENV_SUB=$(trim "$ENV_SUB_RAW")
+
+          DEV_SUB=$(trim "$DEV_SUB_RAW")
+          QA_SUB=$(trim "$QA_SUB_RAW")
+          UAT_SUB=$(trim "$UAT_SUB_RAW")
+          PROD_SUB=$(trim "$PROD_SUB_RAW")
+
+          write_output ENV        "$ENV_IN"
+          write_output PRODUCT    "$PRODUCT"
+          write_output PLANE      "$PLANE"
+          write_output CLOUD_ENV  "$CLOUD_ENV"
+          write_output ARM_ENV    "$ARM_ENV"
+          write_output TENANT     "$TENANT"
+          write_output CLIENT_ID  "$CLIENT_ID"
+          write_output AUDIENCE   "$AUDIENCE"
+          write_output STATE_SUB  "$STATE_SUB"
+          write_output CORE_SUB   "$CORE_SUB"
+          write_output TARGET_SUB "$TARGET_SUB"
+          write_output ENV_SUB    "$ENV_SUB"
+
+          write_env ARM_ENVIRONMENT "$ARM_ENV"
+          write_env ARM_TENANT_ID   "$TENANT"
+          write_env ARM_CLIENT_ID   "$CLIENT_ID"
+
+          write_env TF_VAR_core_tenant_id        "$TENANT"
+          write_env TF_VAR_core_subscription_id  "$CORE_SUB"
+          write_env TF_VAR_env_tenant_id         "$TENANT"
+          write_env TF_VAR_env_subscription_id   "$ENV_SUB"
+
+          write_env TF_VAR_subscription_id       "$TARGET_SUB"
+          write_env TF_VAR_tenant_id             "$TENANT"
+
+          if [ "$PLANE" = "nonprod" ]; then
+            write_env TF_VAR_dev_subscription_id "$DEV_SUB"
+            write_env TF_VAR_dev_tenant_id       "$TENANT"
+            write_env TF_VAR_qa_subscription_id  "$QA_SUB"
+            write_env TF_VAR_qa_tenant_id        "$TENANT"
+          else
+            write_env TF_VAR_prod_subscription_id "$PROD_SUB"
+            write_env TF_VAR_prod_tenant_id       "$TENANT"
+            write_env TF_VAR_uat_subscription_id  "$UAT_SUB"
+            write_env TF_VAR_uat_tenant_id        "$TENANT"
+          fi
+
+          write_env TF_VAR_product "$PRODUCT"
+          write_env TF_VAR_env     "$ENV_IN"
+          write_env TF_VAR_plane   "$PLANE"
+
+      - name: Resolve tfvars & backend key (env-based)
+        id: paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          write_output() { printf '%s<<__OUT__\n%s\n__OUT__\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
+
+          ENV="${{ steps.sel.outputs.ENV }}"
+          PRODUCT="${{ steps.sel.outputs.PRODUCT }}"
+
+          TFVARS_DIR="${GITHUB_WORKSPACE}/stacks/observability/tfvars"
+          echo "Listing $TFVARS_DIR:"; ls -la "$TFVARS_DIR" || true
+
+          candidates=(
+            "${ENV}.${PRODUCT}.tfvars"
+            "${ENV}.tfvars"
+            "default.${ENV}.tfvars"
+            "default.tfvars"
+          )
+
+          TFVARS_PATH=""
+          for f in "${candidates[@]}"; do
+            if [ -f "${TFVARS_DIR}/${f}" ]; then
+              TFVARS_PATH="${TFVARS_DIR}/${f}"
+              echo "Using tfvars: ${f}"
+              break
+            fi
+          done
+
+          [ -n "${TFVARS_PATH}" ] || { echo "Missing tfvars. Tried: ${candidates[*]}"; exit 1; }
+
+          write_output TFVARS_PATH      "$TFVARS_PATH"
+          write_output STATE_RG         "rg-core-tfstate-01"
+          write_output STATE_SA         "sacoretfstateinfra"
+          write_output STATE_CONTAINER  "tfstate"
+          write_output STATE_KEY        "observability/${PRODUCT}/${ENV}/terraform.tfstate"
+
+      - name: Export remote-state vars to Terraform
+        shell: bash
+        run: |
+          set -euo pipefail
+          write_env() { printf '%s<<__ENV__\n%s\n__ENV__\n' "$1" "$2" >> "$GITHUB_ENV"; }
+          write_env TF_VAR_state_rg        "${{ steps.paths.outputs.STATE_RG }}"
+          write_env TF_VAR_state_sa        "${{ steps.paths.outputs.STATE_SA }}"
+          write_env TF_VAR_state_container "${{ steps.paths.outputs.STATE_CONTAINER }}"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ steps.tfver.outputs.version }}
+
+      - name: Azure Login (state subscription for backend)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ steps.sel.outputs.CLIENT_ID }}
+          tenant-id:       ${{ steps.sel.outputs.TENANT }}
+          subscription-id: ${{ steps.sel.outputs.STATE_SUB }}
+          environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
+          audience:        ${{ steps.sel.outputs.AUDIENCE }}
+
+      - name: Terraform Init (backend in state/prod subscription)
+        env:
+          ARM_USE_CLI: true
+          ARM_USE_AZUREAD: true
+          ARM_CLIENT_ID:       ${{ steps.sel.outputs.CLIENT_ID }}
+          ARM_TENANT_ID:       ${{ steps.sel.outputs.TENANT }}
+          ARM_SUBSCRIPTION_ID: ${{ steps.sel.outputs.STATE_SUB }}
+          ARM_ENVIRONMENT:     ${{ steps.sel.outputs.ARM_ENV }}
+        run: |
+          terraform init -input=false -reconfigure             -backend-config="environment=${{ steps.sel.outputs.ARM_ENV }}"             -backend-config="tenant_id=${{ steps.sel.outputs.TENANT }}"             -backend-config="subscription_id=${{ steps.sel.outputs.STATE_SUB }}"             -backend-config="resource_group_name=${{ steps.paths.outputs.STATE_RG }}"             -backend-config="storage_account_name=${{ steps.paths.outputs.STATE_SA }}"             -backend-config="container_name=${{ steps.paths.outputs.STATE_CONTAINER }}"             -backend-config="key=${{ steps.paths.outputs.STATE_KEY }}"             -backend-config="use_azuread_auth=true"             -backend-config="use_cli=true"
+
+      - name: Azure Login (target subscription for plan)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ steps.sel.outputs.CLIENT_ID }}
+          tenant-id:       ${{ steps.sel.outputs.TENANT }}
+          subscription-id: ${{ steps.sel.outputs.TARGET_SUB }}
+          environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
+          audience:        ${{ steps.sel.outputs.AUDIENCE }}
+
+      - name: Terraform Fmt & Validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform fmt -recursive
+          terraform validate
+
+      - name: Plan (detailed exit code)
+        id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          terraform plan -input=false -lock-timeout=5m             -var-file="${{ steps.paths.outputs.TFVARS_PATH }}"             -var "product=${{ steps.sel.outputs.PRODUCT }}"             -var "env=${{ steps.sel.outputs.ENV }}"             -detailed-exitcode -out=tfplan             2>&1 | tee plan-raw.txt
+          ec=${PIPESTATUS[0]}
+          set -e
+          echo "exitcode=${ec}" >> "$GITHUB_OUTPUT"
+
+          if [ "$ec" = "0" ] || [ "$ec" = "2" ]; then
+            terraform show -no-color tfplan > plan.txt
+          else
+            if [ ! -f tfplan ]; then
+              cp plan-raw.txt plan.txt
+            fi
+          fi
+
+      - name: Sanity check plan output (no embedded errors)
+        id: sanity
+        if: ${{ success() && (steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -q '^Error:' plan.txt; then
+            echo "Found 'Error:' lines in plan.txt; failing."
+            exit 1
+          fi
+
+      - name: Summarize plan
+        id: summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          write_output() { printf '%s<<__OUT__\n%s\n__OUT__\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
+
+          if grep -qiE "^no changes(\.|)$" plan.txt; then
+            SUM="No changes. Infrastructure is up-to-date."
+          else
+            SUM="$(grep -E '^Plan: ' plan.txt | tail -n1 || true)"
+            if [ -z "${SUM}" ]; then
+              SUM="(No 'Plan:' line found)"
+              echo "::group::Plan tail"; tail -n 10 plan.txt; echo "::endgroup::"
+            fi
+          fi
+
+          write_output summary "${SUM}"
+          {
+            echo "## Terraform plan summary"
+            echo
+            echo "${SUM}"
+            echo
+            echo "[View full run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+            echo
+            echo "Artifact: \`observability-plan-${{ github.run_id }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Parse plan JSON for changes
+        id: parse
+        if: ${{ success() && (steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform show -json tfplan > plan.json
+          COUNT=$(jq '[.resource_changes[] | select((.change.actions | index("no-op")) | not)] | length' plan.json)
+          echo "changes_count=${COUNT}" >> "$GITHUB_OUTPUT"
+          if [ "${COUNT}" -gt 0 ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "${COUNT}" -gt 0 ] && [ "${{ steps.plan.outputs.exitcode }}" = "0" ]; then
+            echo "::warning::Detected changes from JSON but exitcode=0; will treat as changes."
+          fi
+
+      - name: Collect status / error summary
+        id: status
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC_FILE="plan-raw.txt"
+          if [ ! -f "$SRC_FILE" ] && [ -f "plan.txt" ]; then
+            SRC_FILE="plan.txt"
+          fi
+
+          ERR_COUNT=0
+          ERR_EXCERPT=""
+          if [ -f "$SRC_FILE" ]; then
+            ERR_LINES="$(grep -E '(^Error:|^[[:space:]]*│[[:space:]]*Error:)' "$SRC_FILE" || true)"
+            if [ -n "$ERR_LINES" ]; then
+              ERR_COUNT="$(printf '%s\n' "$ERR_LINES" | sed '/^[[:space:]]*$/d' | wc -l | tr -d ' ')"
+              ERR_EXCERPT="$(printf '%s\n' "$ERR_LINES" | head -n 10)"
+            fi
+          fi
+
+          echo "error_count=${ERR_COUNT}" >> "$GITHUB_OUTPUT"
+          {
+            echo 'error_excerpt<<EOF_ERROR'
+            printf '%s\n' "${ERR_EXCERPT}"
+            echo 'EOF_ERROR'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Mark pipeline had errors
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          echo "HAS_PIPELINE_FAILURE=true" >> "$GITHUB_ENV"
+
+      - name: Persist metadata for post job (no logic change)
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "APPROVERS_CSV=${{ env.APPROVERS_CSV }}"
+            echo "PRODUCT=${{ steps.sel.outputs.PRODUCT }}"
+            echo "PLANE=${{ steps.sel.outputs.PLANE }}"
+            echo "ENVIRONMENT=${{ steps.sel.outputs.ENV }}"
+            echo "PLAN_SUMMARY=${{ steps.summary.outputs.summary }}"
+            echo "STATE_KEY=${{ steps.paths.outputs.STATE_KEY }}"
+            echo "ERROR_COUNT=${{ steps.status.outputs.error_count }}"
+            echo "PLAN_EXITCODE=${{ steps.plan.outputs.exitcode }}"
+          } > meta.env
+
+          printf '%s' "${{ steps.status.outputs.error_excerpt }}" > error_excerpt.txt || true
+
+          if [ "${HAS_PIPELINE_FAILURE:-}" = "true" ]; then
+            echo "HAS_PIPELINE_FAILURE=true" >> meta.env
+          fi
+
+      - name: Upload plan
+        if: ${{ success() && (steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: observability-plan-${{ github.run_id }}
+          if-no-files-found: error
+          path: |
+            ${{ github.workspace }}/stacks/observability/tfplan
+            ${{ github.workspace }}/stacks/observability/plan.txt
+            ${{ github.workspace }}/stacks/observability/plan.json
+
+      - name: Upload post-job metadata bundle
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: observability-plan-meta-${{ github.run_id }}
+          if-no-files-found: error
+          path: |
+            ${{ github.workspace }}/stacks/observability/meta.env
+            ${{ github.workspace }}/stacks/observability/error_excerpt.txt
+
+  plan_post:
+    if: ${{ inputs.mode == 'plan' }}
+    name: "Post | approval issue"
+    needs: [plan]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download metadata bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: observability-plan-meta-${{ github.run_id }}
+          path: ./bundle
+
+      - name: Load metadata into env
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat ./bundle/meta.env >> "$GITHUB_ENV"
+          {
+            echo 'ERROR_EXCERPT<<EOF_ERROR'
+            cat ./bundle/error_excerpt.txt || true
+            echo 'EOF_ERROR'
+          } >> "$GITHUB_ENV"
+
+      - name: Open approval issue
+        if: ${{ always() }}
+        uses: actions/github-script@v7
+        env:
+          APPROVERS_CSV: ${{ env.APPROVERS_CSV }}
+          PRODUCT:       ${{ env.PRODUCT }}
+          ENVIRONMENT:   ${{ env.ENVIRONMENT }}
+          PLAN_SUMMARY:  ${{ env.PLAN_SUMMARY }}
+          STATE_KEY:     ${{ env.STATE_KEY }}
+          ERROR_COUNT:   ${{ env.ERROR_COUNT }}
+          ERROR_EXCERPT: ${{ env.ERROR_EXCERPT }}
+          PLAN_EXITCODE: ${{ env.PLAN_EXITCODE }}
+          HAS_PIPELINE_FAILURE: ${{ env.HAS_PIPELINE_FAILURE }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const product      = process.env.PRODUCT || '';
+            const envVal       = process.env.ENVIRONMENT || '';
+            const planSummary  = process.env.PLAN_SUMMARY || '';
+            const stateKey     = process.env.STATE_KEY || '';
+            const errorCount   = parseInt(process.env.ERROR_COUNT || '0', 10) || 0;
+            const planExitCode = process.env.PLAN_EXITCODE || '';
+            const pipelineFailed = process.env.HAS_PIPELINE_FAILURE === 'true';
+            const errorExcerpt = process.env.ERROR_EXCERPT || '';
+
+            const hasErrors = pipelineFailed || errorCount > 0;
+
+            const approvers = (process.env.APPROVERS_CSV || '')
+              .split(',')
+              .map(s => s.trim())
+              .filter(Boolean);
+            const firstApprover = approvers[0];
+
+            const branchRaw  = process.env.GITHUB_REF || '';
+            const branch     = branchRaw.replace('refs/heads/', '') || 'detached';
+            const shortSha   = (process.env.GITHUB_SHA || '').slice(0, 7);
+            const runNum     = process.env.GITHUB_RUN_NUMBER;
+            const runId      = process.env.GITHUB_RUN_ID;
+            const serverUrl  = process.env.GITHUB_SERVER_URL;
+            const repo       = process.env.GITHUB_REPOSITORY;
+            const runUrl     = `${serverUrl}/${repo}/actions/runs/${runId}`;
+
+            let headlineStatus;
+            if (hasErrors) {
+              headlineStatus = `⚠️ This plan run had errors. Please review the Actions logs before approving. (Error lines in plan.txt: ${errorCount})`;
+            } else if (planExitCode === '2') {
+              headlineStatus = '✅ Plan succeeded with pending changes.';
+            } else if (planExitCode === '0') {
+              headlineStatus = '✅ Plan succeeded with no changes.';
+            } else {
+              headlineStatus = 'ℹ️ Plan status is not fully determined from exit code.';
+            }
+
+            let titlePrefix = 'APPROVAL: observability';
+            if (hasErrors) {
+              titlePrefix += ' (WITH ERRORS)';
+            }
+            const title =
+              titlePrefix +
+              ' | ' + product + '-' + envVal +
+              ' | ' + branch +
+              ' | #' + runNum +
+              ' | run ' + runId +
+              ' (' + shortSha + ')';
+
+            const statusTag = hasErrors ? '❌ WITH ERRORS' : '✅ clean';
+            const errorBlock = (hasErrors && errorExcerpt) ? `#### Error excerpt from Terraform output\n\`\`\`text\n${errorExcerpt}\n\`\`\`\n` : '';
+
+            const body = `
+            **Plan ready (${statusTag})**
+            - **Stack:** observability
+            - **Product:** ${product}
+            - **Env:** ${envVal}
+            - **Branch:** ${branchRaw}
+            - **Commit:** ${process.env.GITHUB_SHA}
+            - **Run:** ${runUrl}
+            - **State key:** \`${stateKey}\`
+
+            **Summary:** ${planSummary}
+
+            ${headlineStatus}
+
+            ${hasErrors ? '> ⚠️ One or more steps in this workflow failed or errors were detected in the plan output. Do **not** approve until the errors are understood and resolved.\n' : ''}
+
+            ${errorBlock}
+
+            **Artifact:** \`observability-plan-${runId}\`
+            **JSON:** \`plan.json\`
+
+            **Approve by commenting:** \`/approve ${runId}\`
+            **Reject by commenting:** \`/reject ${runId}\`
+            `;
+
+            const resp = await github.rest.issues.create({
+              ...context.repo,
+              title,
+              body,
+              assignees: firstApprover ? [firstApprover] : undefined,
+              labels: [
+                'stack:observability',
+                `product:${product}`,
+                `env:${envVal}`,
+                `branch:${branch}`
+              ]
+            });
+            core.info(`Created issue #${resp.data.number}`);
+
+  # ---------------------------------------------------------------------------
+  # MODE=APPLY (govern dispatches this with plan_run_id)
+  # ---------------------------------------------------------------------------
+  apply:
+    if: ${{ inputs.mode == 'apply' }}
+    # name: "Apply (observability: ${{ inputs.env }}.${{ inputs.product }})"
+    name: "Apply (observability)"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.env }}
+    defaults:
+      run:
+        working-directory: stacks/observability
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guard - require plan_run_id for apply
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${{ inputs.plan_run_id }}" ]; then
+            echo "plan_run_id is required when mode=apply"
+            exit 1
+          fi
+
+      - name: Select cloud + subscriptions
+        id: sel
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENV_IN="${{ inputs.env }}"
+          PRODUCT="${{ inputs.product }}"
+
+          case "$ENV_IN" in
+            dev|qa)   PLANE="nonprod" ;;
+            uat|prod) PLANE="prod"    ;;
+            *) echo "Unknown env: $ENV_IN"; exit 1 ;;
+          esac
+
+          if [ "$PRODUCT" = "hrz" ]; then
+            CLOUD_ENV="AzureUSGovernment"; ARM_ENV="usgovernment"
+            TENANT_RAW='${{ secrets.AZ_TENANT_HRZ }}'
+            CLIENT_ID_RAW='${{ secrets.AZURE_CLIENT_ID_HRZ }}'
+            AUDIENCE="api://AzureADTokenExchangeUSGov"
+
+            STATE_SUB_RAW='${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}'
+            CORE_SUB_RAW='${{ secrets.AZ_SUB_HRZ_CORE != '' && secrets.AZ_SUB_HRZ_CORE || secrets.AZ_SUB_HRZ_PROD }}'
+
+            DEV_SUB_RAW='${{ secrets.AZ_SUB_HRZ_DEV }}'
+            QA_SUB_RAW='${{ secrets.AZ_SUB_HRZ_QA }}'
+            UAT_SUB_RAW='${{ secrets.AZ_SUB_HRZ_UAT }}'
+            PROD_SUB_RAW='${{ secrets.AZ_SUB_HRZ_PROD }}'
+
+            TARGET_SUB_RAW=$([ "$PLANE" = "prod" ] && echo '${{ secrets.AZ_SUB_HRZ_PROD }}' || echo '${{ secrets.AZ_SUB_HRZ_NONPROD }}')
+
+            case "$ENV_IN" in
+              dev)  ENV_SUB_RAW="$DEV_SUB_RAW"  ;;
+              qa)   ENV_SUB_RAW="$QA_SUB_RAW"   ;;
+              uat)  ENV_SUB_RAW="$UAT_SUB_RAW"  ;;
+              prod) ENV_SUB_RAW="$PROD_SUB_RAW" ;;
+              *) echo "Unknown env for ENV_SUB mapping: $ENV_IN"; exit 1 ;;
+            esac
+          else
+            CLOUD_ENV="AzureCloud"; ARM_ENV="public"
+            TENANT_RAW='${{ secrets.AZ_TENANT_PUB }}'
+            CLIENT_ID_RAW='${{ secrets.AZURE_CLIENT_ID_PUB }}'
+            AUDIENCE="api://AzureADTokenExchange"
+
+            STATE_SUB_RAW='${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}'
+            CORE_SUB_RAW='${{ secrets.AZ_SUB_PUB_CORE != '' && secrets.AZ_SUB_PUB_CORE || secrets.AZ_SUB_PUB_PROD }}'
+
+            DEV_SUB_RAW='${{ secrets.AZ_SUB_PUB_DEV }}'
+            QA_SUB_RAW='${{ secrets.AZ_SUB_PUB_QA }}'
+            UAT_SUB_RAW='${{ secrets.AZ_SUB_PUB_UAT }}'
+            PROD_SUB_RAW='${{ secrets.AZ_SUB_PUB_PROD }}'
+
+            TARGET_SUB_RAW=$([ "$PLANE" = "prod" ] && echo '${{ secrets.AZ_SUB_PUB_PROD }}' || echo '${{ secrets.AZ_SUB_PUB_NONPROD }}')
+
+            case "$ENV_IN" in
+              dev)  ENV_SUB_RAW="$DEV_SUB_RAW"  ;;
+              qa)   ENV_SUB_RAW="$QA_SUB_RAW"   ;;
+              uat)  ENV_SUB_RAW="$UAT_SUB_RAW"  ;;
+              prod) ENV_SUB_RAW="$PROD_SUB_RAW" ;;
+              *) echo "Unknown env for ENV_SUB mapping: $ENV_IN"; exit 1 ;;
+            esac
+          fi
+
+          trim(){ printf "%s" "$1" | tr -d '[:space:]'; }
+          TENANT=$(trim "$TENANT_RAW")
+          CLIENT_ID=$(trim "$CLIENT_ID_RAW")
+          STATE_SUB=$(trim "$STATE_SUB_RAW")
+          CORE_SUB=$(trim "$CORE_SUB_RAW")
+          TARGET_SUB=$(trim "$TARGET_SUB_RAW")
+          ENV_SUB=$(trim "$ENV_SUB_RAW")
+
+          DEV_SUB=$(trim "$DEV_SUB_RAW")
+          QA_SUB=$(trim "$QA_SUB_RAW")
+          UAT_SUB=$(trim "$UAT_SUB_RAW")
+          PROD_SUB=$(trim "$PROD_SUB_RAW")
+
+          echo "ENV=$ENV_IN"            >> $GITHUB_OUTPUT
+          echo "PRODUCT=$PRODUCT"       >> $GITHUB_OUTPUT
+          echo "PLANE=$PLANE"           >> $GITHUB_OUTPUT
+          echo "CLOUD_ENV=$CLOUD_ENV"   >> $GITHUB_OUTPUT
+          echo "ARM_ENV=$ARM_ENV"       >> $GITHUB_OUTPUT
+          echo "TENANT=$TENANT"         >> $GITHUB_OUTPUT
+          echo "CLIENT_ID=$CLIENT_ID"   >> $GITHUB_OUTPUT
+          echo "AUDIENCE=$AUDIENCE"     >> $GITHUB_OUTPUT
+          echo "STATE_SUB=$STATE_SUB"   >> $GITHUB_OUTPUT
+          echo "TARGET_SUB=$TARGET_SUB" >> $GITHUB_OUTPUT
+          echo "CORE_SUB=$CORE_SUB"     >> $GITHUB_OUTPUT
+          echo "ENV_SUB=$ENV_SUB"       >> $GITHUB_OUTPUT
+
+          {
+            echo "ARM_ENVIRONMENT=$ARM_ENV"
+            echo "ARM_TENANT_ID=$TENANT"
+            echo "ARM_CLIENT_ID=$CLIENT_ID"
+
+            echo "TF_VAR_subscription_id=$TARGET_SUB"
+            echo "TF_VAR_tenant_id=$TENANT"
+
+            echo "TF_VAR_core_subscription_id=$CORE_SUB"
+            echo "TF_VAR_core_tenant_id=$TENANT"
+
+            echo "TF_VAR_env_subscription_id=$ENV_SUB"
+            echo "TF_VAR_env_tenant_id=$TENANT"
+
+            echo "TF_VAR_hub_subscription_id=$TARGET_SUB"
+            echo "TF_VAR_hub_tenant_id=$TENANT"
+
+            if [ "$PLANE" = "nonprod" ]; then
+              echo "TF_VAR_dev_subscription_id=$DEV_SUB"
+              echo "TF_VAR_dev_tenant_id=$TENANT"
+              echo "TF_VAR_qa_subscription_id=$QA_SUB"
+              echo "TF_VAR_qa_tenant_id=$TENANT"
+            else
+              echo "TF_VAR_prod_subscription_id=$PROD_SUB"
+              echo "TF_VAR_prod_tenant_id=$TENANT"
+              echo "TF_VAR_uat_subscription_id=$UAT_SUB"
+              echo "TF_VAR_uat_tenant_id=$TENANT"
+            fi
+
+            echo "TF_VAR_product=$PRODUCT"
+            echo "TF_VAR_env=$ENV_IN"
+            echo "TF_VAR_plane=$PLANE"
+          } >> $GITHUB_ENV
+
+      - name: Resolve backend key (env-based)
+        id: paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENV="${{ steps.sel.outputs.ENV }}"
+          PRODUCT="${{ steps.sel.outputs.PRODUCT }}"
+          echo "STATE_RG=rg-core-tfstate-01"     >> "$GITHUB_OUTPUT"
+          echo "STATE_SA=sacoretfstateinfra"      >> "$GITHUB_OUTPUT"
+          echo "STATE_CONTAINER=tfstate"          >> "$GITHUB_OUTPUT"
+          echo "STATE_KEY=observability/${PRODUCT}/${ENV}/terraform.tfstate" >> "$GITHUB_OUTPUT"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.13.3"
+
+      - name: Azure Login (state subscription)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ steps.sel.outputs.CLIENT_ID }}
+          tenant-id:       ${{ steps.sel.outputs.TENANT }}
+          subscription-id: ${{ steps.sel.outputs.STATE_SUB }}
+          environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
+          audience:        ${{ steps.sel.outputs.AUDIENCE }}
+
+      - name: Terraform Init (backend)
+        env:
+          ARM_USE_CLI: true
+          ARM_USE_AZUREAD: true
+          ARM_CLIENT_ID:       ${{ steps.sel.outputs.CLIENT_ID }}
+          ARM_TENANT_ID:       ${{ steps.sel.outputs.TENANT }}
+          ARM_SUBSCRIPTION_ID: ${{ steps.sel.outputs.STATE_SUB }}
+          ARM_ENVIRONMENT:     ${{ steps.sel.outputs.ARM_ENV }}
+        run: |
+          terraform init -input=false -reconfigure \
+            -backend-config="environment=${{ steps.sel.outputs.ARM_ENV }}" \
+            -backend-config="tenant_id=${{ steps.sel.outputs.TENANT }}" \
+            -backend-config="subscription_id=${{ steps.sel.outputs.STATE_SUB }}" \
+            -backend-config="resource_group_name=${{ steps.paths.outputs.STATE_RG }}" \
+            -backend-config="storage_account_name=${{ steps.paths.outputs.STATE_SA }}" \
+            -backend-config="container_name=${{ steps.paths.outputs.STATE_CONTAINER }}" \
+            -backend-config="key=${{ steps.paths.outputs.STATE_KEY }}" \
+            -backend-config="use_azuread_auth=true" \
+            -backend-config="use_cli=true"
+
+      - name: Azure Login (target subscription)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ steps.sel.outputs.CLIENT_ID }}
+          tenant-id:       ${{ steps.sel.outputs.TENANT }}
+          subscription-id: ${{ steps.sel.outputs.TARGET_SUB }}
+          environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
+          audience:        ${{ steps.sel.outputs.AUDIENCE }}
+
+      - name: Download approved plan artifact (best effort)
+        id: dl
+        uses: dawidd6/action-download-artifact@v6
+        continue-on-error: true
+        with:
+          run_id: ${{ inputs.plan_run_id }}
+          name: observability-plan-${{ inputs.plan_run_id }}
+          path: ${{ github.workspace }}/stacks/observability
+
+      - name: Verify plan artifact presence
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f "tfplan" ]; then
+            echo "has_tfplan=true" >> "$GITHUB_OUTPUT"
+            echo "Found approved tfplan artifact"
+          else
+            echo "has_tfplan=false" >> "$GITHUB_OUTPUT"
+            echo "No approved tfplan found; refusing to apply without approved plan."
+            ls -la || true
+          fi
+      - name: Traceability (plan ↔ apply)
+        shell: bash
+        env:
+          PLAN_RUN_ID: ${{ inputs.plan_run_id }}
+          PLAN_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ inputs.plan_run_id }}
+          APPLY_RUN_ID: ${{ github.run_id }}
+          APPLY_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Traceability"
+            echo "- Plan run id: ${PLAN_RUN_ID}"
+            echo "- Plan run url: ${PLAN_RUN_URL}"
+            echo "- Apply run id: ${APPLY_RUN_ID}"
+            echo "- Apply run url: ${APPLY_RUN_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Terraform Apply (approved plan)
+        if: ${{ steps.detect.outputs.has_tfplan == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform apply -input=false -auto-approve tfplan
+
+      # - name: Fail if no approved plan
+      #   if: ${{ steps.detect.outputs.has_tfplan != 'true' }}
+      #   shell: bash
+      #   run: |
+      #     echo "Missing approved tfplan artifact. Re-run mode=plan and approve, then apply."
+      #     exit 1
