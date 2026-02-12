@@ -1,5 +1,7 @@
-name: "✅ Govern | Approval Listener"
-run-name: "${{ format('🕵️ Approval Listener | {0} | issue #{1} | run #{2}', github.ref_name, github.event.issue.number, github.run_number) }}"
+name: "Approval Gate"
+#run-name: "${{ format('🕵️ Approval Listener | {0} | issue #{1} | run #{2}', github.ref_name, github.event.issue.number, github.run_number) }}"
+run-name: "${{ format('🕵️ {0} | issue #{1} | run #{2}', github.event.issue.title, github.event.issue.number, github.run_number) }}"
+
 on:
   issue_comment:
     types: [created]
@@ -11,9 +13,9 @@ permissions:
   id-token: write
 
 env:
-  APPROVERS_CSV: "francisbachabi81,user2"
+  APPROVERS_CSV: "francisbachabi1206,user2"
   # Fallback username; prefer setting a secret GH_PAT_ACTOR to the PAT owner login
-  PAT_ACTOR: "francisbachabi81"
+  PAT_ACTOR: "francisbachabi1206"
   SYSTEM_MARKER: "<!-- system:approval-final -->"
 
 concurrency:
@@ -22,6 +24,14 @@ concurrency:
 
 jobs:
   gate:
+    # Skip bot-authored comments (including CodeRabbit), only run for humans
+    if: >-
+      ${{
+        github.event.issue.state == 'open' &&
+        github.event.comment.user.type != 'Bot' &&
+        github.event.comment.user.login != 'coderabbitai' &&
+        github.event.comment.user.login != 'coderabbitai[bot]'
+      }}
     runs-on: ubuntu-latest
     steps:
       # Decide whether to proceed; everything else is gated on this.
@@ -149,49 +159,68 @@ jobs:
             // Decide which apply workflow + inputs to call
             let workflow_id, inputs;
             if (stack === "shared-network") {
-              workflow_id = "network-apply.yml";
-              inputs = { product, plane: third, plan_run_id: planRunId };
+              workflow_id = "shared-network-governed-plan-apply.yml";
+              inputs = { mode: "apply", product, plane: third, plan_run_id: planRunId };
+              // workflow_id = "network-apply.yml";
+              // inputs = { product, plane: third, plan_run_id: planRunId };
             } else if (stack === "core") {
-              workflow_id = "core-apply.yml";
-              inputs = { product, plane: third, plan_run_id: planRunId };
-            } else if (stack === "afd-config") {
-              workflow_id = "afd-config-apply.yml";
-              inputs = { product, plane: third, plan_run_id: planRunId };
+              workflow_id = "core-governed-plan-apply.yml";
+              inputs = { mode: "apply", product, plane: third, plan_run_id: planRunId };
+              // workflow_id = "core-apply.yml";
+              // inputs = { product, plane: third, plan_run_id: planRunId };
             } else if (stack === "platform-app") {
-              workflow_id = "platform-apply.yml";
-              inputs = { product, env: third, plan_run_id: planRunId }; // platform-app uses env
+              workflow_id = "platform-app-governed-plan-apply.yml";
+              inputs = { mode: "apply", product, env: third, plan_run_id: planRunId };
+              // workflow_id = "platform-apply.yml";
+              // inputs = { product, env: third, plan_run_id: planRunId }; // platform-app uses env
             } else if (stack === "observability") {
-              workflow_id = "observability-apply.yml";
-              inputs = { product, env: third, plan_run_id: planRunId };
+              workflow_id = "observability-governed-plan-apply.yml";
+              inputs = { mode: "apply", product, env: third, plan_run_id: planRunId };
+              // workflow_id = "observability-apply.yml";
+              // inputs = { product, env: third, plan_run_id: planRunId };
             } else if (stack === "platform-registry") {
               workflow_id = "registry-apply.yml";
               inputs = { product, env: third, plan_run_id: planRunId };
             } else if (stack === "app-gateway-config") {
-              workflow_id = "app-gateway-config-apply.yml";
-              inputs = { product, plane: third, plan_run_id: planRunId };
+              workflow_id = "app-gateway-config-governed-plan-apply.yml";
+              inputs = { mode: "apply", product, env: third, plan_run_id: planRunId };
+              // workflow_id = "app-gateway-config-apply.yml";
+              // inputs = { product, plane: third, plan_run_id: planRunId };
             } else {
               core.setFailed(`Unknown stack in issue title: ${stack}`);
               return;
             }
 
-            // 🔹 Dynamic branch ref from the original plan run
-            let ref = 'main';
+            // Confirm workflow exists and we can see it
+            try {
+              const wf = await github.rest.actions.getWorkflow({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                workflow_id, // same string you're about to use for dispatch
+              });
+              core.info(`Workflow resolved: id=${wf.data.id}, name=${wf.data.name}, state=${wf.data.state}, path=${wf.data.path}`);
+            } catch (e) {
+              core.error(`getWorkflow failed for '${workflow_id}': ${e.status} ${e.message}`);
+              core.error(`This almost always means filename/path or permissions/SSO.`);
+              throw e; // bail early; dispatch will also 404 anyway
+            }
+
+            // Dynamic branch ref from the original plan run
+            let ref = context.ref?.startsWith('refs/heads/')
+              ? context.ref.replace('refs/heads/', '')
+              : 'main';
+            
             try {
               const run = await github.rest.actions.getWorkflowRun({
                 owner: context.repo.owner,
                 repo:  context.repo.repo,
                 run_id: Number(planRunId)
               });
-              // head_branch is the branch name used by the plan run
               if (run?.data?.head_branch) {
                 ref = run.data.head_branch;
-              } else if (context.ref?.startsWith('refs/heads/')) {
-                // fallback to current event's ref (usually the issue’s repo default)
-                ref = context.ref.replace('refs/heads/', '');
               }
             } catch (e) {
               core.warning(`Could not resolve branch from plan run ${planRunId}: ${e.message}`);
-              // keep fallback 'main'
             }
 
             // Dispatch the apply on that exact branch
@@ -274,7 +303,8 @@ jobs:
         if: ${{ steps.guard.outputs.proceed == '1' && steps.parse.outputs.action == '/reject' }}
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GH_PAT_WORKFLOW }}
+          # github-token: ${{ secrets.GH_PAT_WORKFLOW }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const MARK = process.env.SYSTEM_MARKER || '<!-- system:approval-final -->';
 
