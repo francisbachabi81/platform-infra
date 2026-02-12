@@ -13,9 +13,9 @@ permissions:
   id-token: write
 
 env:
-  APPROVERS_CSV: "francisbachabi1206,user2"
+  APPROVERS_CSV: "francisbachabi81,user2"
   # Fallback username; prefer setting a secret GH_PAT_ACTOR to the PAT owner login
-  PAT_ACTOR: "francisbachabi1206"
+  PAT_ACTOR: "francisbachabi81"
   SYSTEM_MARKER: "<!-- system:approval-final -->"
 
 concurrency:
