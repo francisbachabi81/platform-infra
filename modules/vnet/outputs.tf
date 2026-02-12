@@ -27,3 +27,10 @@ output "subnet_names" {
   value       = keys(azurerm_subnet.subnets)
   description = "List of subnet names."
 }
+
+output "subnet_pls_policies_enabled" {
+  value = {
+    for k, s in var.subnets :
+    k => try(s.private_link_service_network_policies_enabled, true)
+  }
+}

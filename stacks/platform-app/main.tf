@@ -410,22 +410,6 @@ locals {
   sa1_name_cleaned = replace(lower(trimspace(local.sa1_name)), "-", "")
 }
 
-# UAI used for storage encryption
-# resource "azurerm_user_assigned_identity" "sa1_cmk" {
-#   provider            = local.is_prod ? azurerm.prod : local.is_uat ? azurerm.uat : azurerm
-#   name                = "uai-${var.product}-${var.env}-${var.region}-sta-cmk-01" # your updated name
-#   location            = var.location
-#   resource_group_name = local.env_rg_name
-#   tags                = local.tags_common
-
-#   depends_on = [
-#     module.rg_dev,
-#     module.rg_qa,
-#     module.rg_uat,
-#     module.rg_prod
-#   ]
-# }
-
 resource "azurerm_user_assigned_identity" "sa1_cmk_default" {
   count               = (!local.is_prod && !local.is_uat) ? 1 : 0
   name                = "uai-${var.product}-${var.env}-${var.region}-sta-cmk-01"
@@ -476,11 +460,6 @@ resource "azurerm_role_assignment" "sa1_cmk_kv_crypto" {
   role_definition_name = "Key Vault Crypto Service Encryption User"
   principal_id         = local.sa1_cmk_principal_id
 }
-# resource "azurerm_role_assignment" "sa1_cmk_kv_crypto" {
-#   scope                = local.core_kv_id
-#   role_definition_name = "Key Vault Crypto Service Encryption User"
-#   principal_id         = azurerm_user_assigned_identity.sa1_cmk.principal_id
-# }
 
 module "sa1" {
   count               = local.enable_both ? 1 : 0
@@ -495,12 +474,12 @@ module "sa1" {
   pe_subnet_id         = local.pe_subnet_id_effective
   private_dns_zone_ids = local.zone_ids_effective
 
-  # --- compliance ---
   restrict_network_access = true
 
+  enable_storage_data_scanner_private_link_access = true
+
   identity_type = "UserAssigned"
-  # identity_ids  = [azurerm_user_assigned_identity.sa1_cmk.id]
-  identity_ids = [local.sa1_cmk_id]
+  identity_ids  = [local.sa1_cmk_id]
 
   pe_blob_name         = "pep-${local.sa1_name_cleaned}-blob"
   psc_blob_name        = "psc-${local.sa1_name_cleaned}-blob"
@@ -511,10 +490,11 @@ module "sa1" {
 
   tags = merge(local.tags_common, local.tags_sa, var.tags)
   depends_on = [
-    # data.azurerm_resource_group.env,
     module.kv1,
-    # azurerm_user_assigned_identity.sa1_cmk,
-    azurerm_role_assignment.sa1_cmk_kv_crypto
+    azurerm_role_assignment.sa1_cmk_kv_crypto,
+    data.terraform_remote_state.core,
+    data.terraform_remote_state.shared,
+    data.azurerm_resource_group.env
   ]
 }
 
@@ -958,7 +938,7 @@ module "funcapp1" {
   psc_scm_name         = "psc-${local.funcapp1_name_clean}-scm"
   scm_zone_group_name  = "pdns-${local.funcapp1_name_clean}-scm"
 
-  stack = { node_version = "22" }
+  stack = { node_version = "20" }
   app_settings = {
     FUNCTIONS_WORKER_RUNTIME = "node"
     WEBSITE_RUN_FROM_PACKAGE = "1"
@@ -1001,7 +981,7 @@ module "funcapp2" {
   psc_scm_name         = "psc-${local.funcapp2_name_clean}-scm"
   scm_zone_group_name  = "pdns-${local.funcapp2_name_clean}-scm"
 
-  stack = { node_version = "22" }
+  stack = { node_version = "20" }
   app_settings = {
     FUNCTIONS_WORKER_RUNTIME = "node"
     WEBSITE_RUN_FROM_PACKAGE = "1"
@@ -1034,30 +1014,6 @@ resource "azurerm_role_assignment" "func_sa_data_roles" {
   role_definition_name = each.value.role
   principal_id         = each.value.principal_id
 }
-
-# resource "azurerm_role_assignment" "funcapp1_blob_contrib" {
-#   scope                = module.sa1[0].id
-#   role_definition_name = "Storage Blob Data Contributor"
-#   principal_id         = module.funcapp1[0].principal_id
-# }
-
-# resource "azurerm_role_assignment" "funcapp1_queue_contrib" {
-#   scope                = module.sa1[0].id
-#   role_definition_name = "Storage Queue Data Contributor"
-#   principal_id         = module.funcapp1[0].principal_id
-# }
-
-# resource "azurerm_role_assignment" "funcapp2_blob_contrib" {
-#   scope                = module.sa1[0].id
-#   role_definition_name = "Storage Blob Data Contributor"
-#   principal_id         = module.funcapp2[0].principal_id
-# }
-
-# resource "azurerm_role_assignment" "funcapp2_queue_contrib" {
-#   scope                = module.sa1[0].id
-#   role_definition_name = "Storage Queue Data Contributor"
-#   principal_id         = module.funcapp2[0].principal_id
-# }
 
 # Event Hubs (env)
 locals {
@@ -1171,12 +1127,10 @@ locals {
   pg_private_zone_id = try(local.zone_ids_effective[local._pg_pdz_name], null)
 
   pg_name1 = "pgflex-${var.product}-${var.env}-${var.region}-01"
-  # pg_geo_backup_effective = var.env == "prod" ? true : var.pg_geo_redundant_backup
 
   pg_geo_backup_supported_regions = toset([
-    # example tokens — populate with what you support in your org
     "usva",
-    # "usaz",  # apparently NOT supported for your case
+    # "usaz",  # apparently NOT supported in azure gov yet
   ])
 
   pg_geo_backup_effective = (
@@ -1226,11 +1180,15 @@ module "postgres" {
   ]
 }
 
+locals {
+  pg_replica_name1 = "pgflex-${var.product}-${var.env}-${var.region}-rep-01"
+}
+
 module "postgres_replica" {
   count  = (local.enable_both && (var.pg_replica_enabled && !var.pg_ha_enabled)) ? 1 : 0
   source = "../../modules/postgres-flex"
 
-  name                = local.pg_name1
+  name                = local.pg_replica_name1
   resource_group_name = local.env_rg_name
   location            = var.location
 
@@ -1253,6 +1211,114 @@ module "postgres_replica" {
   tags = merge(local.tags_common, local.tags_postgres, var.tags, { role = "replica" })
 
   depends_on = [data.azurerm_resource_group.env, module.postgres]
+}
+
+# PostgreSQL Flexible (AUTH) (env)
+locals {
+  pg_auth_name1 = "pgflex-${var.product}-${var.env}-${var.region}-auth-01"
+
+  pg_authflex_subnet_id = try(local.subnet_ids_from_state[var.pg_auth_delegated_subnet_name], null)
+
+}
+
+module "postgres_auth" {
+  count               = local.enable_hrz_features ? 1 : 0
+  source              = "../../modules/postgres-flex"
+  name                = local.pg_auth_name1
+  resource_group_name = local.env_rg_name
+  location            = var.location
+
+  pg_version                   = var.pg_auth_version
+  administrator_login_password = var.pg_auth_admin_password
+  sku_name                     = var.pg_auth_sku_name
+  storage_mb                   = var.pg_auth_storage_mb
+
+  # Keep auth DB simple: usually no HA/replica unless you truly need it
+  zone       = var.pg_auth_zone
+  ha_enabled = var.pg_auth_ha_enabled
+  ha_zone    = var.pg_auth_ha_enabled ? var.pg_auth_ha_zone : null
+
+  ha_mode = var.product == "hrz" ? "SameZone" : "ZoneRedundant"
+
+  network_mode = "private"
+  delegated_subnet_id = coalesce(
+    local.pg_authflex_subnet_id,
+    var.pg_auth_delegated_subnet_id,
+    local.pgflex_subnet_id,
+    var.pg_delegated_subnet_id,
+    null
+  )
+
+  private_dns_zone_id = local.pg_private_zone_id
+
+  aad_auth_enabled             = var.pg_aad_auth_enabled
+  aad_tenant_id                = var.tenant_id
+  geo_redundant_backup_enabled = false
+
+  # Create the auth DB(s)
+  databases      = var.pg_auth_databases
+  firewall_rules = [] # private only
+  enable_postgis = var.pg_auth_enable_postgis
+  extensions     = var.pg_auth_extensions
+
+  tags = merge(
+    local.tags_common,
+    local.tags_postgres,
+    var.tags,
+    {
+      role      = "auth"
+      component = "postgres-auth"
+      workload  = "authentication"
+    }
+  )
+
+  depends_on = [
+    data.azurerm_resource_group.env
+  ]
+}
+
+locals {
+  pg_auth_replica_name1 = "pgflex-${var.product}-${var.env}-${var.region}-authr-01"
+}
+
+module "postgres_auth_replica" {
+  count = (local.enable_hrz_features && var.pg_auth_replica_enabled && !var.pg_auth_ha_enabled) ? 1 : 0
+
+  source = "../../modules/postgres-flex"
+
+  name                = local.pg_auth_replica_name1
+  resource_group_name = local.env_rg_name
+
+  pg_version                   = var.pg_auth_version
+  administrator_login_password = var.pg_auth_admin_password
+  sku_name                     = var.pg_auth_sku_name
+  storage_mb                   = var.pg_auth_storage_mb
+
+  location = var.location
+
+  replica_enabled  = var.pg_auth_replica_enabled
+  ha_enabled       = var.pg_auth_ha_enabled
+  source_server_id = module.postgres_auth[0].id
+
+  network_mode = "private"
+  delegated_subnet_id = coalesce(
+    local.pg_authflex_subnet_id,
+    var.pg_auth_delegated_subnet_id,
+    local.pgflex_subnet_id,
+    var.pg_delegated_subnet_id,
+    null
+  )
+  private_dns_zone_id = local.pg_private_zone_id
+
+  ha_mode = var.product == "hrz" ? "SameZone" : "ZoneRedundant"
+
+  extensions = var.pg_auth_extensions
+
+  tags = merge(
+    local.tags_common,
+    local.tags_postgres,
+    { role = "auth-replica", workload = "authentication" }
+  )
 }
 
 # PostgreSQL Elastic Cluster (env)
@@ -1339,18 +1405,6 @@ module "redis1" {
 
 # NSG Flow Logs Storage (hub / core)
 locals {
-  # sa_core_shared_name = substr(
-  #   "saobs-${var.product}-${local.plane_code}-${var.region}-nsg",
-  #   0,
-  #   24
-  # )
-
-  # sa_core_shared_name_cleaned = replace(
-  #   lower(trimspace(local.sa_core_shared_name)),
-  #   "-",
-  #   ""
-  # )
-
   sa_core_shared_name = substr(
     "saobs-${var.product}-${local.plane_code}-${var.region}-core",
     0,
@@ -1414,8 +1468,9 @@ module "sa_core_shared" {
   pe_subnet_id         = local.hub_privatelink_subnet_id
   private_dns_zone_ids = local.hub_private_dns_zone_ids
 
-  # --- compliance ---
   restrict_network_access = true
+
+  enable_storage_data_scanner_private_link_access = true
 
   identity_type = "UserAssigned"
   identity_ids  = [azurerm_user_assigned_identity.sa_core_shared_cmk[0].id]
@@ -1510,8 +1565,9 @@ module "sa_grafana" {
   pe_subnet_id         = local.hub_privatelink_subnet_id
   private_dns_zone_ids = local.hub_private_dns_zone_ids
 
-  # --- compliance ---
   restrict_network_access = true
+
+  enable_storage_data_scanner_private_link_access = true
 
   identity_type = "UserAssigned"
   identity_ids  = [azurerm_user_assigned_identity.sa_grafana_cmk[0].id]
@@ -1542,4 +1598,148 @@ module "sa_grafana" {
     azurerm_user_assigned_identity.sa_grafana_cmk,
     azurerm_role_assignment.sa_grafana_cmk_kv_crypto
   ]
+}
+
+# Public Layers Storage (env) — NEW
+locals {
+  create_public_layers_storage = local.enable_public_features
+
+  sa_public_layers_name = substr(
+    "sapublyr-${var.product}-${var.env}-${var.region}-01",
+    0,
+    24
+  )
+
+  sa_public_layers_name_cleaned = replace(
+    lower(trimspace(local.sa_public_layers_name)),
+    "-",
+    ""
+  )
+}
+
+# UAI used for storage encryption (env scoped)
+resource "azurerm_user_assigned_identity" "sa_public_layers_cmk_default" {
+  count               = local.create_public_layers_storage && (!local.is_prod && !local.is_uat) ? 1 : 0
+  name                = "uai-${var.product}-${var.env}-${var.region}-publyr-cmk-01"
+  location            = var.location
+  resource_group_name = local.env_rg_name
+  tags                = local.tags_common
+}
+
+resource "azurerm_user_assigned_identity" "sa_public_layers_cmk_prod" {
+  count               = local.create_public_layers_storage && local.is_prod ? 1 : 0
+  provider            = azurerm.prod
+  name                = "uai-${var.product}-${var.env}-${var.region}-publyr-cmk-01"
+  location            = var.location
+  resource_group_name = local.env_rg_name
+  tags                = local.tags_common
+
+  depends_on = [module.rg_prod]
+}
+
+resource "azurerm_user_assigned_identity" "sa_public_layers_cmk_uat" {
+  count               = local.create_public_layers_storage && local.is_uat ? 1 : 0
+  provider            = azurerm.uat
+  name                = "uai-${var.product}-${var.env}-${var.region}-publyr-cmk-01"
+  location            = var.location
+  resource_group_name = local.env_rg_name
+  tags                = local.tags_common
+
+  depends_on = [module.rg_uat]
+}
+
+locals {
+  sa_public_layers_cmk_id = local.create_public_layers_storage ? coalesce(
+    try(azurerm_user_assigned_identity.sa_public_layers_cmk_prod[0].id, null),
+    try(azurerm_user_assigned_identity.sa_public_layers_cmk_uat[0].id, null),
+    try(azurerm_user_assigned_identity.sa_public_layers_cmk_default[0].id, null)
+  ) : null
+
+  sa_public_layers_cmk_principal_id = local.create_public_layers_storage ? coalesce(
+    try(azurerm_user_assigned_identity.sa_public_layers_cmk_prod[0].principal_id, null),
+    try(azurerm_user_assigned_identity.sa_public_layers_cmk_uat[0].principal_id, null),
+    try(azurerm_user_assigned_identity.sa_public_layers_cmk_default[0].principal_id, null)
+  ) : null
+}
+
+# Grant KV permissions to that identity (so Storage can use the CMK)
+resource "azurerm_role_assignment" "sa_public_layers_cmk_kv_crypto" {
+  count                = local.create_public_layers_storage && local.sa_public_layers_cmk_principal_id != null ? 1 : 0
+  scope                = local.core_kv_id
+  role_definition_name = "Key Vault Crypto Service Encryption User"
+  principal_id         = local.sa_public_layers_cmk_principal_id
+}
+
+module "sa_public_layers" {
+  count               = local.create_public_layers_storage ? 1 : 0
+  source              = "../../modules/storage-account"
+  product             = var.product
+  name                = local.sa_public_layers_name_cleaned
+  location            = var.location
+  resource_group_name = local.env_rg_name
+  replication_type    = var.sa_replication_type
+
+  container_names = [
+    "public-layers-es"
+  ]
+
+  pe_subnet_id         = local.pe_subnet_id_effective
+  private_dns_zone_ids = local.zone_ids_effective
+
+  allow_blob_public_access = true
+
+  restrict_network_access = true
+
+  identity_type = "UserAssigned"
+  identity_ids  = [local.sa_public_layers_cmk_id]
+
+  pe_blob_name         = "pep-${local.sa_public_layers_name_cleaned}-blob"
+  psc_blob_name        = "psc-${local.sa_public_layers_name_cleaned}-blob"
+  blob_zone_group_name = "pdns-${local.sa_public_layers_name_cleaned}-blob"
+  pe_file_name         = "pep-${local.sa_public_layers_name_cleaned}-file"
+  psc_file_name        = "psc-${local.sa_public_layers_name_cleaned}-file"
+  file_zone_group_name = "pdns-${local.sa_public_layers_name_cleaned}-file"
+
+  enable_storage_data_scanner_private_link_access = true
+
+  tags = merge(
+    local.tags_common,
+    local.tags_sa,
+    {
+      component        = "public-layers-storage"
+      workload_purpose = "Stores public layers + samples (assets/data) for public product"
+    },
+    var.tags
+  )
+
+  depends_on = [
+    data.terraform_remote_state.core,
+    data.terraform_remote_state.shared,
+    data.azurerm_resource_group.env,
+    module.sa1,
+    module.kv1,
+    module.sa_grafana,
+    azurerm_role_assignment.sa_public_layers_cmk_kv_crypto
+  ]
+}
+
+locals {
+  # PUB only: per-container access for the public layers storage
+  public_layers_container_access = {
+    "public-layers"     = "blob" # public blobs
+    "public-layers-etl" = "blob" # public blobs
+    # "public-layers-es"  = "private"   # private container
+    # "sample-assets"     = "blob"      # public blobs
+    # "sample-data"       = "container" # "reg container" (public list + read)
+  }
+}
+
+resource "azurerm_storage_container" "public_layers" {
+  for_each = local.enable_public_features ? local.public_layers_container_access : {}
+
+  name                  = each.key
+  storage_account_name  = module.sa_public_layers[0].name
+  container_access_type = each.value
+
+  depends_on = [module.sa_public_layers]
 }

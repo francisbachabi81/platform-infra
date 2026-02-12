@@ -27,6 +27,7 @@ resource "azurerm_subnet" "subnets" {
   service_endpoints                     = try(each.value.service_endpoints, null)
   private_endpoint_network_policies     = try(each.value.private_endpoint_network_policies, null)
   # private_link_service_network_policies = try(each.value.private_link_service_network_policies, null)
+  private_link_service_network_policies_enabled = try(each.value.private_link_service_network_policies_enabled, true)
 
   dynamic "delegation" {
     for_each = coalesce(try(each.value.delegations, []), [])

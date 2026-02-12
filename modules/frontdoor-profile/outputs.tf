@@ -1,24 +1,23 @@
 output "profile_id" {
-  value       = azurerm_cdn_frontdoor_profile.this.id
-  description = "Front Door profile resource ID."
+  value = azapi_resource.profile.id
 }
 
 output "profile_name" {
-  value       = azurerm_cdn_frontdoor_profile.this.name
-  description = "Front Door profile name."
+  value = var.profile_name
 }
 
 output "endpoint_id" {
-  value       = azurerm_cdn_frontdoor_endpoint.this.id
-  description = "Front Door endpoint resource ID."
+  value = azapi_resource.endpoint.id
 }
 
 output "endpoint_name" {
-  value       = azurerm_cdn_frontdoor_endpoint.this.name
-  description = "Front Door endpoint name."
+  value = var.endpoint_name
+}
+
+output "sku_name" {
+  value = var.sku_name
 }
 
 output "endpoint_hostname" {
-  value       = azurerm_cdn_frontdoor_endpoint.this.host_name
-  description = "Front Door endpoint hostname."
+  value = try(data.azapi_resource.endpoint_read.output.properties.hostName, null)
 }

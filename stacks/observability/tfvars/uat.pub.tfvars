@@ -3,7 +3,7 @@ product = "pub"
 env     = "uat"
 
 location = "Central US"
-region  = "cus"
+region   = "cus"
 
 # Alerting (Action Group recipients)
 action_group_email_receivers = [
@@ -17,9 +17,7 @@ action_group_email_receivers = [
   }
 ]
 
-# FedRAMP policy compliance pipeline
-# enable_policy_compliance_alerts = false
-policy_alert_email              = "cloudops@intterragroup.com"
+policy_alert_email = "cloudops@intterragroup.com"
 
 policy_source_subscriptions = {
   prod-core = {

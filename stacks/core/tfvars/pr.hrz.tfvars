@@ -1,18 +1,18 @@
-plane           = "pr"
-product         = "hrz"
-location        = "USGov Arizona"
-region          = "usaz"
+plane    = "pr"
+product  = "hrz"
+location = "USGov Arizona"
+region   = "usaz"
 
 tags = {
   plane   = "pr"
   product = "hrz"
 }
 
-law_sku                      = "PerGB2018"
-law_retention_days           = 90
+law_sku                         = "PerGB2018"
+law_retention_days              = 90
 appi_internet_ingestion_enabled = false
 appi_internet_query_enabled     = false
-law_daily_quota_gb           = 5
+law_daily_quota_gb              = 5
 
 state_rg_name        = "rg-core-infra-state"
 state_sa_name        = "sacoretfstateinfra"
@@ -36,9 +36,9 @@ enable_custom_domain    = true
 custom_domain_name      = "horizon.intterra.io"
 associate_custom_domain = false
 
-create_core_vm          = true
-core_vm_private_ip      = "10.13.13.10"
-core_vm_admin_username  = "coreadmin"
+create_core_vm         = true
+core_vm_private_ip     = "10.13.13.10"
+core_vm_admin_username = "coreadmin"
 
 # VM size suggestions:
 # - "Standard_D2s_v5": light CI / tooling, low cost -- Standard_D2s_v4
@@ -61,7 +61,7 @@ query_pack_queries = {
   nsg_denies_detail = {
     display_name = "NSG denies (detailed)"
     description  = "Detailed denied NSG flow entries with normalized direction/protocol + rule priority"
-    body = <<KQL
+    body         = <<KQL
 AzureNetworkAnalytics_CL
 | where FlowStatus_s == "D"   // Denied
 | extend Time          = TimeGenerated
@@ -104,7 +104,7 @@ KQL
   nsg_denies_timechart_1h = {
     display_name = "NSG denies (hourly timechart)"
     description  = "Denied NSG flows aggregated by hour"
-    body = <<KQL
+    body         = <<KQL
 AzureNetworkAnalytics_CL
 | where FlowStatus_s == "D"
 | summarize DeniedCount = sum(FlowCount_d) by bin(TimeGenerated, 1h)
@@ -122,7 +122,7 @@ KQL
   nsg_denies_timechart_5m = {
     display_name = "NSG denies (5m timechart)"
     description  = "Denied NSG flows aggregated every 5 minutes"
-    body = <<KQL
+    body         = <<KQL
 AzureNetworkAnalytics_CL
 | where FlowStatus_s == "D"
 | summarize DeniedCount = sum(FlowCount_d) by bin(TimeGenerated, 5m)

@@ -531,11 +531,11 @@ variable "cdbpg_enable_private_endpoint" {
   default     = true
 }
 
-variable "cdbpg_admin_password" {
-  description = "cluster admin password"
-  type        = string
-  sensitive   = true
-}
+# variable "cdbpg_admin_password" {
+#   description = "cluster admin password"
+#   type        = string
+#   sensitive   = true
+# }
 
 variable "cdbpg_preferred_primary_zone" {
   description = "preferred primary zone"
@@ -558,19 +558,7 @@ variable "servicebus_authorization_rules_override" {
   default     = {}
 }
 
-# variable "spa_redirect_uris" {
-#   description = "Redirect URIs for the SPA (e.g., https://gov-app.example.us/auth/callback)"
-#   type        = list(string)
-#   default     = []
-# }
-
-# variable "spa_multi_tenant" {
-#   description = "If true, allow other orgs to sign in; if false, only this tenant."
-#   type        = bool
-#   default     = false
-# }
-
-# Elastic Cluster subnet lookup (preferred: name that exists in your state subnet map)
+# Elastic Cluster subnet lookup
 variable "pg_elastic_private_endpoint_subnet_name" {
   type        = string
   default     = "privatelink-pg"
@@ -619,4 +607,101 @@ variable "pg_elastic_worker_storage_mb" {
   type        = number
   default     = 131072
   description = "Elastic worker storage in MB."
+}
+
+# PostgreSQL Flexible Server (AUTH) - variables
+variable "pg_auth_storage_mb" {
+  type    = number
+  default = 32768
+}
+
+variable "pg_auth_version" {
+  type    = string
+  default = "16"
+}
+
+variable "pg_auth_sku_name" {
+  description = "SKU name for the AUTH PostgreSQL Flexible Server (e.g., B_Standard_B2s, GP_Standard_D2s_v3)."
+  type        = string
+  default     = "B_Standard_B2s"
+}
+
+variable "pg_auth_geo_redundant_backup" {
+  description = "Enable geo-redundant backups for the AUTH PostgreSQL Flexible Server (typically prod-only and region-dependent)."
+  type        = bool
+  default     = false
+}
+
+variable "pg_auth_delegated_subnet_name" {
+  description = "Name of the delegated subnet (from shared-network remote state) to use for the AUTH PostgreSQL Flexible Server."
+  type        = string
+  default     = "pgflex-auth"
+}
+
+variable "pg_auth_delegated_subnet_id" {
+  description = "Optional explicit delegated subnet ID for AUTH PG (overrides subnet-name lookup when provided)."
+  type        = string
+  default     = null
+}
+
+variable "pg_auth_zone" {
+  description = "Availability zone for the AUTH PostgreSQL Flexible Server primary (Commercial only when supported by SKU/region). Use null when not supported (common in Gov for many SKUs)."
+  type        = string
+  default     = "1"
+}
+
+variable "pg_auth_ha_zone" {
+  description = "Availability zone for the AUTH PostgreSQL Flexible Server HA standby (only used when HA is enabled and zones are supported)."
+  type        = string
+  default     = "2"
+}
+
+variable "pg_auth_ha_enabled" {
+  description = "Enable built-in HA for the AUTH PostgreSQL Flexible Server. Mutually exclusive with pg_auth_replica_enabled."
+  type        = bool
+  default     = false
+}
+
+variable "pg_auth_replica_enabled" {
+  description = "Enable a read replica for the AUTH PostgreSQL Flexible Server (only when HA is disabled). Mutually exclusive with pg_auth_ha_enabled."
+  type        = bool
+  default     = false
+}
+
+variable "pg_auth_admin_password" {
+  description = "Administrator password for the AUTH PostgreSQL Flexible Server. Provide via TF_VAR_pg_auth_admin_password or secret injection."
+  type        = string
+  sensitive   = true
+}
+
+variable "pg_auth_databases" {
+  description = "List of databases to create on the AUTH PostgreSQL Flexible Server."
+  type        = list(string)
+  default     = ["identity"]
+
+  validation {
+    condition = alltrue([
+      for db in var.pg_auth_databases :
+      can(regex("^[a-zA-Z][a-zA-Z0-9_]{0,62}$", db))
+    ])
+    error_message = "Each database name must start with a letter and contain only letters, numbers, and underscores (max 63 chars)."
+  }
+}
+
+variable "pg_auth_enable_postgis" {
+  description = "Enable PostGIS on the AUTH PostgreSQL Flexible Server (usually false for auth workloads)."
+  type        = bool
+  default     = false
+}
+
+variable "pg_auth_extensions" {
+  description = "List of PostgreSQL extensions to enable on the AUTH PostgreSQL Flexible Server."
+  type        = list(string)
+  default = [
+    "POSTGIS",
+    "PGCRYPTO",
+    "PG_STAT_STATEMENTS",
+    "UUID-OSSP",
+    "BTREE_GIN"
+  ]
 }

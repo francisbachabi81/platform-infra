@@ -12,8 +12,8 @@ terraform {
   }
 }
 
-provider "azurerm" { 
-  features {} 
+provider "azurerm" {
+  features {}
 }
 
 provider "azapi" {
@@ -22,11 +22,11 @@ provider "azapi" {
 }
 
 locals {
-  env_norm     = var.env == null ? null : lower(trimspace(var.env))
-  plane_norm   = var.plane == null ? null : lower(trimspace(var.plane))
-  env_is_np    = local.env_norm != null && contains(["dev", "qa"], local.env_norm)
-  plane_full   = coalesce(local.plane_norm, local.env_is_np ? "nonprod" : "prod")
-  plane_code   = local.plane_full == "nonprod" ? "np" : "pr"
+  env_norm   = var.env == null ? null : lower(trimspace(var.env))
+  plane_norm = var.plane == null ? null : lower(trimspace(var.plane))
+  env_is_np  = local.env_norm != null && contains(["dev", "qa"], local.env_norm)
+  plane_full = coalesce(local.plane_norm, local.env_is_np ? "nonprod" : "prod")
+  plane_code = local.plane_full == "nonprod" ? "np" : "pr"
 }
 
 data "terraform_remote_state" "shared_network" {
@@ -52,8 +52,19 @@ data "terraform_remote_state" "core" {
 }
 
 locals {
-  waf_policy_ids = { for k, p in azurerm_web_application_firewall_policy.this : k => p.id }
+  waf_policy_ids = {
+    for k, p in azurerm_web_application_firewall_policy.this :
+    k => (
+      try(p.id, null) == null ? null : replace(
+        p.id,
+        "providers/Microsoft.Network/applicationGatewayWebApplicationFirewallPolicies",
+        "providers/Microsoft.Network/ApplicationGatewayWebApplicationFirewallPolicies"
+      )
+    )
+  }
+}
 
+locals {
   shared_outputs = try(data.terraform_remote_state.shared_network.outputs, {})
   core_outputs   = try(data.terraform_remote_state.core.outputs, {})
 
@@ -72,7 +83,7 @@ locals {
 
   core_kv = (
     lookup(local.core_outputs, "core_key_vault", null) != null ? lookup(local.core_outputs, "core_key_vault", null) :
-    lookup(local.core_outputs, "core_kvt", null)       != null ? lookup(local.core_outputs, "core_kvt", null) :
+    lookup(local.core_outputs, "core_kvt", null) != null ? lookup(local.core_outputs, "core_kvt", null) :
     null
   )
 
@@ -88,11 +99,11 @@ locals {
   shared_resource_groups = try(local.shared_outputs.resource_groups, {})
   hub_rg_name            = try(local.shared_resource_groups.hub.name, null)
 
-  shared_frontends      = try(local.shared_appgw.frontends, {})
-  feip_public_name      = try(local.shared_frontends.public.feip_name, "feip-public")
-  feip_private_name     = try(local.shared_frontends.private.feip_name, "feip-private")
-  feip_public_enabled   = try(local.shared_frontends.public.enabled, false)
-  feip_private_enabled  = try(local.shared_frontends.private.enabled, false)
+  shared_frontends     = try(local.shared_appgw.frontends, {})
+  feip_public_name     = try(local.shared_frontends.public.feip_name, "feip-public")
+  feip_private_name    = try(local.shared_frontends.private.feip_name, "feip-private")
+  feip_public_enabled  = try(local.shared_frontends.public.enabled, false)
+  feip_private_enabled = try(local.shared_frontends.private.enabled, false)
 
   ssl_cert_secret_ids = {
     for cert_name, c in var.ssl_certificates :
@@ -136,60 +147,60 @@ locals {
   )
 
   _backend_pools = [
-    for name, b in (local.agw_ready ? var.backend_pools : tomap({})) : {
-      name       = name
+    for name, b in(local.agw_ready ? var.backend_pools : tomap({})) : {
+      name = name
       properties = {
         backendAddresses = concat(
           [for ip in try(b.ip_addresses, []) : { ipAddress = ip }],
-          [for fqdn in try(b.fqdns, [])      : { fqdn      = fqdn }]
+          [for fqdn in try(b.fqdns, []) : { fqdn = fqdn }]
         )
       }
     }
   ]
 
   _probes = [
-    for name, p in (local.agw_ready ? var.probes : tomap({})) : {
-      name       = name
+    for name, p in(local.agw_ready ? var.probes : tomap({})) : {
+      name = name
       properties = {
-        protocol                           = p.protocol
-        host                               = try(p.host, null)
-        path                               = p.path
-        interval                           = try(p.interval, 30)
-        timeout                            = try(p.timeout, 30)
-        unhealthyThreshold                 = try(p.unhealthy_threshold, 3)
+        protocol                            = p.protocol
+        host                                = try(p.host, null)
+        path                                = p.path
+        interval                            = try(p.interval, 30)
+        timeout                             = try(p.timeout, 30)
+        unhealthyThreshold                  = try(p.unhealthy_threshold, 3)
         pickHostNameFromBackendHttpSettings = try(p.pick_host_name_from_backend_http_settings, false)
-        match                              = { statusCodes = try(p.match_status_codes, ["200-399"]) }
+        match                               = { statusCodes = try(p.match_status_codes, ["200-399"]) }
       }
     }
   ]
 
   _http_settings = [
-    for name, s in (local.agw_ready ? var.backend_http_settings : tomap({})) : {
-      name       = name
+    for name, s in(local.agw_ready ? var.backend_http_settings : tomap({})) : {
+      name = name
       properties = merge(
         {
-          port                         = s.port
-          protocol                     = s.protocol
-          requestTimeout               = try(s.request_timeout, 20)
-          cookieBasedAffinity          = try(s.cookie_based_affinity, "Disabled")
+          port                           = s.port
+          protocol                       = s.protocol
+          requestTimeout                 = try(s.request_timeout, 20)
+          cookieBasedAffinity            = try(s.cookie_based_affinity, "Disabled")
           pickHostNameFromBackendAddress = try(s.pick_host_name_from_backend_address, false)
         },
         try(s.probe_name, null) != null ? { probe = { id = "${local.agw_id}/probes/${s.probe_name}" } } : {},
-        try(s.host_name, null)  != null ? { hostName = s.host_name } : {}
+        try(s.host_name, null) != null ? { hostName = s.host_name } : {}
       )
     }
   ]
 
   _frontend_ports = [
-    for name, port in (local.agw_ready ? var.frontend_ports : tomap({})) : {
+    for name, port in(local.agw_ready ? var.frontend_ports : tomap({})) : {
       name       = name
       properties = { port = port }
     }
   ]
 
   _listeners = [
-    for name, l in (local.agw_ready ? var.listeners : tomap({})) : {
-      name       = name
+    for name, l in(local.agw_ready ? var.listeners : tomap({})) : {
+      name = name
       properties = merge(
         {
           protocol = l.protocol
@@ -209,8 +220,8 @@ locals {
   ]
 
   _redirects = [
-    for name, r in (local.agw_ready ? var.redirect_configurations : tomap({})) : {
-      name       = name
+    for name, r in(local.agw_ready ? var.redirect_configurations : tomap({})) : {
+      name = name
       properties = {
         redirectType       = try(r.redirect_type, "Permanent")
         targetListener     = { id = "${local.agw_id}/httpListeners/${r.target_listener_name}" }
@@ -221,8 +232,8 @@ locals {
   ]
 
   _rules = [
-    for r in (local.agw_ready ? var.routing_rules : tolist([])) : {
-      name       = r.name
+    for r in(local.agw_ready ? var.routing_rules : tolist([])) : {
+      name = r.name
       properties = merge(
         {
           ruleType     = try(r.rule_type, "Basic")
@@ -231,7 +242,7 @@ locals {
         },
         try(r.redirect_configuration_name, null) != null ? {
           redirectConfiguration = { id = "${local.agw_id}/redirectConfigurations/${r.redirect_configuration_name}" }
-        } : {
+          } : {
           backendAddressPool  = { id = "${local.agw_id}/backendAddressPools/${r.backend_address_pool_name}" }
           backendHttpSettings = { id = "${local.agw_id}/backendHttpSettingsCollection/${r.backend_http_settings_name}" }
         }
@@ -241,18 +252,18 @@ locals {
 
   azapi_body = local.agw_ready ? {
     properties = merge(
-      length(local._backend_pools)    > 0 ? { backendAddressPools            = local._backend_pools } : {},
-      length(local._http_settings)    > 0 ? { backendHttpSettingsCollection  = local._http_settings } : {},
-      length(local._probes)           > 0 ? { probes                        = local._probes } : {},
-      length(local._frontend_ports)   > 0 ? { frontendPorts                 = local._frontend_ports } : {},
-      length(local._ssl_certs)        > 0 ? { sslCertificates               = local._ssl_certs } : {},
-      length(local._listeners)        > 0 ? { httpListeners                 = local._listeners } : {},
-      length(local._redirects)        > 0 ? { redirectConfigurations        = local._redirects } : {},
-      length(local._rules)            > 0 ? { requestRoutingRules           = local._rules } : {}
+      length(local._backend_pools) > 0 ? { backendAddressPools = local._backend_pools } : {},
+      length(local._http_settings) > 0 ? { backendHttpSettingsCollection = local._http_settings } : {},
+      length(local._probes) > 0 ? { probes = local._probes } : {},
+      length(local._frontend_ports) > 0 ? { frontendPorts = local._frontend_ports } : {},
+      length(local._ssl_certs) > 0 ? { sslCertificates = local._ssl_certs } : {},
+      length(local._listeners) > 0 ? { httpListeners = local._listeners } : {},
+      length(local._redirects) > 0 ? { redirectConfigurations = local._redirects } : {},
+      length(local._rules) > 0 ? { requestRoutingRules = local._rules } : {}
     )
   } : null
 
-  ssl_cert_names_in_payload     = toset([for c in local._ssl_certs : c.name])
+  ssl_cert_names_in_payload = toset([for c in local._ssl_certs : c.name])
   https_listeners_need_certs = {
     for name, l in var.listeners : name => l.ssl_certificate_name
     if try(l.protocol, "") == "Https"
@@ -357,60 +368,28 @@ resource "azurerm_web_application_firewall_policy" "this" {
     }
   }
 
+  # Pass-through custom rules (from tfvars: waf_policies[*].custom_rules)
   dynamic "custom_rules" {
-    for_each = length(try(each.value.allowed_countries, ["US"])) > 0 ? [1] : []
+    for_each = try(each.value.custom_rules, [])
     content {
-      name      = "blockNonAllowedCountries"
-      priority  = 5
+      name      = custom_rules.value.name
+      priority  = custom_rules.value.priority
       rule_type = "MatchRule"
-      action    = "Block"
+      action    = custom_rules.value.action
 
-      match_conditions {
-        match_variables { variable_name = "RemoteAddr" }
-        operator           = "GeoMatch"
-        match_values       = each.value.allowed_countries
-        negation_condition = true
-      }
-    }
-  }
+      dynamic "match_conditions" {
+        for_each = try(custom_rules.value.match_conditions, [])
+        content {
+          match_variables {
+            variable_name = match_conditions.value.match_variable
+            selector      = try(match_conditions.value.selector, null)
+          }
 
-  dynamic "custom_rules" {
-    for_each = (try(each.value.vpn_required_for_all_paths, false) && length(try(each.value.vpn_cidrs, [])) > 0) ? [1] : []
-    content {
-      name      = "blockNonVpnAllPaths"
-      priority  = 8
-      rule_type = "MatchRule"
-      action    = "Block"
-
-      match_conditions {
-        match_variables { variable_name = "RemoteAddr" }
-        operator           = "IPMatch"
-        match_values       = each.value.vpn_cidrs
-        negation_condition = true
-      }
-    }
-  }
-
-  dynamic "custom_rules" {
-    for_each = (length(try(each.value.restricted_paths, [])) > 0 && length(try(each.value.vpn_cidrs, [])) > 0) ? [1] : []
-    content {
-      name      = "blockNonvpnRestrictedPaths"
-      priority  = 10
-      rule_type = "MatchRule"
-      action    = "Block"
-
-      match_conditions {
-        match_variables { variable_name = "RequestUri" }
-        operator     = "BeginsWith"
-        match_values = each.value.restricted_paths
-        transforms   = ["Lowercase"]
-      }
-
-      match_conditions {
-        match_variables { variable_name = "RemoteAddr" }
-        operator           = "IPMatch"
-        match_values       = each.value.vpn_cidrs
-        negation_condition = true
+          operator           = match_conditions.value.operator
+          match_values       = match_conditions.value.match_values
+          negation_condition = try(match_conditions.value.negation_condition, false)
+          transforms         = try(match_conditions.value.transforms, [])
+        }
       }
     }
   }

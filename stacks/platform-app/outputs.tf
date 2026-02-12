@@ -22,7 +22,7 @@ output "features" {
     deploy_aks_in_env      = local.aks_enabled_env
     sbns1_created          = try(length(module.sbns1) > 0, false)
     eventhub_created       = try(length(module.eventhub) > 0, false)
-    # AKS can exist in exactly one of the three per-env modules
+
     aks1_created = (
       try(length(module.aks1_env_shared_nonprod) > 0, false) ||
       try(length(module.aks1_env_prod) > 0, false) ||
@@ -31,25 +31,28 @@ output "features" {
     postgres_created = try(length(module.postgres) > 0, false)
     redis_created    = try(length(module.redis1) > 0, false)
     # cdbpg_created    = try(length(module.cdbpg1) > 0, false)
-    cosmos_created = try(length(module.cosmos1) > 0, false)
+    cosmos_created           = try(length(module.cosmos1) > 0, false)
+    public_layers_sa_created = try(length(module.sa_public_layers) > 0, false)
   }
 }
 
 output "ids" {
   value = {
-    kv1      = try(module.kv1[0].id, null)
-    sa1      = try(module.sa1[0].id, null)
-    cosmos1  = try(module.cosmos1[0].id, null)
-    aks1     = local.aks_id
-    aks      = local.aks_id
-    sbns1    = try(module.sbns1[0].id, null)
-    eventhub = try(module.eventhub[0].id, null)
-    postgres = try(module.postgres[0].id, null)
-    redis    = try(module.redis1[0].id, null)
+    kv1           = try(module.kv1[0].id, null)
+    sa1           = try(module.sa1[0].id, null)
+    cosmos1       = try(module.cosmos1[0].id, null)
+    aks1          = local.aks_id
+    aks           = local.aks_id
+    sbns1         = try(module.sbns1[0].id, null)
+    eventhub      = try(module.eventhub[0].id, null)
+    postgres      = try(module.postgres[0].id, null)
+    postgres_auth = try(module.postgres_auth[0].id, null)
+    redis         = try(module.redis1[0].id, null)
     # cdbpg1     = try(module.cdbpg1[0].id, null)
-    funcapp1   = try(module.funcapp1[0].id, null)
-    funcapp2   = try(module.funcapp2[0].id, null)
-    plan1_func = try(module.plan1_func[0].id, null)
+    funcapp1         = try(module.funcapp1[0].id, null)
+    funcapp2         = try(module.funcapp2[0].id, null)
+    plan1_func       = try(module.plan1_func[0].id, null)
+    sa_public_layers = try(module.sa_public_layers[0].id, null)
   }
 }
 
@@ -69,9 +72,10 @@ output "names" {
     postgres    = try(module.postgres[0].name, null)
     redis       = try(module.redis1[0].name, null)
     # cdbpg1      = try(module.cdbpg1[0].name, null)
-    funcapp1   = try(module.funcapp1[0].name, null)
-    funcapp2   = try(module.funcapp2[0].name, null)
-    plan1_func = try(module.plan1_func[0].name, null)
+    funcapp1         = try(module.funcapp1[0].name, null)
+    funcapp2         = try(module.funcapp2[0].name, null)
+    plan1_func       = try(module.plan1_func[0].name, null)
+    sa_public_layers = try(module.sa_public_layers[0].name, null)
   }
 }
 
@@ -104,9 +108,6 @@ output "aks" {
     subscription_id     = local.aks_subscription_id
     tenant_id           = local.aks_tenant_id
     resource_group      = local.aks_rg_name
-
-    # oidc_issuer_url     = local.aks_oidc_issuer_url
-    # provider_alias      = local.aks_provider_alias
   } : null
 }
 
@@ -153,6 +154,15 @@ output "storage_account" {
   }, null)
 }
 
+output "public_layers_storage_account" {
+  value = try({
+    id                = module.sa_public_layers[0].id
+    name              = module.sa_public_layers[0].name
+    blob_primary_host = "${module.sa_public_layers[0].name}.blob.${local._sa_domain}"
+    blob_base_url     = "https://${module.sa_public_layers[0].name}.blob.${local._sa_domain}"
+  }, null)
+}
+
 output "key_vault" {
   value = try({
     id        = module.kv1[0].id
@@ -195,6 +205,24 @@ output "postgres_replica" {
     id   = module.postgres_replica[0].id
     name = module.postgres_replica[0].name
     fqdn = try(module.postgres_replica[0].fqdn, null)
+  }, null)
+}
+
+output "postgres_auth" {
+  value = try({
+    id                  = module.postgres_auth[0].id
+    name                = module.postgres_auth[0].name
+    fqdn                = try(module.postgres_auth[0].fqdn, null)
+    private_dns_zone_id = try(module.postgres_auth[0].private_dns_zone_id, null)
+    ha_enabled          = try(module.postgres_auth[0].ha_enabled, null)
+  }, null)
+}
+
+output "postgres_auth_replica" {
+  value = try({
+    id   = module.postgres_auth_replica[0].id
+    name = module.postgres_auth_replica[0].name
+    fqdn = try(module.postgres_auth_replica[0].fqdn, null)
   }, null)
 }
 
@@ -273,32 +301,3 @@ output "grafana_storage" {
     envs  = ["dev", "prod"]
   }
 }
-
-# output "spa" {
-#   description = "SPA app registration (public client, no secret)."
-#   value = local.create_sp ? {
-#     name              = local.spa_app_name
-#     client_id         = try(azuread_application.spa_app[0].client_id, null)
-#     object_id         = try(azuread_service_principal.spa_sp[0].object_id, null)
-#     sign_in_audience  = local.spa_sign_in_audience
-#     redirect_uris     = var.spa_redirect_uris
-#     tenant_id         = var.tenant_id
-#   } : null
-# }
-
-# output "env_sp" {
-#   description = "Env service principal (confidential). Client credentials are stored in core Key Vault with env prefix."
-#   value = local.create_sp ? {
-#     name        = local.env_sp_app_name
-#     client_id   = try(azuread_application.env_sp_app[0].client_id, null)
-#     object_id   = try(azuread_service_principal.env_sp[0].object_id, null)
-#     tenant_id   = var.tenant_id
-
-#     key_vault_id = local.core_kv_id
-#     key_vault_secret_names = [
-#       local.kv_secret_client_id_name,
-#       local.kv_secret_client_secret_name,
-#       local.kv_secret_tenant_id_name,
-#     ]
-#   } : null
-# }

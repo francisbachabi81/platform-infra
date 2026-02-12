@@ -6,7 +6,7 @@ locals {
   env_effective = coalesce(
     local.env_norm,
     local.plane_norm == "nonprod" ? "dev" :
-    local.plane_norm == "prod"    ? "prod" :
+    local.plane_norm == "prod" ? "prod" :
     "dev"
   )
 
@@ -79,29 +79,29 @@ locals {
   product_env = var.product == "hrz" ? "usgovernment" : "public"
 
   core_sub    = trimspace(coalesce(var.core_subscription_id, var.subscription_id))
-  core_tenant = trimspace(coalesce(var.core_tenant_id,     var.tenant_id))
+  core_tenant = trimspace(coalesce(var.core_tenant_id, var.tenant_id))
 
   env_sub    = trimspace(coalesce(var.env_subscription_id, var.subscription_id))
   env_tenant = trimspace(coalesce(var.env_tenant_id, var.tenant_id))
 }
 
 locals {
-  dev_sub  = (var.dev_subscription_id  != null && trimspace(var.dev_subscription_id)  != "") ? var.dev_subscription_id  : var.core_subscription_id
-  dev_ten  = (var.dev_tenant_id        != null && trimspace(var.dev_tenant_id)        != "") ? var.dev_tenant_id        : var.core_tenant_id
+  dev_sub = (var.dev_subscription_id != null && trimspace(var.dev_subscription_id) != "") ? var.dev_subscription_id : var.core_subscription_id
+  dev_ten = (var.dev_tenant_id != null && trimspace(var.dev_tenant_id) != "") ? var.dev_tenant_id : var.core_tenant_id
 
-  qa_sub   = (var.qa_subscription_id   != null && trimspace(var.qa_subscription_id)   != "") ? var.qa_subscription_id   : var.core_subscription_id
-  qa_ten   = (var.qa_tenant_id         != null && trimspace(var.qa_tenant_id)         != "") ? var.qa_tenant_id         : var.core_tenant_id
+  qa_sub = (var.qa_subscription_id != null && trimspace(var.qa_subscription_id) != "") ? var.qa_subscription_id : var.core_subscription_id
+  qa_ten = (var.qa_tenant_id != null && trimspace(var.qa_tenant_id) != "") ? var.qa_tenant_id : var.core_tenant_id
 
-  uat_sub  = (var.uat_subscription_id  != null && trimspace(var.uat_subscription_id)  != "") ? var.uat_subscription_id  : var.core_subscription_id
-  uat_ten  = (var.uat_tenant_id        != null && trimspace(var.uat_tenant_id)        != "") ? var.uat_tenant_id        : var.core_tenant_id
+  uat_sub = (var.uat_subscription_id != null && trimspace(var.uat_subscription_id) != "") ? var.uat_subscription_id : var.core_subscription_id
+  uat_ten = (var.uat_tenant_id != null && trimspace(var.uat_tenant_id) != "") ? var.uat_tenant_id : var.core_tenant_id
 
   prod_sub = (var.prod_subscription_id != null && trimspace(var.prod_subscription_id) != "") ? var.prod_subscription_id : var.core_subscription_id
-  prod_ten = (var.prod_tenant_id       != null && trimspace(var.prod_tenant_id)       != "") ? var.prod_tenant_id       : var.core_tenant_id
+  prod_ten = (var.prod_tenant_id != null && trimspace(var.prod_tenant_id) != "") ? var.prod_tenant_id : var.core_tenant_id
 }
 
 # azurerm aliases
 provider "azurerm" {
-  alias           = "env"
+  alias = "env"
   features {}
   subscription_id = local.env_sub
   tenant_id       = local.env_tenant
@@ -109,7 +109,7 @@ provider "azurerm" {
 }
 
 provider "azurerm" {
-  alias           = "core"
+  alias = "core"
   features {}
   subscription_id = local.core_sub
   tenant_id       = local.core_tenant
@@ -117,7 +117,7 @@ provider "azurerm" {
 }
 
 provider "azurerm" {
-  alias           = "dev"
+  alias = "dev"
   features {}
   subscription_id = local.dev_sub
   tenant_id       = local.dev_ten
@@ -125,7 +125,7 @@ provider "azurerm" {
 }
 
 provider "azurerm" {
-  alias           = "qa"
+  alias = "qa"
   features {}
   subscription_id = local.qa_sub
   tenant_id       = local.qa_ten
@@ -133,7 +133,7 @@ provider "azurerm" {
 }
 
 provider "azurerm" {
-  alias           = "uat"
+  alias = "uat"
   features {}
   subscription_id = local.uat_sub
   tenant_id       = local.uat_ten
@@ -141,7 +141,7 @@ provider "azurerm" {
 }
 
 provider "azurerm" {
-  alias           = "prod"
+  alias = "prod"
   features {}
   subscription_id = local.prod_sub
   tenant_id       = local.prod_ten
@@ -150,12 +150,12 @@ provider "azurerm" {
 
 # Caller identity and RG discovery
 data "azurerm_client_config" "core" { provider = azurerm.core }
-data "azurerm_client_config" "env"  { provider = azurerm.env }
+data "azurerm_client_config" "env" { provider = azurerm.env }
 
 # (locals depend on remote state outputs)
 locals {
   rg_core_name = try(data.terraform_remote_state.core.outputs.meta.rg_core_name, null)
-  rg_app_name  = coalesce(
+  rg_app_name = coalesce(
     var.env_rg_name,
     try(data.terraform_remote_state.platform.outputs.meta.rg_name, null)
   )
@@ -175,13 +175,13 @@ data "azurerm_resource_group" "env_rg" {
 
 locals {
   sub_core_resolved = try(data.azurerm_client_config.core.subscription_id, null)
-  sub_env_resolved  = try(data.azurerm_client_config.env.subscription_id,  null)
+  sub_env_resolved  = try(data.azurerm_client_config.env.subscription_id, null)
 
-  rg_env_name_resolved  = try(data.azurerm_resource_group.env_rg[0].name, null)
-  rg_env_id_resolved    = try(data.azurerm_resource_group.env_rg[0].id,   null)
+  rg_env_name_resolved = try(data.azurerm_resource_group.env_rg[0].name, null)
+  rg_env_id_resolved   = try(data.azurerm_resource_group.env_rg[0].id, null)
 
-  rg_core_name_resolved = try(data.azurerm_resource_group.core_rg[0].name,     null)
-  rg_core_id_resolved   = try(data.azurerm_resource_group.core_rg[0].id,       null)
+  rg_core_name_resolved     = try(data.azurerm_resource_group.core_rg[0].name, null)
+  rg_core_id_resolved       = try(data.azurerm_resource_group.core_rg[0].id, null)
   rg_core_location_resolved = try(data.azurerm_resource_group.core_rg[0].location, null)
 }
 
@@ -208,10 +208,15 @@ locals {
     var.key_vault_ids
   ))
 
-  ids_sa    = compact([try(local.platform_ids.sa1, null)])
-  ids_sbns  = compact([try(local.platform_ids.sbns1, null)])
-  ids_ehns  = compact([try(data.terraform_remote_state.platform.outputs.eventhub.namespace_id, null)])
-  ids_pg    = compact([try(local.platform_ids.postgres, null), try(local.platform_ids.cdbpg1, null)])
+  ids_sa   = compact([try(local.platform_ids.sa1, null)])
+  ids_sbns = compact([try(local.platform_ids.sbns1, null)])
+  ids_ehns = compact([try(data.terraform_remote_state.platform.outputs.eventhub.namespace_id, null)])
+  # ids_pg    = compact([try(local.platform_ids.postgres, null), try(local.platform_ids.cdbpg1, null)])
+  ids_pg = compact([
+    try(local.platform_ids.postgres, null),
+    try(local.platform_ids.postgres_auth, null),
+    try(local.platform_ids.cdbpg1, null)
+  ])
   ids_redis = compact([try(local.platform_ids.redis, null)])
   ids_rsv   = compact([try(local.core_ids.rsv, null)])
   ids_appi  = compact([try(local.core_ids.appi, null)])
@@ -219,93 +224,97 @@ locals {
 
   ids_cosmos = compact(concat(
     [
-      try(local.platform_ids.cosmos,                     null),
-      try(local.platform_ids.cosmos1,                    null),
-      try(local.platform_ids.cdb1,                       null),
-      try(data.terraform_remote_state.platform.outputs.ids.cosmosdb,        null),
-      try(data.terraform_remote_state.platform.outputs.cosmos.account_id,   null),
+      try(local.platform_ids.cosmos, null),
+      try(local.platform_ids.cosmos1, null),
+      try(local.platform_ids.cdb1, null),
+      try(data.terraform_remote_state.platform.outputs.ids.cosmosdb, null),
+      try(data.terraform_remote_state.platform.outputs.cosmos.account_id, null),
       try(data.terraform_remote_state.platform.outputs.cosmosdb.account_id, null)
     ],
     var.cosmos_account_ids
   ))
 
   ids_aks = compact([
-    try(data.terraform_remote_state.platform.outputs.aks.id,        null),
-    try(data.terraform_remote_state.platform.outputs.aks_id,        null),
-    try(data.terraform_remote_state.platform.outputs.ids.aks,       null),
+    try(data.terraform_remote_state.platform.outputs.aks.id, null),
+    try(data.terraform_remote_state.platform.outputs.aks_id, null),
+    try(data.terraform_remote_state.platform.outputs.ids.aks, null),
     try(data.terraform_remote_state.platform.outputs.kubernetes.id, null),
   ])
 
   ids_funcapps = compact([
-    try(local.platform_ids.funcapp1,   null),
-    try(local.platform_ids.funcapp2,   null),
+    try(local.platform_ids.funcapp1, null),
+    try(local.platform_ids.funcapp2, null),
     try(local.platform_ids.plan1_func, null),
   ])
 
   ids_webapps = compact([
-    try(local.platform_ids.webapp,       null),
-    try(local.platform_app.web_app_id,   null),
-    try(local.platform_ids.app,          null),
+    try(local.platform_ids.webapp, null),
+    try(local.platform_app.web_app_id, null),
+    try(local.platform_ids.app, null),
   ])
 
   ids_appgws = compact([
-    try(data.terraform_remote_state.network.outputs.app_gateway.id,         null),
+    try(data.terraform_remote_state.network.outputs.app_gateway.id, null),
     try(data.terraform_remote_state.network.outputs.application_gateway.id, null),
   ])
 
+  # ids_frontdoor = compact([
+  #   try(data.terraform_remote_state.network.outputs.frontdoor.profile_id, null)
+  # ])
   ids_frontdoor = compact([
-    try(data.terraform_remote_state.network.outputs.frontdoor.profile_id, null)
+    try(data.terraform_remote_state.network.outputs.frontdoor.profile_id, null),
+    try(data.terraform_remote_state.network.outputs.frontdoor_02.profile_id, null),
   ])
 
+
   nsg_ids_flat = concat(
-    values(try(data.terraform_remote_state.network.outputs.nsg_ids_by_env.hub,  {})),
-    values(try(data.terraform_remote_state.network.outputs.nsg_ids_by_env.dev,  {})),
-    values(try(data.terraform_remote_state.network.outputs.nsg_ids_by_env.qa,   {})),
+    values(try(data.terraform_remote_state.network.outputs.nsg_ids_by_env.hub, {})),
+    values(try(data.terraform_remote_state.network.outputs.nsg_ids_by_env.dev, {})),
+    values(try(data.terraform_remote_state.network.outputs.nsg_ids_by_env.qa, {})),
     values(try(data.terraform_remote_state.network.outputs.nsg_ids_by_env.prod, {})),
-    values(try(data.terraform_remote_state.network.outputs.nsg_ids_by_env.uat,  {}))
+    values(try(data.terraform_remote_state.network.outputs.nsg_ids_by_env.uat, {}))
   )
 
   ids_nsg = compact(local.nsg_ids_flat)
 
-  kv_map     = { for id in local.ids_kv       : id => id }
-  sa_map     = { for id in local.ids_sa       : id => id }
-  sbns_map   = { for id in local.ids_sbns     : id => id }
-  ehns_map   = { for id in local.ids_ehns     : id => id }
-  pg_map     = { for id in local.ids_pg       : id => id }
-  redis_map  = { for id in local.ids_redis    : id => id }
-  rsv_map    = { for id in local.ids_rsv      : id => id }
-  appi_map   = { for id in local.ids_appi     : id => id }
-  vpng_map   = { for id in local.ids_vpng     : id => id }
-  cosmos_map = { for id in local.ids_cosmos   : id => id }
+  kv_map     = { for id in local.ids_kv : id => id }
+  sa_map     = { for id in local.ids_sa : id => id }
+  sbns_map   = { for id in local.ids_sbns : id => id }
+  ehns_map   = { for id in local.ids_ehns : id => id }
+  pg_map     = { for id in local.ids_pg : id => id }
+  redis_map  = { for id in local.ids_redis : id => id }
+  rsv_map    = { for id in local.ids_rsv : id => id }
+  appi_map   = { for id in local.ids_appi : id => id }
+  vpng_map   = { for id in local.ids_vpng : id => id }
+  cosmos_map = { for id in local.ids_cosmos : id => id }
 
-  fa_map    = { for id in local.ids_funcapps  : id => id }
-  web_map   = { for id in local.ids_webapps   : id => id }
-  appgw_map = { for id in local.ids_appgws    : id => id }
+  fa_map    = { for id in local.ids_funcapps : id => id }
+  web_map   = { for id in local.ids_webapps : id => id }
+  appgw_map = { for id in local.ids_appgws : id => id }
   afd_map   = { for id in local.ids_frontdoor : id => id }
-  nsg_map   = { for id in local.ids_nsg       : id => id }
+  nsg_map   = { for id in local.ids_nsg : id => id }
 
   sa_core_shared = try(data.terraform_remote_state.platform.outputs.sa_core_shared, null)
 
-  existing_exports_sa_id   = coalesce(var.sa_core_shared_account_id_override, try(local.sa_core_shared.id, null))
+  existing_exports_sa_id = coalesce(var.sa_core_shared_account_id_override, try(local.sa_core_shared.id, null))
 }
 
 locals {
-  # Which tiers are managed by this observability run?
+  # Which tiers managed by observability
   manage_core_shared = contains(["dev", "prod"], local.env_effective) # dev => nonprod core; prod => prod core
   manage_env_only    = contains(["qa", "uat"], local.env_effective)
 
-  # Convenience: which env this run is responsible for (itself only)
   managed_env_key = local.env_effective
 }
 
 locals {
-  # --- Core Key Vault ("kvt") from core stack outputs ---
+  # Core kvt from core stack outputs
   ids_kv_core = compact([
     try(data.terraform_remote_state.core.outputs.core_key_vault.id, null),
     try(data.terraform_remote_state.core.outputs.keyvault.core.id, null),
   ])
 
-  # --- Env Key Vault(s) ("kv") from platform stack outputs / overrides ---
+  # Env kvt from platform stack outputs
   ids_kv_env = compact(concat(
     [
       try(local.platform_ids.kv1, null),
@@ -319,20 +328,15 @@ locals {
   ids_kv_env_distinct  = distinct(local.ids_kv_env)
   ids_kv_core_distinct = distinct(local.ids_kv_core)
 
-  kv_env_map  = { for id in local.ids_kv_env_distinct  : id => id }
+  kv_env_map  = { for id in local.ids_kv_env_distinct : id => id }
   kv_core_map = { for id in local.ids_kv_core_distinct : id => id }
 }
 
 locals {
-  # single resource id (or null if platform stack didn't create it)
   excluded_flowlogs_sa_id = try(data.terraform_remote_state.platform.outputs.sa_core_shared.id, null)
 }
 
 # Diagnostic categories (data sources)
-# data "azurerm_monitor_diagnostic_categories" "kv" {
-#   for_each    = local.kv_map
-#   resource_id = each.value
-# }
 data "azurerm_monitor_diagnostic_categories" "kv_env" {
   provider    = azurerm.env
   for_each    = local.kv_env_map
@@ -434,7 +438,7 @@ resource "azurerm_monitor_diagnostic_setting" "nsg" {
   dynamic "enabled_log" {
     for_each = toset([
       for c in var.nsg_log_categories :
-      c if (
+      c if(
         contains(try(each.value.log_category_types, []), c) ||
         contains(try(each.value.logs, []), c)
       )
@@ -469,8 +473,8 @@ data "azurerm_monitor_diagnostic_categories" "appgw_nsg" {
 }
 
 resource "azurerm_monitor_diagnostic_setting" "appgw_nsg" {
-  provider                   = azurerm.core
-  count                      = (var.enable_nsg_diagnostics && local.appgw_nsg_id != null) ? 1 : 0
+  provider = azurerm.core
+  count    = (var.enable_nsg_diagnostics && local.appgw_nsg_id != null) ? 1 : 0
 
   name                       = "${var.diag_name}-appgw-nsg"
   target_resource_id         = local.appgw_nsg_id
@@ -546,39 +550,6 @@ resource "azurerm_monitor_diagnostic_setting" "sub_core" {
   }
 }
 
-# resource "azurerm_monitor_diagnostic_setting" "kv" {
-#   for_each                   = var.enable_kv_diagnostics ? data.azurerm_monitor_diagnostic_categories.kv : {}
-#   name                       = var.diag_name
-#   target_resource_id         = each.key
-#   log_analytics_workspace_id = local.law_id
-
-#   dynamic "enabled_log" {
-#     for_each = toset([
-#       for c in var.kv_log_categories :
-#       c if (
-#         contains(try(each.value.log_category_types, []), c) ||
-#         contains(try(each.value.logs, []), c)
-#       )
-#     ])
-#     content { category = enabled_log.value }
-#   }
-
-#   dynamic "metric" {
-#     for_each = toset(try(each.value.metrics, []))
-#     content {
-#       category = metric.value
-#       enabled  = true
-#     }
-#   }
-
-#   lifecycle {
-#     precondition {
-#       condition     = local.law_id != null
-#       error_message = "LAW workspace ID could not be resolved for Key Vault diagnostics."
-#     }
-#   }
-# }
-
 resource "azurerm_monitor_diagnostic_setting" "kv_env" {
   provider                   = azurerm.env
   for_each                   = var.enable_kv_diagnostics ? data.azurerm_monitor_diagnostic_categories.kv_env : {}
@@ -596,9 +567,9 @@ resource "azurerm_monitor_diagnostic_setting" "kv_env" {
 
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
-    content { 
+    content {
       category = metric.value
-      enabled = true 
+      enabled  = true
     }
   }
 
@@ -627,9 +598,9 @@ resource "azurerm_monitor_diagnostic_setting" "kv_core" {
 
   dynamic "metric" {
     for_each = toset(try(each.value.metrics, []))
-    content { 
+    content {
       category = metric.value
-      enabled = true 
+      enabled  = true
     }
   }
 
@@ -650,7 +621,7 @@ resource "azurerm_monitor_diagnostic_setting" "sa" {
   dynamic "enabled_log" {
     for_each = toset([
       for c in var.sa_log_categories :
-      c if (
+      c if(
         contains(try(each.value.log_category_types, []), c) ||
         contains(try(each.value.logs, []), c)
       )
@@ -676,7 +647,7 @@ resource "azurerm_monitor_diagnostic_setting" "sbns" {
   dynamic "enabled_log" {
     for_each = toset([
       for c in var.sbns_log_categories :
-      c if (
+      c if(
         contains(try(each.value.log_category_types, []), c) ||
         contains(try(each.value.logs, []), c)
       )
@@ -709,7 +680,7 @@ resource "azurerm_monitor_diagnostic_setting" "ehns" {
   dynamic "enabled_log" {
     for_each = toset([
       for c in var.ehns_log_categories :
-      c if (
+      c if(
         contains(try(each.value.log_category_types, []), c) ||
         contains(try(each.value.logs, []), c)
       )
@@ -742,7 +713,7 @@ resource "azurerm_monitor_diagnostic_setting" "pg" {
   dynamic "enabled_log" {
     for_each = toset([
       for c in var.pg_log_categories :
-      c if (
+      c if(
         contains(try(each.value.log_category_types, []), c) ||
         contains(try(each.value.logs, []), c)
       )
@@ -775,7 +746,7 @@ resource "azurerm_monitor_diagnostic_setting" "redis" {
   dynamic "enabled_log" {
     for_each = toset([
       for c in var.redis_log_categories :
-      c if (
+      c if(
         contains(try(each.value.log_category_types, []), c) ||
         contains(try(each.value.logs, []), c)
       )
@@ -808,7 +779,7 @@ resource "azurerm_monitor_diagnostic_setting" "rsv" {
   dynamic "enabled_log" {
     for_each = toset([
       for c in var.rsv_log_categories :
-      c if (
+      c if(
         contains(try(each.value.log_category_types, []), c) ||
         contains(try(each.value.logs, []), c)
       )
@@ -843,7 +814,7 @@ resource "azurerm_monitor_diagnostic_setting" "appi" {
   dynamic "enabled_log" {
     for_each = toset([
       for c in var.appi_log_categories :
-      c if (
+      c if(
         contains(try(each.value.log_category_types, []), c) ||
         contains(try(each.value.logs, []), c)
       )
@@ -876,7 +847,7 @@ resource "azurerm_monitor_diagnostic_setting" "vpng" {
   dynamic "enabled_log" {
     for_each = toset([
       for c in var.vpng_log_categories :
-      c if (
+      c if(
         contains(try(each.value.log_category_types, []), c) ||
         contains(try(each.value.logs, []), c)
       )
@@ -909,7 +880,7 @@ resource "azurerm_monitor_diagnostic_setting" "fa" {
   dynamic "enabled_log" {
     for_each = toset([
       for c in var.fa_log_categories :
-      c if (
+      c if(
         contains(try(each.value.log_category_types, []), c) ||
         contains(try(each.value.logs, []), c)
       )
@@ -942,7 +913,7 @@ resource "azurerm_monitor_diagnostic_setting" "web" {
   dynamic "enabled_log" {
     for_each = toset([
       for c in var.web_log_categories :
-      c if (
+      c if(
         contains(try(each.value.log_category_types, []), c) ||
         contains(try(each.value.logs, []), c)
       )
@@ -975,7 +946,7 @@ resource "azurerm_monitor_diagnostic_setting" "appgw" {
   dynamic "enabled_log" {
     for_each = toset([
       for c in var.appgw_log_categories :
-      c if (
+      c if(
         contains(try(each.value.log_category_types, []), c) ||
         contains(try(each.value.logs, []), c)
       )
@@ -1008,7 +979,7 @@ resource "azurerm_monitor_diagnostic_setting" "afd" {
   dynamic "enabled_log" {
     for_each = toset([
       for c in var.afd_log_categories :
-      c if (
+      c if(
         contains(try(each.value.log_category_types, []), c) ||
         contains(try(each.value.logs, []), c)
       )
@@ -1041,7 +1012,7 @@ resource "azurerm_monitor_diagnostic_setting" "cosmos" {
   dynamic "enabled_log" {
     for_each = toset([
       for c in var.cosmos_log_categories :
-      c if (
+      c if(
         contains(try(each.value.log_category_types, []), c) ||
         contains(try(each.value.logs, []), c)
       )
@@ -1147,7 +1118,7 @@ resource "azurerm_monitor_activity_log_alert" "service_health_env" {
   resource_group_name = local.rg_env_name_resolved
   scopes              = ["/subscriptions/${local.sub_env_resolved}"]
   criteria { category = "ServiceHealth" }
-  action   { action_group_id = local.ag_id_env }
+  action { action_group_id = local.ag_id_env }
 
   lifecycle {
     precondition {
@@ -1166,7 +1137,7 @@ resource "azurerm_monitor_activity_log_alert" "service_health_core" {
   scopes              = ["/subscriptions/${local.sub_core_resolved}"]
   description         = "Service Health incidents in the core subscription"
   criteria { category = "ServiceHealth" }
-  action   { action_group_id = local.ag_id_core }
+  action { action_group_id = local.ag_id_core }
 
   lifecycle {
     precondition {
@@ -1191,8 +1162,8 @@ resource "azurerm_monitor_activity_log_alert" "service_health_core" {
 # AKS diagnostics
 locals {
   aks_ids = toset(compact([
-    try(data.terraform_remote_state.platform.outputs.ids.aks,       null),
-    try(data.terraform_remote_state.platform.outputs.aks_id,        null),
+    try(data.terraform_remote_state.platform.outputs.ids.aks, null),
+    try(data.terraform_remote_state.platform.outputs.aks_id, null),
     try(data.terraform_remote_state.platform.outputs.kubernetes.id, null),
   ]))
 
@@ -1238,18 +1209,18 @@ locals {
     for label, cfg in var.policy_source_subscriptions :
     label => (
       label == "core"
-        ? local.rg_core_id_resolved
-        : try(
-            data.terraform_remote_state.network.outputs.resource_groups[replace(label, "-", "_")].id,
-            null
-          )
+      ? local.rg_core_id_resolved
+      : try(
+        data.terraform_remote_state.network.outputs.resource_groups[replace(label, "-", "_")].id,
+        null
+      )
     )
   }
 }
 
 locals {
   policy_alerts_enabled_for_env = contains(["dev", "prod"], local.env_effective)
-  policy_compliance_enabled = var.enable_policy_compliance_alerts && local.policy_alerts_enabled_for_env
+  policy_compliance_enabled     = var.enable_policy_compliance_alerts && local.policy_alerts_enabled_for_env
 }
 
 resource "azapi_resource" "policy_state_changes" {
@@ -1323,7 +1294,7 @@ locals {
             }
           },
           "Manual_Validation_GET" = {
-            "type" = "Http"
+            "type"     = "Http"
             "runAfter" = { "Return_SubscriptionValidation_Response" = ["Failed"] }
             "inputs" = {
               "method" = "GET"
@@ -1352,38 +1323,38 @@ locals {
                       "type"       = "If"
                       "expression" = "@equals(items('For_each_event')?['data']?['complianceState'], 'NonCompliant')"
                       "actions" = {
-                        # ---- Core event fields ----
+                        # -Core event fields-
                         "Compose_SubscriptionId" = {
                           "type"   = "Compose"
                           "inputs" = "@items('For_each_event')?['data']?['subscriptionId']"
                         },
                         "Compose_ResourceId" = {
-                          "type"   = "Compose"
-                          "inputs" = "@coalesce(items('For_each_event')?['data']?['resourceId'], items('For_each_event')?['subject'])"
+                          "type"     = "Compose"
+                          "inputs"   = "@coalesce(items('For_each_event')?['data']?['resourceId'], items('For_each_event')?['subject'])"
                           "runAfter" = { "Compose_SubscriptionId" = ["Succeeded"] }
                         },
                         "Compose_ResourceGroup" = {
-                          "type"   = "Compose"
-                          "inputs" = "@coalesce(items('For_each_event')?['data']?['resourceGroup'], split(outputs('Compose_ResourceId'), '/')[4])"
+                          "type"     = "Compose"
+                          "inputs"   = "@coalesce(items('For_each_event')?['data']?['resourceGroup'], split(outputs('Compose_ResourceId'), '/')[4])"
                           "runAfter" = { "Compose_ResourceId" = ["Succeeded"] }
                         },
                         "Compose_ResourceType" = {
-                          "type"   = "Compose"
-                          "inputs" = "@coalesce(items('For_each_event')?['data']?['resourceType'], concat(split(outputs('Compose_ResourceId'), '/')[6], '/', split(outputs('Compose_ResourceId'), '/')[7]))"
+                          "type"     = "Compose"
+                          "inputs"   = "@coalesce(items('For_each_event')?['data']?['resourceType'], concat(split(outputs('Compose_ResourceId'), '/')[6], '/', split(outputs('Compose_ResourceId'), '/')[7]))"
                           "runAfter" = { "Compose_ResourceGroup" = ["Succeeded"] }
                         },
                         "Compose_ResourceName" = {
-                          "type"   = "Compose"
-                          "inputs" = "@last(split(outputs('Compose_ResourceId'), '/'))"
+                          "type"     = "Compose"
+                          "inputs"   = "@last(split(outputs('Compose_ResourceId'), '/'))"
                           "runAfter" = { "Compose_ResourceType" = ["Succeeded"] }
                         },
 
-                        # ---- Enrichment: Policy Definition ----
+                        # -Enrichment: Policy Definition-
                         "HTTP_PolicyDefinition" = {
                           "type" = "Http"
                           "inputs" = {
-                            "method" = "GET"
-                            "uri"    = "@concat('https://management.usgovcloudapi.net', items('For_each_event')?['data']?['policyDefinitionId'], '?api-version=2021-06-01')"
+                            "method"  = "GET"
+                            "uri"     = "@concat('https://management.usgovcloudapi.net', items('For_each_event')?['data']?['policyDefinitionId'], '?api-version=2021-06-01')"
                             "headers" = { "Content-Type" = "application/json" }
                             "authentication" = {
                               "type"     = "ManagedServiceIdentity"
@@ -1393,12 +1364,12 @@ locals {
                           "runAfter" = { "Compose_ResourceName" = ["Succeeded"] }
                         },
 
-                        # ---- Enrichment: Policy Assignment ----
+                        # -Enrichment: Policy Assignment-
                         "HTTP_PolicyAssignment" = {
                           "type" = "Http"
                           "inputs" = {
-                            "method" = "GET"
-                            "uri"    = "@concat('https://management.usgovcloudapi.net', items('For_each_event')?['data']?['policyAssignmentId'], '?api-version=2023-04-01')"
+                            "method"  = "GET"
+                            "uri"     = "@concat('https://management.usgovcloudapi.net', items('For_each_event')?['data']?['policyAssignmentId'], '?api-version=2023-04-01')"
                             "headers" = { "Content-Type" = "application/json" }
                             "authentication" = {
                               "type"     = "ManagedServiceIdentity"
@@ -1408,46 +1379,46 @@ locals {
                           "runAfter" = { "HTTP_PolicyDefinition" = ["Succeeded"] }
                         },
 
-                        # ---- Friendly fields ----
+                        # -Friendly fields-
                         "Compose_PolicyDisplayName" = {
-                          "type"   = "Compose"
-                          "inputs" = "@coalesce(body('HTTP_PolicyDefinition')?['properties']?['displayName'], items('For_each_event')?['data']?['policyDefinitionId'])"
+                          "type"     = "Compose"
+                          "inputs"   = "@coalesce(body('HTTP_PolicyDefinition')?['properties']?['displayName'], items('For_each_event')?['data']?['policyDefinitionId'])"
                           "runAfter" = { "HTTP_PolicyAssignment" = ["Succeeded"] }
                         },
                         "Compose_AssignmentDisplayName" = {
-                          "type"   = "Compose"
-                          "inputs" = "@coalesce(body('HTTP_PolicyAssignment')?['properties']?['displayName'], items('For_each_event')?['data']?['policyAssignmentId'])"
+                          "type"     = "Compose"
+                          "inputs"   = "@coalesce(body('HTTP_PolicyAssignment')?['properties']?['displayName'], items('For_each_event')?['data']?['policyAssignmentId'])"
                           "runAfter" = { "Compose_PolicyDisplayName" = ["Succeeded"] }
                         },
                         "Compose_NonComplianceMessage" = {
-                          "type"   = "Compose"
-                          "inputs" = "@if(empty(coalesce(body('HTTP_PolicyAssignment')?['properties']?['nonComplianceMessages'], json('[]'))), null, first(coalesce(body('HTTP_PolicyAssignment')?['properties']?['nonComplianceMessages'], json('[]')))?['message'])"
+                          "type"     = "Compose"
+                          "inputs"   = "@if(empty(coalesce(body('HTTP_PolicyAssignment')?['properties']?['nonComplianceMessages'], json('[]'))), null, first(coalesce(body('HTTP_PolicyAssignment')?['properties']?['nonComplianceMessages'], json('[]')))?['message'])"
                           "runAfter" = { "Compose_AssignmentDisplayName" = ["Succeeded"] }
                         },
 
-                        # ---- Portal links (Gov) ----
+                        # -Portal links (Gov)-
                         # Resource blade link
                         "Compose_ResourcePortalUrl" = {
-                          "type"   = "Compose"
-                          "inputs" = "@concat('https://portal.azure.us/#@/resource', outputs('Compose_ResourceId'))"
+                          "type"     = "Compose"
+                          "inputs"   = "@concat('https://portal.azure.us/#@/resource', outputs('Compose_ResourceId'))"
                           "runAfter" = { "Compose_NonComplianceMessage" = ["Succeeded"] }
                         },
                         # Assignment blade link
                         "Compose_AssignmentPortalUrl" = {
-                          "type"   = "Compose"
-                          "inputs" = "@concat('https://portal.azure.us/#@/resource', items('For_each_event')?['data']?['policyAssignmentId'])"
+                          "type"     = "Compose"
+                          "inputs"   = "@concat('https://portal.azure.us/#@/resource', items('For_each_event')?['data']?['policyAssignmentId'])"
                           "runAfter" = { "Compose_ResourcePortalUrl" = ["Succeeded"] }
                         },
                         # Definition blade link
                         "Compose_DefinitionPortalUrl" = {
-                          "type"   = "Compose"
-                          "inputs" = "@concat('https://portal.azure.us/#@/resource', items('For_each_event')?['data']?['policyDefinitionId'])"
+                          "type"     = "Compose"
+                          "inputs"   = "@concat('https://portal.azure.us/#@/resource', items('For_each_event')?['data']?['policyDefinitionId'])"
                           "runAfter" = { "Compose_AssignmentPortalUrl" = ["Succeeded"] }
                         },
 
-                        # ---- Email ----
+                        # -Email-
                         "Send_Email" = {
-                          "type" = "ApiConnection"
+                          "type"     = "ApiConnection"
                           "runAfter" = { "Compose_DefinitionPortalUrl" = ["Succeeded"] }
                           "inputs" = {
                             "host" = {
@@ -1458,10 +1429,10 @@ locals {
                             "method" = "post"
                             "path"   = "/v2/Mail"
                             "body" = {
-                              "To"   = var.policy_alert_email
-                              "From" = "noreply-alerts@intterragroup.com"
-                              "Subject" = "@{concat('Non-Compliance: ', outputs('Compose_ResourceName'), ' | ', outputs('Compose_PolicyDisplayName'))}"
-                              "Body" = <<-HTML
+                              "To"              = var.policy_alert_email
+                              "From"            = "noreply-alerts@intterragroup.com"
+                              "Subject"         = "@{concat('Non-Compliance: ', outputs('Compose_ResourceName'), ' | ', outputs('Compose_PolicyDisplayName'))}"
+                              "Body"            = <<-HTML
                                 <p><strong>Azure Policy Non-Compliance detected.</strong></p>
 
                                 <h3>What failed</h3>
@@ -1668,9 +1639,8 @@ resource "azurerm_consumption_budget_subscription" "policy_source_budgets" {
   }
 }
 
-# VNet flow logs (replaces NSG flow logs)
+# VNet flow logs
 locals {
-  # --- Backward compat defaults (prefer new vnet_* vars if set) ---
   flow_logs_enabled_effective = coalesce(var.enable_vnet_flow_logs, var.enable_nsg_flow_logs, false)
   flow_logs_retention_days    = coalesce(var.vnet_flow_logs_retention_days, var.nsg_flow_logs_retention_days, 30)
   flow_logs_sa_override_id = try(
@@ -1681,7 +1651,6 @@ locals {
     null
   )
 
-  # Prefer explicit override for workspace GUID first
   law_workspace_guid = coalesce(
     var.law_workspace_guid_override,
     try(data.terraform_remote_state.core.outputs.observability.law_workspace_guid, null),
@@ -1689,18 +1658,10 @@ locals {
     null
   )
 
-  # Storage account for flow logs (from platform remote state OR explicit override)
+  # Storage account for flow logs
   flow_logs_storage = try(data.terraform_remote_state.platform.outputs.sa_core_shared, null)
   flow_logs_sa_id   = coalesce(local.flow_logs_sa_override_id, try(local.flow_logs_storage.id, null))
 
-  # Pull VNets from:
-  # 1) shared-network remote state (if you expose it), and
-  # 2) explicit var.vnet_ids_by_env (already in your variables.tf)
-  # vnet_ids_by_env_remote = try(data.terraform_remote_state.network.outputs.vnet_ids_by_env, {})
-
-  # shared-network exposes vnet_map with keys:
-  # - "nphub" or "prhub"
-  # - dev, qa, prod, uat
   _shared_vnet_map = try(data.terraform_remote_state.network.outputs.vnet_map, {})
 
   _shared_hub_vnet_id = coalesce(
@@ -1709,13 +1670,12 @@ locals {
     null
   )
 
-  # Normalize into the env keys your observability stack expects: hub/dev/qa/prod/uat
   vnet_ids_by_env_remote = {
     hub  = compact([local._shared_hub_vnet_id])
-    dev  = compact([try(local._shared_vnet_map["dev"].id,  null)])
-    qa   = compact([try(local._shared_vnet_map["qa"].id,   null)])
+    dev  = compact([try(local._shared_vnet_map["dev"].id, null)])
+    qa   = compact([try(local._shared_vnet_map["qa"].id, null)])
     prod = compact([try(local._shared_vnet_map["prod"].id, null)])
-    uat  = compact([try(local._shared_vnet_map["uat"].id,  null)])
+    uat  = compact([try(local._shared_vnet_map["uat"].id, null)])
   }
 
   vnet_env_keys_all = toset(concat(
@@ -1727,7 +1687,7 @@ locals {
     for k in local.vnet_env_keys_all :
     k => distinct(compact(concat(
       lookup(local.vnet_ids_by_env_remote, k, []),
-      lookup(var.vnet_ids_by_env,        k, [])
+      lookup(var.vnet_ids_by_env, k, [])
     )))
   }
 
@@ -1763,11 +1723,11 @@ locals {
     length(local.vnet_flowlog_map) > 0
   )
 
-  vnet_flowlog_map_hub  = { for id, item in local.vnet_flowlog_map : id => item if item.env_key == "hub"  }
-  vnet_flowlog_map_dev  = { for id, item in local.vnet_flowlog_map : id => item if item.env_key == "dev"  }
-  vnet_flowlog_map_qa   = { for id, item in local.vnet_flowlog_map : id => item if item.env_key == "qa"   }
+  vnet_flowlog_map_hub  = { for id, item in local.vnet_flowlog_map : id => item if item.env_key == "hub" }
+  vnet_flowlog_map_dev  = { for id, item in local.vnet_flowlog_map : id => item if item.env_key == "dev" }
+  vnet_flowlog_map_qa   = { for id, item in local.vnet_flowlog_map : id => item if item.env_key == "qa" }
   vnet_flowlog_map_prod = { for id, item in local.vnet_flowlog_map : id => item if item.env_key == "prod" }
-  vnet_flowlog_map_uat  = { for id, item in local.vnet_flowlog_map : id => item if item.env_key == "uat"  }
+  vnet_flowlog_map_uat  = { for id, item in local.vnet_flowlog_map : id => item if item.env_key == "uat" }
 
   network_watcher_by_env = coalesce(
     try(data.terraform_remote_state.network.outputs.network_watchers, null),
@@ -1796,7 +1756,7 @@ locals {
   )
 }
 
-# HUB (core subscription)
+# HUB
 resource "azurerm_network_watcher_flow_log" "vnet_core" {
   provider = azurerm.core
 
@@ -1931,7 +1891,7 @@ resource "azurerm_network_watcher_flow_log" "vnet_prod" {
   }
 }
 
-# UAT subscription (created by the prod stack)
+# UAT subscription
 resource "azurerm_network_watcher_flow_log" "vnet_uat" {
   provider = azurerm.uat
 
@@ -1962,7 +1922,7 @@ resource "azurerm_network_watcher_flow_log" "vnet_uat" {
   }
 }
 
-# AzAPI providers for Cost Management Exports (subscription-scoped resources)
+# AzAPI providers for Cost Management Exports
 provider "azapi" {
   alias           = "dev"
   subscription_id = local.dev_sub
@@ -1987,14 +1947,13 @@ provider "azapi" {
   tenant_id       = local.uat_ten
 }
 
-# --- Register required Resource Providers (explicit per provider alias) ---
+# explicit per provider alias
 locals {
   cost_exports_enabled = var.enable_cost_exports
 
-  # same logic you had
   cost_exports_rp_targets = (
     !local.cost_exports_enabled ? toset([]) :
-    local.env_effective == "dev"  ? toset(["core", "dev", "qa"]) :
+    local.env_effective == "dev" ? toset(["core", "dev", "qa"]) :
     local.env_effective == "prod" ? toset(["core", "uat", "prod"]) :
     toset([])
   )
@@ -2062,13 +2021,12 @@ locals {
 locals {
   cost_exports_destination = (var.enable_cost_exports && local.existing_exports_sa_id != null) ? {
     resourceId     = local.existing_exports_sa_id
-    container      = var.cost_exports_container_name        # "cost-exports"
+    container      = var.cost_exports_container_name # "cost-exports"
     rootFolderPath = "${var.cost_exports_root_folder}"
-    # rootFolderPath = "${var.cost_exports_root_folder}/${var.product}/${local.env_effective}/${var.region}"
   } : null
 }
 
-# ---------- DEV subscription exports ----------
+# DEV subscription exports
 resource "azapi_resource" "cost_export_dev_last_month" {
   provider                  = azapi.dev
   count                     = contains(local.cost_export_targets, "dev") ? 1 : 0
@@ -2101,8 +2059,6 @@ resource "azapi_resource" "cost_export_dev_last_month" {
       }
     }
   }
-
-#  response_export_values = ["identity.principalId"]
 
   depends_on = [time_sleep.wait_cost_exports_rp]
 
@@ -2146,8 +2102,6 @@ resource "azapi_resource" "cost_export_dev_mtd_daily" {
       }
     }
   }
-
-#  response_export_values = ["identity.principalId"]
 
   depends_on = [time_sleep.wait_cost_exports_rp]
 
@@ -2196,8 +2150,6 @@ resource "azapi_resource" "cost_export_dev_manual_custom" {
     }
   }
 
-#  response_export_values = ["identity.principalId"]
-
   depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
@@ -2208,7 +2160,7 @@ resource "azapi_resource" "cost_export_dev_manual_custom" {
   }
 }
 
-# ---------- QA subscription exports ----------
+# QA subscription exports
 resource "azapi_resource" "cost_export_qa_last_month" {
   provider                  = azapi.qa
   count                     = contains(local.cost_export_targets, "qa") ? 1 : 0
@@ -2241,8 +2193,6 @@ resource "azapi_resource" "cost_export_qa_last_month" {
       }
     }
   }
-
-#  response_export_values = ["identity.principalId"]
 
   depends_on = [time_sleep.wait_cost_exports_rp]
 
@@ -2286,8 +2236,6 @@ resource "azapi_resource" "cost_export_qa_mtd_daily" {
       }
     }
   }
-
-#  response_export_values = ["identity.principalId"]
 
   depends_on = [time_sleep.wait_cost_exports_rp]
 
@@ -2336,8 +2284,6 @@ resource "azapi_resource" "cost_export_qa_manual_custom" {
     }
   }
 
-#  response_export_values = ["identity.principalId"]
-
   depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
@@ -2348,7 +2294,7 @@ resource "azapi_resource" "cost_export_qa_manual_custom" {
   }
 }
 
-# ---------- PROD subscription exports ----------
+# PROD subscription exports
 resource "azapi_resource" "cost_export_prod_last_month" {
   provider                  = azapi.prod
   count                     = contains(local.cost_export_targets, "prod") ? 1 : 0
@@ -2381,8 +2327,6 @@ resource "azapi_resource" "cost_export_prod_last_month" {
       }
     }
   }
-
-#  response_export_values = ["identity.principalId"]
 
   depends_on = [time_sleep.wait_cost_exports_rp]
 
@@ -2426,8 +2370,6 @@ resource "azapi_resource" "cost_export_prod_mtd_daily" {
       }
     }
   }
-
-#  response_export_values = ["identity.principalId"]
 
   depends_on = [time_sleep.wait_cost_exports_rp]
 
@@ -2476,8 +2418,6 @@ resource "azapi_resource" "cost_export_prod_manual_custom" {
     }
   }
 
-#  response_export_values = ["identity.principalId"]
-
   depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
@@ -2488,7 +2428,7 @@ resource "azapi_resource" "cost_export_prod_manual_custom" {
   }
 }
 
-# ---------- UAT subscription exports ----------
+# UAT subscription exports
 resource "azapi_resource" "cost_export_uat_last_month" {
   provider                  = azapi.uat
   count                     = contains(local.cost_export_targets, "uat") ? 1 : 0
@@ -2521,8 +2461,6 @@ resource "azapi_resource" "cost_export_uat_last_month" {
       }
     }
   }
-
-#  response_export_values = ["identity.principalId"]
 
   depends_on = [time_sleep.wait_cost_exports_rp]
 
@@ -2566,8 +2504,6 @@ resource "azapi_resource" "cost_export_uat_mtd_daily" {
       }
     }
   }
-
-#  response_export_values = ["identity.principalId"]
 
   depends_on = [time_sleep.wait_cost_exports_rp]
 
@@ -2616,8 +2552,6 @@ resource "azapi_resource" "cost_export_uat_manual_custom" {
     }
   }
 
-#  response_export_values = ["identity.principalId"]
-
   depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
@@ -2628,7 +2562,7 @@ resource "azapi_resource" "cost_export_uat_manual_custom" {
   }
 }
 
-# ---------- CORE subscription exports ----------
+# CORE subscription exports
 resource "azapi_resource" "cost_export_core_nonprod_last_month" {
   provider                  = azapi.core
   count                     = (local.cost_exports_enabled && local.env_effective == "dev") ? 1 : 0
@@ -2661,8 +2595,6 @@ resource "azapi_resource" "cost_export_core_nonprod_last_month" {
       }
     }
   }
-
-#  response_export_values = ["identity.principalId"]
 
   depends_on = [time_sleep.wait_cost_exports_rp]
 
@@ -2706,8 +2638,6 @@ resource "azapi_resource" "cost_export_core_nonprod_mtd_daily" {
       }
     }
   }
-
-#  response_export_values = ["identity.principalId"]
 
   depends_on = [time_sleep.wait_cost_exports_rp]
 
@@ -2756,8 +2686,6 @@ resource "azapi_resource" "cost_export_core_nonprod_manual_custom" {
     }
   }
 
-#  response_export_values = ["identity.principalId"]
-
   depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
@@ -2801,8 +2729,6 @@ resource "azapi_resource" "cost_export_core_prod_last_month" {
     }
   }
 
-#  response_export_values = ["identity.principalId"]
-
   depends_on = [time_sleep.wait_cost_exports_rp]
 
   lifecycle {
@@ -2845,8 +2771,6 @@ resource "azapi_resource" "cost_export_core_prod_mtd_daily" {
       }
     }
   }
-
-#  response_export_values = ["identity.principalId"]
 
   depends_on = [time_sleep.wait_cost_exports_rp]
 
@@ -2894,8 +2818,6 @@ resource "azapi_resource" "cost_export_core_prod_manual_custom" {
       }
     }
   }
-
-#  response_export_values = ["identity.principalId"]
 
   depends_on = [time_sleep.wait_cost_exports_rp]
 
@@ -2947,13 +2869,13 @@ locals {
   aks_ci_namespace_filtering_mode = "Exclude"
   aks_ci_namespaces_excluded      = ["kube-system", "gatekeeper-system", "azure-arc"]
 
-  aks_ci_collect_perf        = coalesce(var.aks_collect_performance, false)
-  aks_ci_collect_all_logs    = coalesce(var.aks_collect_all_logs, true)
+  aks_ci_collect_perf     = coalesce(var.aks_collect_performance, false)
+  aks_ci_collect_all_logs = coalesce(var.aks_collect_all_logs, true)
 
   aks_ci_streams = local.aks_ci_collect_all_logs ? ["Microsoft-ContainerInsights-Group-Default"] : compact(concat(
-        ["Microsoft-ContainerLogV2", "Microsoft-KubeEvents", "Microsoft-KubePodInventory"],
-        local.aks_ci_collect_perf ? ["Microsoft-Perf"] : []
-      ))
+    ["Microsoft-ContainerLogV2", "Microsoft-KubeEvents", "Microsoft-KubePodInventory"],
+    local.aks_ci_collect_perf ? ["Microsoft-Perf"] : []
+  ))
 }
 
 resource "azapi_resource" "dcr_container_insights_nonprod" {
@@ -3026,7 +2948,7 @@ resource "azapi_resource" "dcr_assoc_container_insights_nonprod" {
 
   body = {
     properties = {
-      description         = "Associate Container Insights DCR"
+      description          = "Associate Container Insights DCR"
       dataCollectionRuleId = azapi_resource.dcr_container_insights_nonprod[0].id
     }
   }
@@ -3074,7 +2996,6 @@ resource "azapi_resource" "dcr_container_insights_prod" {
                 namespaceFilteringMode = local.aks_ci_namespace_filtering_mode
                 namespaces             = local.aks_ci_namespaces_excluded
 
-                # Only meaningful when you’re using ContainerLogV2 (which you are in the non-group preset case).
                 enableContainerLogV2 = true
               }
             }
@@ -3102,7 +3023,7 @@ resource "azapi_resource" "dcr_assoc_container_insights_prod" {
 
   body = {
     properties = {
-      description         = "Associate Container Insights DCR"
+      description          = "Associate Container Insights DCR"
       dataCollectionRuleId = azapi_resource.dcr_container_insights_prod[0].id
     }
   }
@@ -3112,30 +3033,28 @@ resource "azapi_resource" "dcr_assoc_container_insights_prod" {
 locals {
   aks_ids_effective = toset(distinct(compact(concat(
     [
-      try(data.terraform_remote_state.platform.outputs.ids.aks,       null),
-      try(data.terraform_remote_state.platform.outputs.aks_id,        null),
+      try(data.terraform_remote_state.platform.outputs.ids.aks, null),
+      try(data.terraform_remote_state.platform.outputs.aks_id, null),
       try(data.terraform_remote_state.platform.outputs.kubernetes.id, null),
     ],
     [
-      try(data.terraform_remote_state.core.outputs.ids.aks,           null),
-      try(data.terraform_remote_state.core.outputs.aks_id,            null),
-      try(data.terraform_remote_state.core.outputs.kubernetes.id,     null),
+      try(data.terraform_remote_state.core.outputs.ids.aks, null),
+      try(data.terraform_remote_state.core.outputs.aks_id, null),
+      try(data.terraform_remote_state.core.outputs.kubernetes.id, null),
     ],
     var.aks_resource_ids_override
   ))))
-
-  # aks_map = { for id in local.aks_ids_effective : id => id }
 
   # Enable AKS alerting only where we want it
   aks_alerts_enabled_for_env = contains(["dev", "prod"], local.env_effective)
 }
 
-# --- Shared alert knobs ---
+# Shared alert knobs
 locals {
   aks_alert_frequency = "PT5M"
 
-  aks_cpu_threshold  = 90.0
-  aks_mem_threshold  = 90.0
+  aks_cpu_threshold  = 98.0
+  aks_mem_threshold  = 98.0
   aks_disk_threshold = 50.0
 }
 
@@ -3167,7 +3086,7 @@ locals {
   KQL
 }
 
-# DEV: alerts in CORE subscription (AKS often lives in nonprod core)
+# alerts in CORE subscription (AKS often lives in nonprod core)
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_cpu_high_dev" {
   provider = azurerm.core
   for_each = (local.env_effective == "dev" && local.aks_alerts_enabled_for_env) ? local.aks_map : {}
@@ -3198,7 +3117,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_cpu_high_dev" {
   action { action_groups = [local.ag_id_core] }
 }
 
-# PROD: alerts in PROD subscription
+# alerts in PROD subscription
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_cpu_high_prod" {
   provider = azurerm.prod
   for_each = (local.env_effective == "prod" && local.aks_alerts_enabled_for_env) ? local.aks_map : {}
@@ -3229,7 +3148,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_cpu_high_prod" {
   action { action_groups = [local.ag_id_env] }
 }
 
-# Memory (Allocatable-based)
+# Memory
 locals {
   aks_mem_window = "PT5M"
   aks_mem_query  = <<-KQL
@@ -3317,7 +3236,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_mem_high_prod" {
   action { action_groups = [local.ag_id_env] }
 }
 
-# Disk (InsightsMetrics used_percent by mountPath)
+# Disk
 locals {
   aks_disk_window = "PT10M"
   aks_disk_query  = <<-KQL
@@ -3408,12 +3327,8 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "aks_disk_high_prod" {
   action { action_groups = [local.ag_id_env] }
 }
 
-#############################
-# High-signal RG change alerts (LAW / AzureActivity)
-#############################
-
+# RG change alerts (LAW / AzureActivity)
 locals {
-  # Use LAW for high-signal alerts. If LAW isn't resolved, we do nothing.
   enable_high_signal_rg_alerts = var.enable_high_signal_rg_alerts
 
   # Exclude known "expected" automation callers to reduce deployment noise.
@@ -3427,10 +3342,10 @@ locals {
     prod = local.prod_sub
   }
 
-  # --- ENV target (always: dev/qa/uat/prod) ---
+  # ENV target (always: dev/qa/uat/prod)
   rg_alert_target_env = (
     local.rg_env_name_resolved != null
-  ) ? {
+    ) ? {
     "${local.env_effective}" = {
       rg_name = local.rg_env_name_resolved
       sub_id  = lookup(local.env_sub_by_env, local.env_effective, local.env_sub)
@@ -3439,11 +3354,11 @@ locals {
     }
   } : {}
 
-  # --- CORE target (only when dev/prod) ---
+  # CORE target (only when dev/prod)
   rg_alert_target_core = (
     contains(["dev", "prod"], local.env_effective) &&
     local.rg_core_name_resolved != null
-  ) ? {
+    ) ? {
     "${local.plane_code}-core" = {
       rg_name = local.rg_core_name_resolved
       sub_id  = local.core_sub
@@ -3463,10 +3378,8 @@ locals {
     join(", ", [for c in local.rg_alert_excluded_callers : format("'%s'", replace(c, "'", "''"))])
   )
 
-  # --- 6 high-signal alert definitions (edit/add/remove here) ---
-  # Each entry should produce low-noise, high-value signals.
   high_signal_alert_defs = {
-    # 1) RBAC changes
+    # RBAC changes
     rbac_changes = {
       suffix   = "rbac-changes"
       severity = 1
@@ -3485,7 +3398,7 @@ locals {
       KQL
     }
 
-    # 2) Azure Policy changes
+    # Azure Policy changes
     policy_changes = {
       suffix   = "policy-changes"
       severity = 2
@@ -3505,7 +3418,7 @@ locals {
       KQL
     }
 
-    # 3) Key Vault sensitive admin operations (focus on vault config / access control)
+    # Key Vault sensitive admin operations
     keyvault_admin = {
       suffix   = "kv-admin"
       severity = 2
@@ -3524,7 +3437,7 @@ locals {
       KQL
     }
 
-    # 4) Network security perimeter changes (NSG rules / route changes / public exposure)
+    # Network security perimeter changes
     network_security_changes = {
       suffix   = "netsec-changes"
       severity = 2
@@ -3553,7 +3466,7 @@ locals {
       KQL
     }
 
-    # 5) Deletes (broad but only delete ops; still usually high-signal)
+    # Deletes
     deletes = {
       suffix   = "resource-deletes"
       severity = 2
@@ -3567,7 +3480,7 @@ locals {
       KQL
     }
 
-    # 6) Failed administrative operations (probing / mistakes / attempted changes)
+    # Failed administrative operations
     failed_admin_ops = {
       suffix   = "admin-failures"
       severity = 2
@@ -3581,7 +3494,6 @@ locals {
     }
   }
 
-  # Expand into instances: { "<target>.<alert_key>" => {...} }
   high_signal_alert_instances_env = {
     for item in flatten([
       for t_key, t in local.rg_alert_target_env : [

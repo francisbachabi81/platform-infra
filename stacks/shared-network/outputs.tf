@@ -1,10 +1,10 @@
 output "meta" {
   value = {
-    product            = var.product
-    plane_code         = local.plane_code
-    lane               = local.lane
-    region_code        = var.region
-    location           = var.location
+    product             = var.product
+    plane_code          = local.plane_code
+    lane                = local.lane
+    region_code         = var.region
+    location            = var.location
     hub_subscription_id = var.hub_subscription_id
     hub_tenant_id       = var.hub_tenant_id
   }
@@ -26,15 +26,15 @@ output "features" {
 
 output "resource_groups" {
   value = {
-    hub  = { name = local.hub_rg_name,  id = try(module.rg_hub.id, null) }
-    dev  = try({ name = local.dev_rg_name,  id = module.rg_dev[0].id },  null)
-    qa   = try({ name = local.qa_rg_name,   id = module.rg_qa[0].id },   null)
-    prod = try({ name = local.prod_rg_name, id = module.rg_prod[0].id }, null)
-    uat  = try({ name = local.uat_rg_name,  id = module.rg_uat[0].id },  null)
-    dev_core  = try({ name = local.dev_rg_name_core,  id = module.rg_dev_core[0].id },  null)
-    qa_core   = try({ name = local.qa_rg_name_core,   id = module.rg_qa_core[0].id },   null)
+    hub       = { name = local.hub_rg_name, id = try(module.rg_hub.id, null) }
+    dev       = try({ name = local.dev_rg_name, id = module.rg_dev[0].id }, null)
+    qa        = try({ name = local.qa_rg_name, id = module.rg_qa[0].id }, null)
+    prod      = try({ name = local.prod_rg_name, id = module.rg_prod[0].id }, null)
+    uat       = try({ name = local.uat_rg_name, id = module.rg_uat[0].id }, null)
+    dev_core  = try({ name = local.dev_rg_name_core, id = module.rg_dev_core[0].id }, null)
+    qa_core   = try({ name = local.qa_rg_name_core, id = module.rg_qa_core[0].id }, null)
     prod_core = try({ name = local.prod_rg_name_core, id = module.rg_prod_core[0].id }, null)
-    uat_core  = try({ name = local.uat_rg_name_core,  id = module.rg_uat_core[0].id },  null)
+    uat_core  = try({ name = local.uat_rg_name_core, id = module.rg_uat_core[0].id }, null)
   }
 }
 
@@ -55,13 +55,13 @@ output "private_dns" {
 
 output "vpn_gateway" {
   value = try({
-    id               = module.vpng[0].id
-    name             = module.vpng[0].name
-    resource_group   = local.vpng_hub_rg
-    public_ip_id     = try(azurerm_public_ip.vpngw[0].id, null)
-    public_ip        = try(azurerm_public_ip.vpngw[0].ip_address, null)
+    id                = module.vpng[0].id
+    name              = module.vpng[0].name
+    resource_group    = local.vpng_hub_rg
+    public_ip_id      = try(azurerm_public_ip.vpngw[0].id, null)
+    public_ip         = try(azurerm_public_ip.vpngw[0].ip_address, null)
     gateway_subnet_id = local.vpng_gateway_subnet_id
-    sku              = var.vpn_sku
+    sku               = var.vpn_sku
   }, null)
 }
 
@@ -72,15 +72,15 @@ output "app_gateway" {
     resource_group = local.appgw_hub_rg
     public_ip      = try(azurerm_public_ip.appgw[0].ip_address, null)
 
-    sku_name       = var.appgw_sku_name
-    sku_tier       = var.appgw_sku_tier
-    capacity       = var.appgw_capacity
+    sku_name = var.appgw_sku_name
+    sku_tier = var.appgw_sku_tier
+    capacity = var.appgw_capacity
 
-    waf_policy_id  = try(module.waf[0].id, null)
-    nsg_id         = try(azurerm_network_security_group.appgw_nsg[0].id, null)
-    nsg_name       = try(azurerm_network_security_group.appgw_nsg[0].name, null)
+    waf_policy_id = try(module.waf[0].id, null)
+    nsg_id        = try(azurerm_network_security_group.appgw_nsg[0].id, null)
+    nsg_name      = try(azurerm_network_security_group.appgw_nsg[0].name, null)
 
-    subnet_id      = local.appgw_subnet_id
+    subnet_id = local.appgw_subnet_id
 
     frontends = {
       public = {
@@ -91,8 +91,8 @@ output "app_gateway" {
       }
 
       private = {
-        enabled   = local.appgw_enabled
-        feip_name = "feip-private"
+        enabled    = local.appgw_enabled
+        feip_name  = "feip-private"
         private_ip = try(var.appgw_private_frontend_ip, null)
       }
     }
@@ -112,6 +112,11 @@ output "appgw_uami" {
 output "appgw_public_ip_id" {
   description = "Public IP resource id used by Application Gateway (null for private-only)."
   value       = try(azurerm_public_ip.appgw[0].id, null)
+}
+
+output "appgw_public_ip_fqdn" {
+  value       = try(azurerm_public_ip.appgw[0].fqdn, null)
+  description = "Azure-provided Public IP FQDN (<label>.<region>.cloudapp.azure.com)"
 }
 
 output "dns_private_resolver" {
@@ -135,14 +140,46 @@ output "public_dns" {
 
 output "frontdoor" {
   value = try({
-    profile_name  = local.fd_profile_name
-    endpoint_name = local.fd_endpoint_name
-    # IDs are module-defined; will be null if not exposed
-    profile_id    = try(module.fd[0].profile_id, null)
-    endpoint_id   = try(module.fd[0].endpoint_id, null)
+    profile_name         = local.fd_profile_name
+    endpoint_name        = local.fd_endpoint_name
+    profile_id           = try(module.fd[0].profile_id, null)
+    endpoint_id          = try(module.fd[0].endpoint_id, null)
     profile_principal_id = try(module.fd[0].profile_principal_id, null)
-    sku_name      = var.fd_sku_name
+    sku_name             = var.fd_sku_name
   }, null)
+}
+
+# Temporary additional AFD for HRZ + NONPROD only (suffix 02). Null everywhere else.
+output "frontdoor_02" {
+  value = try({
+    profile_name         = local.fd_profile_name_02
+    endpoint_name        = local.fd_endpoint_name_02
+    profile_id           = try(module.fd_02[0].profile_id, null)
+    endpoint_id          = try(module.fd_02[0].endpoint_id, null)
+    profile_principal_id = try(module.fd_02[0].profile_principal_id, null)
+    sku_name             = var.fd_sku_name
+  }, null)
+}
+
+output "frontdoor_all" {
+  value = {
+    "01" = try({
+      profile_name         = local.fd_profile_name
+      endpoint_name        = local.fd_endpoint_name
+      profile_id           = try(module.fd[0].profile_id, null)
+      endpoint_id          = try(module.fd[0].endpoint_id, null)
+      profile_principal_id = try(module.fd[0].profile_principal_id, null)
+      sku_name             = var.fd_sku_name
+    }, null)
+    "02" = try({
+      profile_name         = local.fd_profile_name_02
+      endpoint_name        = local.fd_endpoint_name_02
+      profile_id           = try(module.fd_02[0].profile_id, null)
+      endpoint_id          = try(module.fd_02[0].endpoint_id, null)
+      profile_principal_id = try(module.fd_02[0].profile_principal_id, null)
+      sku_name             = var.fd_sku_name
+    }, null)
+  }
 }
 
 output "network_watchers" {
@@ -220,16 +257,6 @@ output "vnet_ids_by_env" {
   }
 }
 
-# output "vnet_ids_by_env" {
-#   value = {
-#     hub  = try(local.vnet_map_consolidated[local._hub_key].id, null)
-#     dev  = try(local.vnet_map_consolidated["dev"].id, null)
-#     qa   = try(local.vnet_map_consolidated["qa"].id, null)
-#     prod = try(local.vnet_map_consolidated["prod"].id, null)
-#     uat  = try(local.vnet_map_consolidated["uat"].id, null)
-#   }
-# }
-
 output "vnet_ids" {
   value = {
     hub  = module.vnet_hub.id
@@ -238,4 +265,26 @@ output "vnet_ids" {
     uat  = try(module.vnet_uat[0].id, null)
     prod = try(module.vnet_prod[0].id, null)
   }
+}
+
+output "appgw_private_link_enabled" {
+  value       = local.appgw_private_link_enabled
+  description = "True when AppGW Private Link is enabled and wired to the hub appgw-pl subnet."
+}
+
+output "appgw_private_link_configuration_id" {
+  description = "App Gateway Private Link configuration ID (AFD Premium origin private link target)."
+  value = try(
+    one([
+      for plc in azurerm_application_gateway.appgw[0].private_link_configuration :
+      plc.id
+      if plc.name == var.appgw_private_link_configuration_name
+    ]),
+    null
+  )
+}
+
+output "appgw_private_link_configuration_name" {
+  description = "App Gateway Private Link configuration name."
+  value       = var.appgw_private_link_configuration_name
 }

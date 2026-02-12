@@ -64,6 +64,23 @@ variable "origins" {
     weight             = optional(number, 1000)
 
     certificate_name_check_enabled = optional(bool, true)
+
+    # Unified private_link block supporting both PaaS and AppGW (PLS)
+    private_link = optional(object({
+      # === Common ===
+      location        = string # e.g., "centralus"
+      request_message = optional(string, "AFD origin private link approval")
+
+      # === PaaS path (used by azurerm_cdn_frontdoor_origin.private_link) ===
+      # Use these when the origin is Storage/App Service, etc.
+      target_type        = optional(string) # one of: "blob", "blob_secondary", "sites", "web"
+      target_resource_id = optional(string) # ARM id of Storage Account/App Service/etc.
+
+      # === App Gateway path (used by AzAPI PATCH on origin) ===
+      # Use this when the origin is an Application Gateway via Private Link Service
+      kind   = optional(string) # set to "appgw_pls" for clarity
+      pls_id = optional(string) # ARM id of AppGW Private Link Service
+    }))
   }))
   default = {}
 }
@@ -159,4 +176,18 @@ variable "waf_policy" {
     patterns_to_match             = optional(list(string))
   })
   default = null
+}
+
+# variable "blob_backends" {
+#   description = "Optional blob origin hosts (by env) to avoid platform-app remote-state lookups."
+#   type = map(object({
+#     blob_primary_host = string # e.g. sacontainer.blob.core.windows.net
+#     blob_base_url     = optional(string)
+#   }))
+#   default = {}
+# }
+
+variable "enable_origin_private_link" {
+  type    = bool
+  default = false
 }

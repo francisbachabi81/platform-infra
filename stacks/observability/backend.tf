@@ -26,5 +26,5 @@ provider "azapi" {}
 provider "azapi" {
   alias           = "core"
   subscription_id = coalesce(var.core_subscription_id, var.subscription_id)
-  tenant_id       = coalesce(var.core_tenant_id,     var.tenant_id)
+  tenant_id       = coalesce(var.core_tenant_id, var.tenant_id)
 }

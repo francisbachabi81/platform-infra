@@ -9,11 +9,6 @@ region   = "cus"
 # shared_nonprod_subscription_id = "df6dc63f-c4dc-4590-ba4b-f2ce9639ca6c"
 # shared_nonprod_tenant_id       = "ed7990c3-61c2-477d-85e9-1a396c19ae94"
 
-# (Optional) You can also set:
-# prod_subscription_id / prod_tenant_id
-# uat_subscription_id  / uat_tenant_id
-# if/when you split those planes.
-
 # Remote state (shared-network + core)
 state_rg_name        = "rg-core-infra-state"
 state_sa_name        = "sacoretfstateinfra"
@@ -57,6 +52,7 @@ servicebus_sku      = "Standard" # Basic | Standard | Premium
 servicebus_capacity = 1          # for Premium: messaging units; for lower SKUs: 0/1/(sometimes accepted >1 depending on module)
 
 servicebus_queues = [
+  "incident-events",
   "incident-processor",
   "location-processor",
   "notification",
@@ -75,7 +71,7 @@ servicebus_authorization_rules_override = {
 servicebus_min_tls_version = "1.2"
 
 # Cosmos DB for PostgreSQL (Citus) (env)
-create_cdbpg = true
+create_cdbpg = false
 
 cdbpg_node_count    = 2
 cdbpg_citus_version = "12.1"
@@ -97,7 +93,7 @@ cdbpg_preferred_primary_zone  = "2"
 
 # PostgreSQL Flexible Server (env)
 pg_version  = "16"
-pg_sku_name = "GP_Standard_D2s_v3"
+pg_sku_name = "GP_Standard_D4s_v3"
 
 # Suggested SKUs per environment:
 #   dev:  "B_Standard_B1ms" or "B_Standard_B2s"     # Burstable, cheapest option — NO HA support
@@ -139,6 +135,34 @@ pg_extensions = [
   "PG_STAT_STATEMENTS",
   "UUID-OSSP",
   "BTREE_GIN"
+]
+
+# PostgreSQL Flexible Server (AUTH)  ────────────────────────────
+pg_auth_version               = "16"
+pg_auth_sku_name              = "GP_Standard_D2s_v3"
+pg_auth_storage_mb            = 32768
+pg_auth_geo_redundant_backup  = true
+pg_auth_delegated_subnet_name = "pgflex-auth"
+# pg_aad_auth_enabled      = true
+
+pg_auth_zone    = "1" # no explicit AZ in Gov for this SKU
+pg_auth_ha_zone = "2" # ignored while HA is off and no explicit AZ
+
+# Auth databases (recommended)
+pg_auth_ha_enabled      = true
+pg_auth_replica_enabled = false
+
+pg_auth_databases = ["identity"]
+
+# Extensions are usually minimal for auth; enable pgcrypto if you want server-side crypto helpers.
+pg_auth_enable_postgis = true
+
+pg_auth_extensions = [
+  "postgis",
+  "pgcrypto",
+  "pg_stat_statements",
+  "uuid-ossp",
+  "btree_gin"
 ]
 
 # Cosmos DB (NoSQL) (env)

@@ -27,7 +27,7 @@ locals {
   enable_hrz_features    = var.product == "hrz"
   enable_both            = local.enable_public_features || local.enable_hrz_features
 
-  plane_norm = contains(["np", "nonprod"], lower(var.plane)) ? "nonprod" : contains(["pr", "prod"],   lower(var.plane)) ? "prod"    : var.plane
+  plane_norm = contains(["np", "nonprod"], lower(var.plane)) ? "nonprod" : contains(["pr", "prod"], lower(var.plane)) ? "prod" : var.plane
 
   plane_code = local.plane_norm == "nonprod" ? "np" : "pr"
   plane_full = local.plane_norm
@@ -40,12 +40,12 @@ locals {
     compliance   = "cjis"
   }
 
-  plane_overlay_tags = local.plane_code == "np" ? { shared_with = "dev,qa",  criticality = "medium" } : { shared_with = "uat,prod", criticality = "high" }
+  plane_overlay_tags = local.plane_code == "np" ? { shared_with = "dev,qa", criticality = "medium" } : { shared_with = "uat,prod", criticality = "high" }
 
   runtime_tags = {
-    managed_by    = "terraform"
-    deployed_via  = "github-actions"
-    layer         = "core-resources"
+    managed_by   = "terraform"
+    deployed_via = "github-actions"
+    layer        = "core-resources"
   }
 
   tags_common = merge(
@@ -103,7 +103,7 @@ locals {
   hub_privatelink_subnet_id = coalesce(
     var.core_kv_pe_subnet_id_override,
     try(local.hub_subnet_ids["privatelink-hub"], null),
-    try(local.hub_subnet_ids["privatelink"],     null)
+    try(local.hub_subnet_ids["privatelink"], null)
   )
 
   # Private DNS zone IDs from shared-network state (supports both newer + legacy output names)
@@ -142,7 +142,7 @@ resource "azurerm_log_analytics_workspace" "plane" {
   resource_group_name = local.rg_name_core
   sku                 = var.law_sku
   retention_in_days   = var.law_retention_days
-  daily_quota_gb    = var.law_daily_quota_gb
+  daily_quota_gb      = var.law_daily_quota_gb
 
   tags = merge(local.tags_common, {
     service = "log-analytics"
@@ -382,9 +382,9 @@ module "communication" {
 # Core VM (GHA runner)
 locals {
   core_vm_subnet_id = var.shared_state_enabled ? lookup(
-        lookup(data.terraform_remote_state.shared[0].outputs.subnet_ids_by_env, "hub", {}),
-        "internal",
-        null,) : null
+    lookup(data.terraform_remote_state.shared[0].outputs.subnet_ids_by_env, "hub", {}),
+    "internal",
+  null, ) : null
 
   core_vm_name = "vm-${var.product}-${local.plane_code}-${var.region}-gha"
 }
@@ -513,10 +513,7 @@ module "kv_core" {
   depends_on = [module.core_vm, module.rg_core_platform]
 }
 
-# ------------------------------------------------------------
 # Storage CMK key (in core key vault)
-# ------------------------------------------------------------
-
 locals {
   create_storage_cmk_effective = (
     var.create_storage_cmk

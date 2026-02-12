@@ -9,11 +9,6 @@ region   = "cus"
 shared_nonprod_subscription_id = "ee8a4693-54d4-4de8-842b-b6f35fc0674d"
 shared_nonprod_tenant_id       = "dd58f16c-b85a-4d66-99e1-f86905453853"
 
-# (Optional) You can also set:
-# prod_subscription_id / prod_tenant_id
-# uat_subscription_id  / uat_tenant_id
-# if/when you split those planes.
-
 # remote state (shared-network + core)
 state_rg_name        = "rg-core-infra-state"
 state_sa_name        = "sacoretfstateinfra"
@@ -57,6 +52,7 @@ servicebus_sku      = "Standard" # Basic | Standard | Premium
 servicebus_capacity = 1
 
 servicebus_queues = [
+  "incident-events",
   "incident-processor",
   "location-processor",
   "notification",
@@ -83,7 +79,7 @@ servicebus_authorization_rules_override = {
 servicebus_min_tls_version = "1.2"
 
 # Cosmos DB for PostgreSQL (Citus) (env)
-create_cdbpg = true
+create_cdbpg = false
 
 # Worker nodes: keep 0 in dev if you just want to validate plumbing.
 cdbpg_node_count = 0
@@ -105,7 +101,7 @@ cdbpg_enable_private_endpoint = true
 cdbpg_preferred_primary_zone  = "2"
 # cdbpg_admin_password via TF_VAR_cdbpg_admin_password
 
-# PostgreSQL Flexible Server (env)
+# PostgreSQL Flexible Server (env) ────────────────────────────
 pg_version  = "16"
 pg_sku_name = "B_Standard_B2s"
 
@@ -152,6 +148,34 @@ pg_extensions = [
   "PG_STAT_STATEMENTS",
   "UUID-OSSP",
   "BTREE_GIN"
+]
+
+# PostgreSQL Flexible Server (AUTH)  ────────────────────────────
+pg_auth_version               = "16"
+pg_auth_sku_name              = "B_Standard_B2s"
+pg_auth_storage_mb            = 32768
+pg_auth_geo_redundant_backup  = false
+pg_auth_delegated_subnet_name = "pgflex-auth"
+# pg_aad_auth_enabled      = true
+
+pg_auth_zone    = "1" # no explicit AZ in Gov for this SKU
+pg_auth_ha_zone = "2" # ignored while HA is off and no explicit AZ
+
+# Auth databases (recommended)
+pg_auth_ha_enabled      = false
+pg_auth_replica_enabled = false
+
+pg_auth_databases = ["identity"]
+
+# Extensions are usually minimal for auth; enable pgcrypto if you want server-side crypto helpers.
+pg_auth_enable_postgis = true
+
+pg_auth_extensions = [
+  "postgis",
+  "pgcrypto",
+  "pg_stat_statements",
+  "uuid-ossp",
+  "btree_gin"
 ]
 
 # Cosmos DB (NoSQL) (env)

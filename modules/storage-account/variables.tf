@@ -126,3 +126,15 @@ variable "identity_ids" {
   type    = list(string)
   default = []
 }
+
+variable "allow_blob_public_access" {
+  type        = bool
+  description = "If true, allows anonymous public access at the container/blob level (blob/container access types)."
+  default     = false
+}
+
+variable "enable_storage_data_scanner_private_link_access" {
+  description = "If true, explicitly configures private_link_access for Microsoft.Security storageDataScanner."
+  type        = bool
+  default     = false
+}

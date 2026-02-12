@@ -53,7 +53,7 @@ done
 STATE_RG="rg-core-tfstate-01"
 STATE_SA="sacoretfstateinfra"
 STATE_CONTAINER="tfstate"
-STATE_KEY="app-config/${PRODUCT_IN}/${PLANE}/terraform.tfstate"
+STATE_KEY="afd-config/${PRODUCT_IN}/${PLANE}/terraform.tfstate"
 
 # ---------------------------
 # Export env vars
@@ -129,14 +129,7 @@ fi
 
 exit "$ec"
 
-
-# export ENV_IN=dev
-# export PRODUCT_IN=hrz
-# export TENANT_ID="ed7990c3-61c2-477d-85e9-1a396c19ae94"
-# export STATE_SUB="641d3872-8322-4bdb-83ce-bfbc119fa3cd"
-# export HUB_SUB="df6dc63f-c4dc-4590-ba4b-f2ce9639ca6c"
-# export TARGET_SUB="62ae6908-cbcb-40cb-8773-54bd318ff7f9"
-
+# PUB -----------------------------------------------------------------------------
 # export PLANE_IN=nonprod
 # export PRODUCT_IN=pub
 # export TENANT_ID="dd58f16c-b85a-4d66-99e1-f86905453853"
@@ -144,7 +137,22 @@ exit "$ec"
 # export HUB_SUB="ee8a4693-54d4-4de8-842b-b6f35fc0674d"
 # export TARGET_SUB="ee8a4693-54d4-4de8-842b-b6f35fc0674d"
 
-# env | grep -E '^(ENV_IN|PRODUCT_IN|TENANT_ID|STATE_SUB|HUB_SUB|TARGET_SUB)='
+# export PLANE_IN=prod
+# export PRODUCT_IN=pub
+# export TENANT_ID="dd58f16c-b85a-4d66-99e1-f86905453853"
+# export STATE_SUB="ee8a4693-54d4-4de8-842b-b6f35fc0674d"
+# export HUB_SUB="ec41aef1-269c-4633-8637-924c395ad181"
+# export TARGET_SUB="ec41aef1-269c-4633-8637-924c395ad181"
+# PUB -----------------------------------------------------------------------------
+
+# env | grep -E '^(PLANE_IN|PRODUCT_IN|TENANT_ID|STATE_SUB|HUB_SUB|TARGET_SUB)='
+
+# unset PLANE_IN
+# unset PRODUCT_IN
+# unset TENANT_ID
+# unset STATE_SUB
+# unset HUB_SUB
+# unset TARGET_SUB
 
 # export ENV_IN=prod
 # export PRODUCT_IN=hrz
@@ -155,18 +163,9 @@ exit "$ec"
 # export CDBPG_ADMIN_PASSWORD='nzu1bgw7dmx3QNT*zcn'
 # export PG_ADMIN_PASSWORD='EGU7bqn4qkn*qhf*rye'
 
-# env | grep -E '^(ENV_IN|PRODUCT_IN|TENANT_ID|STATE_SUB|HUB_SUB|TARGET_SUB|CDBPG_ADMIN_PASSWORD|PG_ADMIN_PASSWORD)='
+# env | grep -E '^(ENV_IN|PRODUCT_IN|TENANT_ID|STATE_SUB|HUB_SUB|TARGET_SUB)='
 
 # bash ./local-plan-platform-app.sh
-
-# unset ENV_IN
-# unset PRODUCT_IN
-# unset TENANT_ID
-# unset STATE_SUB
-# unset HUB_SUB
-# unset TARGET_SUB
-# unset CDBPG_ADMIN_PASSWORD
-# unset PG_ADMIN_PASSWORD
 
 
 # az cloud set -n AzureUSGovernment

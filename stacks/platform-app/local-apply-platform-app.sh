@@ -15,8 +15,9 @@ TFPLAN_PATH="${TFPLAN_PATH:-tfplan}"  # path to existing plan file
 : "${STATE_SUB:?set STATE_SUB}"      # backend/state subscription
 : "${HUB_SUB:?set HUB_SUB}"          # core/hub subscription for lookups
 : "${TARGET_SUB:?set TARGET_SUB}"    # target subscription for apply
-: "${CDBPG_ADMIN_PASSWORD:?set CDBPG_ADMIN_PASSWORD}"
+# : "${CDBPG_ADMIN_PASSWORD:?set CDBPG_ADMIN_PASSWORD}"
 : "${PG_ADMIN_PASSWORD:?set PG_ADMIN_PASSWORD}"
+: "${PG_AUTH_ADMIN_PASSWORD:?set PG_AUTH_ADMIN_PASSWORD}"
 
 LOCK_TIMEOUT="${LOCK_TIMEOUT:-10m}"
 APPLY="${APPLY:-no}"                 # set APPLY=yes to actually apply
@@ -54,8 +55,9 @@ export TF_VAR_plane="$PLANE"
 export TF_VAR_subscription_id="$TARGET_SUB"
 export TF_VAR_hub_tenant_id="$TENANT_ID"
 export TF_VAR_hub_subscription_id="$HUB_SUB"
-export TF_VAR_cdbpg_admin_password="$CDBPG_ADMIN_PASSWORD"
+# export TF_VAR_cdbpg_admin_password="$CDBPG_ADMIN_PASSWORD"
 export TF_VAR_pg_admin_password="$PG_ADMIN_PASSWORD"
+export TF_VAR_pg_auth_admin_password="$PG_AUTH_ADMIN_PASSWORD"
 
 # ---------------------------
 # Preflight: ensure tfplan exists

@@ -3,7 +3,7 @@ variable "plane" {
   description = "deployment plane: nonprod or prod"
   type        = string
   validation {
-    condition     = contains(["nonprod","prod"], lower(var.plane))
+    condition     = contains(["nonprod", "prod"], lower(var.plane))
     error_message = "plane must be one of: nonprod, prod."
   }
 }
@@ -13,7 +13,7 @@ variable "product" {
   type        = string
   default     = "hrz"
   validation {
-    condition     = contains(["hrz","pub"], lower(var.product))
+    condition     = contains(["hrz", "pub"], lower(var.product))
     error_message = "product must be hrz or pub."
   }
 }
@@ -128,13 +128,14 @@ variable "nonprod_hub" {
     vnet  = optional(string)
     cidrs = list(string)
     subnets = map(object({
-      address_prefixes                      = optional(list(string))
-      cidr                                  = optional(string)
-      nsg_id                                = optional(string)
-      route_table_id                        = optional(string)
-      service_endpoints                     = optional(list(string))
-      private_endpoint_network_policies     = optional(string)
-      private_link_service_network_policies = optional(string)
+      address_prefixes                              = optional(list(string))
+      cidr                                          = optional(string)
+      nsg_id                                        = optional(string)
+      route_table_id                                = optional(string)
+      service_endpoints                             = optional(list(string))
+      private_endpoint_network_policies             = optional(string)
+      private_link_service_network_policies         = optional(string)
+      private_link_service_network_policies_enabled = optional(bool)
       delegations = optional(list(object({
         name    = string
         service = string
@@ -203,13 +204,14 @@ variable "prod_hub" {
     vnet  = optional(string)
     cidrs = list(string)
     subnets = map(object({
-      address_prefixes                      = optional(list(string))
-      cidr                                  = optional(string)
-      nsg_id                                = optional(string)
-      route_table_id                        = optional(string)
-      service_endpoints                     = optional(list(string))
-      private_endpoint_network_policies     = optional(string)
-      private_link_service_network_policies = optional(string)
+      address_prefixes                              = optional(list(string))
+      cidr                                          = optional(string)
+      nsg_id                                        = optional(string)
+      route_table_id                                = optional(string)
+      service_endpoints                             = optional(list(string))
+      private_endpoint_network_policies             = optional(string)
+      private_link_service_network_policies         = optional(string)
+      private_link_service_network_policies_enabled = optional(bool)
       delegations = optional(list(object({
         name    = string
         service = string
@@ -325,7 +327,7 @@ variable "waf_mode" {
   type        = string
   default     = "Detection"
   validation {
-    condition     = contains(["Detection","Prevention"], var.waf_mode)
+    condition     = contains(["Detection", "Prevention"], var.waf_mode)
     error_message = "waf_mode must be Detection or Prevention."
   }
 }
@@ -359,7 +361,7 @@ variable "appgw_cookie_based_affinity" {
   type        = string
   default     = "Disabled"
   validation {
-    condition     = contains(["Enabled","Disabled"], var.appgw_cookie_based_affinity)
+    condition     = contains(["Enabled", "Disabled"], var.appgw_cookie_based_affinity)
     error_message = "appgw_cookie_based_affinity must be Enabled or Disabled."
   }
 }
@@ -410,7 +412,7 @@ variable "fd_sku_name" {
   type        = string
   default     = "Premium_AzureFrontDoor"
   validation {
-    condition     = contains(["Standard_AzureFrontDoor","Premium_AzureFrontDoor"], var.fd_sku_name)
+    condition     = contains(["Standard_AzureFrontDoor", "Premium_AzureFrontDoor"], var.fd_sku_name)
     error_message = "fd_sku_name must be Standard_AzureFrontDoor or Premium_AzureFrontDoor."
   }
 }
@@ -425,7 +427,7 @@ variable "aks_ingress_allowed_cidrs" {
   description = "CIDR(s) or service tags allowed to reach AKS LB/Ingress from Internet side"
   type        = map(list(string))
   default = {
-    nonprod = ["0.0.0.0/0"] 
+    nonprod = ["0.0.0.0/0"]
     prod    = ["0.0.0.0/0"] # or your WAF/AppGW public IP range later
   }
 }
@@ -452,4 +454,107 @@ variable "appgw_private_frontend_ip" {
   type        = string
   description = "Optional static private IP for the App Gateway private frontend. If null, Dynamic allocation is used."
   default     = null
+}
+
+variable "appgw_private_link_enabled" {
+  description = "Enable Application Gateway Private Link (for AFD Premium origin private connectivity)."
+  type        = bool
+  default     = true
+}
+
+variable "appgw_private_link_subnet_key" {
+  description = "Key in the hub subnets map for the AppGW Private Link subnet."
+  type        = string
+  default     = "appgw-pl"
+}
+
+variable "appgw_private_link_configuration_name" {
+  description = "Private Link configuration name on the Application Gateway (keep short; AppGW name + this <= 70 chars)."
+  type        = string
+  default     = "pl"
+}
+
+variable "enable_s2s" {
+  type    = bool
+  default = false
+}
+
+# Peer VPN gateway Public IP (the other side's VPN GW public IP)
+variable "s2s_peer_gateway_public_ip" {
+  type    = string
+  default = null
+}
+
+# Address spaces behind the peer (routes you want to reach over the tunnel)
+variable "s2s_peer_address_spaces" {
+  type    = list(string)
+  default = []
+}
+
+variable "s2s_shared_key" {
+  type      = string
+  default   = null
+  sensitive = true
+}
+
+# Optional: pin IPsec policy (recommended for Azure-to-Azure)
+variable "s2s_ipsec_policy" {
+  type = object({
+    dh_group         = string
+    ike_encryption   = string
+    ike_integrity    = string
+    ipsec_encryption = string
+    ipsec_integrity  = string
+    pfs_group        = string
+    sa_lifetime      = number
+  })
+  default = null
+}
+
+variable "s2s_oneway_enable" {
+  type    = bool
+  default = true
+}
+
+# # CIDRs of the HRZ subnets that are allowed to initiate to PUB
+# variable "s2s_hrz_source_subnet_cidrs" {
+#   type    = list(string)
+#   default = []
+# }
+
+# Ports HRZ is allowed to hit in PUB (optional – enforce in PUB NSGs if desired)
+variable "s2s_allowed_ports" {
+  type    = list(string)
+  default = ["443"]
+}
+
+variable "local_pgflex_subnet_cidrs" {
+  description = "Per-environment local PGFlex delegated subnet CIDRs"
+  type        = map(list(string))
+
+  # example:
+  # {
+  #   dev  = ["10.11.3.0/24"]
+  #   qa   = ["10.12.3.0/24"]
+  #   prod = ["10.21.3.0/24"]
+  #   uat  = ["10.22.3.0/24"]
+  # }
+}
+
+variable "peer_pgflex_subnet_cidrs" {
+  description = "Per-environment peer PGFlex subnet CIDRs over S2S"
+  type        = map(list(string))
+
+  # example:
+  # {
+  #   dev  = ["172.11.3.0/24"]
+  #   qa   = ["172.12.3.0/24"]
+  #   prod = ["172.21.3.0/24"]
+  #   uat  = ["172.22.3.0/24"]
+  # }
+}
+
+variable "appgw_allow_vnet_ingress" {
+  type    = bool
+  default = false
 }

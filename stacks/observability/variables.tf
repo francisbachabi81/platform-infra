@@ -423,7 +423,7 @@ variable "ehns_log_categories" {
 variable "pg_log_categories" {
   type        = list(string)
   description = "PostgreSQL Flexible Server log categories to enable"
-  default     = [
+  default = [
     "PostgreSQLLogs",
     "PostgreSQLFlexTableStats",
     "PostgreSQLFlexSessions",
@@ -433,7 +433,7 @@ variable "pg_log_categories" {
 variable "redis_log_categories" {
   type        = list(string)
   description = "Redis log categories to enable"
-  default     = [
+  default = [
     "ConnectedClientList",
     "CacheRead",
     "CacheWrite",
@@ -444,7 +444,7 @@ variable "redis_log_categories" {
 variable "appi_log_categories" {
   type        = list(string)
   description = "Application Insights log categories to enable"
-  default     = [
+  default = [
     "AppRequests",
     "AppSystemEvents",
     "AppPerformanceCounters",
@@ -459,7 +459,7 @@ variable "appi_log_categories" {
 variable "vpng_log_categories" {
   type        = list(string)
   description = "VPN Gateway log categories to enable"
-  default     = [
+  default = [
     "GatewayDiagnosticLog",
     "TunnelDiagnosticLog",
     "RouteDiagnosticLog",
@@ -470,7 +470,7 @@ variable "vpng_log_categories" {
 variable "fa_log_categories" {
   type        = list(string)
   description = "Function App log categories to enable"
-  default     = [
+  default = [
     "FunctionAppLogs"
   ]
 }
@@ -478,7 +478,7 @@ variable "fa_log_categories" {
 variable "web_log_categories" {
   type        = list(string)
   description = "Web App log categories to enable"
-  default     = [
+  default = [
     "AppServiceHTTPLogs",
     "AppServiceConsoleLogs",
     "AppServiceAppLogs",
@@ -488,7 +488,7 @@ variable "web_log_categories" {
 variable "appgw_log_categories" {
   type        = list(string)
   description = "Application Gateway log categories to enable"
-  default     = [
+  default = [
     "ApplicationGatewayAccessLog",
     "ApplicationGatewayPerformanceLog",
     "ApplicationGatewayFirewallLog",
@@ -498,16 +498,25 @@ variable "appgw_log_categories" {
 variable "afd_log_categories" {
   type        = list(string)
   description = "Azure Front Door log categories to enable"
-  default     = [
+  default = [
+    # Access log
+    "FrontDoorAccessLog",
     "FrontdoorAccessLog",
+
+    # WAF log
+    "FrontDoorWebApplicationFirewallLog",
     "FrontdoorWebApplicationFirewallLog",
+
+    # Health probe log
+    "FrontDoorHealthProbeLog",
+    "FrontdoorHealthProbeLog",
   ]
 }
 
 variable "nsg_log_categories" {
   type        = list(string)
   description = "NSG diagnostic log categories to enable"
-  default     = [
+  default = [
     "NetworkSecurityGroupEvent",
     "NetworkSecurityGroupRuleCounter",
   ]

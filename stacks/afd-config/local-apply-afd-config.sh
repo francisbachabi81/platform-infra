@@ -36,7 +36,7 @@ esac
 STATE_RG="rg-core-tfstate-01"
 STATE_SA="sacoretfstateinfra"
 STATE_CONTAINER="tfstate"
-STATE_KEY="app-config/${PRODUCT_IN}/${PLANE}/terraform.tfstate"
+STATE_KEY="afd-config/${PRODUCT_IN}/${PLANE}/terraform.tfstate"
 
 # ---------------------------
 # Export env vars (same as workflow)
@@ -105,14 +105,17 @@ echo " - tfplan:       $TFPLAN_PATH"
 echo " - lock timeout: $LOCK_TIMEOUT"
 echo
 
-if [ "$APPLY" != "yes" ]; then
-  echo "Dry-run mode: set APPLY=yes to actually apply."
-  exit 0
-fi
+# if [ "$APPLY" != "yes" ]; then
+#   echo "Dry-run mode: set APPLY=yes to actually apply."
+#   exit 0
+# fi
 
-if [ "$AUTO_APPROVE" = "yes" ]; then
-  terraform apply -input=false -lock-timeout="$LOCK_TIMEOUT" -auto-approve "$TFPLAN_PATH"
-else
-  terraform apply -input=false -lock-timeout="$LOCK_TIMEOUT" "$TFPLAN_PATH"
-fi
+# if [ "$AUTO_APPROVE" = "yes" ]; then
+#   terraform apply -input=false -lock-timeout="$LOCK_TIMEOUT" -auto-approve "$TFPLAN_PATH"
+# else
+#   terraform apply -input=false -lock-timeout="$LOCK_TIMEOUT" "$TFPLAN_PATH"
+# fi
+
+terraform apply -input=false tfplan
+
 echo "✅ Apply complete."

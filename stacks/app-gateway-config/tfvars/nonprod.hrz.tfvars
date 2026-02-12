@@ -1,6 +1,7 @@
-product  = "hrz"
-plane    = "nonprod"
-location = "USGov Arizona"
+product = "hrz"
+plane   = "nonprod"
+
+location = "usgovarizona"
 region   = "usaz"
 
 tags = {
@@ -22,65 +23,219 @@ core_state = {
   key                  = "core/hrz/usaz/np.tfstate"
 }
 
+# WAF policies
 waf_policies = {
-  app-main-dev = {
-    mode              = "Prevention"
-    vpn_cidrs          = ["192.168.1.0/24"]
-    restricted_paths   = ["/admin"]
-    allowed_countries  = ["US"]
+
+  # DEV (PUBLIC APP) - AFD-only allow-list
+
+  "app-dev-afd-only" = {
+    mode = "Prevention"
+
     disabled_rules_by_group = {
-      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200","942260","942340","942370","942330","942440"]
+      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260", "942330", "942340", "942370", "942440"]
       "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
-      "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300","920320"]
+      "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
     }
+
+    custom_rules = [
+      {
+        name     = "BlockNonAFD"
+        priority = 5
+        action   = "Block"
+        match_conditions = [
+          {
+            match_variable     = "RequestHeaders"
+            selector           = "X-Azure-FDID"
+            operator           = "Equal"
+            match_values       = ["19318404-6447-4ef1-8ce2-60c307fb7161"] # <-- replace with HRZ AFD profile FDID
+            negation_condition = true
+          }
+        ]
+      }
+    ]
   }
 
-  obs-internal-dev = {
-    mode                       = "Prevention"
-    vpn_cidrs                  = ["192.168.1.0/24"]
-    restricted_paths           = []  
-    allowed_countries          = ["US"]
-    vpn_required_for_all_paths = true
+  # DEV (APP - private/frontend) - Geo + VPN restriction for /admin
+  "app-dev-somevpn" = {
+    mode = "Prevention"
+
     disabled_rules_by_group = {
-      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200","942260","942340","942370","942330","942440"]
+      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260", "942330", "942340", "942370", "942440"]
       "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
-      "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300","920320"]
+      "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
     }
+
+    custom_rules = [
+      # {
+      #   name     = "BlockNonAllowedCountries"
+      #   priority = 5
+      #   action   = "Block"
+      #   match_conditions = [
+      #     {
+      #       match_variable     = "RemoteAddr"
+      #       operator           = "GeoMatch"
+      #       match_values       = ["US"]
+      #       negation_condition = true
+      #     }
+      #   ]
+      # },
+      {
+        name     = "BlockNonvpnRestrictedPaths"
+        priority = 10
+        action   = "Block"
+        match_conditions = [
+          {
+            match_variable = "RequestUri"
+            operator       = "BeginsWith"
+            match_values   = ["/admin"]
+            transforms     = ["Lowercase"]
+          },
+          {
+            match_variable     = "RemoteAddr"
+            operator           = "IPMatch"
+            match_values       = ["192.168.1.0/24"]
+            negation_condition = true
+          }
+        ]
+      }
+    ]
   }
 
-  # --- QA (copy of dev; update CIDRs/paths if needed) ---
-  # app-main-qa = {
-  #   mode              = "Prevention"
-  #   vpn_cidrs          = ["192.168.1.0/24"]
-  #   restricted_paths   = ["/admin"]
-  #   allowed_countries  = ["US"]
+  # DEV (OBS INTERNAL) - VPN required for all paths
+  "app-dev-protected" = {
+    mode = "Prevention"
+
+    disabled_rules_by_group = {
+      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260", "942330", "942340", "942370", "942440"]
+      "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
+      "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
+    }
+
+    custom_rules = [
+      {
+        name     = "BlockNonVpnAllPaths"
+        priority = 10
+        action   = "Block"
+        match_conditions = [
+          {
+            match_variable     = "RemoteAddr"
+            operator           = "IPMatch"
+            match_values       = ["192.168.1.0/24"]
+            negation_condition = true
+          }
+        ]
+      }
+    ]
+  }
+
+  # QA placeholders (commented out)
+
+  # "app-qa-afd-only" = {
+  #   mode = "Prevention"
+  #
   #   disabled_rules_by_group = {
-  #     "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200","942260","942340","942370","942330","942440"]
+  #     "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260", "942330", "942340", "942370", "942440"]
   #     "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
-  #     "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300","920320"]
+  #     "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
   #   }
+  #
+  #   custom_rules = [
+  #     {
+  #       name     = "BlockNonAFD"
+  #       priority = 5
+  #       action   = "Block"
+  #       match_conditions = [
+  #         {
+  #           match_variable     = "RequestHeaders"
+  #           selector           = "X-Azure-FDID"
+  #           operator           = "Equal"
+  #           match_values       = ["<HRZ_QA_AFD_FDID_GUID>"]
+  #           negation_condition = true
+  #         }
+  #       ]
+  #     }
+  #   ]
   # }
   #
-  # obs-internal-qa = {
-  #   mode                       = "Prevention"
-  #   vpn_cidrs                  = ["192.168.1.0/24"]
-  #   restricted_paths           = []  
-  #   allowed_countries          = ["US"]
-  #   vpn_required_for_all_paths = true
+  # "app-qa-somevpn" = {
+  #   mode = "Prevention"
+  #
   #   disabled_rules_by_group = {
-  #     "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200","942260","942340","942370","942330","942440"]
+  #     "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260", "942330", "942340", "942370", "942440"]
   #     "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
-  #     "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300","920320"]
+  #     "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
   #   }
+  #
+  #   custom_rules = [
+  #     {
+  #       name     = "BlockNonAllowedCountries"
+  #       priority = 5
+  #       action   = "Block"
+  #       match_conditions = [
+  #         {
+  #           match_variable     = "RemoteAddr"
+  #           operator           = "GeoMatch"
+  #           match_values       = ["US"]
+  #           negation_condition = true
+  #         }
+  #       ]
+  #     },
+  #     {
+  #       name     = "BlockNonvpnRestrictedPaths"
+  #       priority = 10
+  #       action   = "Block"
+  #       match_conditions = [
+  #         {
+  #           match_variable = "RequestUri"
+  #           operator       = "BeginsWith"
+  #           match_values   = ["/admin"]
+  #           transforms     = ["Lowercase"]
+  #         },
+  #         {
+  #           match_variable     = "RemoteAddr"
+  #           operator           = "IPMatch"
+  #           match_values       = ["192.168.1.0/24"]
+  #           negation_condition = true
+  #         }
+  #       ]
+  #     }
+  #   ]
+  # }
+  #
+  # "app-qa-protected" = {
+  #   mode = "Prevention"
+  #
+  #   disabled_rules_by_group = {
+  #     "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260", "942330", "942340", "942370", "942440"]
+  #     "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
+  #     "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
+  #   }
+  #
+  #   custom_rules = [
+  #     {
+  #       name     = "BlockNonVpnAllPaths"
+  #       priority = 10
+  #       action   = "Block"
+  #       match_conditions = [
+  #         {
+  #           match_variable     = "RemoteAddr"
+  #           operator           = "IPMatch"
+  #           match_values       = ["192.168.1.0/24"]
+  #           negation_condition = true
+  #         }
+  #       ]
+  #     }
+  #   ]
   # }
 }
 
+# certs (dev now; qa later)
 ssl_certificates = {
-  appgw-gateway-cert-horizon-dev = {
+  appgw-cert-hrz-dev = {
     secret_name = "appgw-gateway-cert-horizon-dev"
   }
 
-  # appgw-gateway-cert-horizon-qa = {
+  # appgw-cert-hrz-qa = {
   #   secret_name = "appgw-gateway-cert-horizon-qa"
   # }
 }
@@ -90,16 +245,21 @@ frontend_ports = {
   feport-443 = 443
 }
 
+# Backends (NO publiclayers)
 backend_pools = {
-  bepool-app-dev          = { ip_addresses = ["62.10.212.49"] }
-  bepool-obs-internal-dev = { ip_addresses = ["1.1.1.1"] }
+  be-dev-app = { ip_addresses = ["62.10.212.185"] }
+  be-dev-obs = { ip_addresses = ["10.10.2.8"] }
 
-  # bepool-app-qa          = { ip_addresses = ["62.10.212.50"] }
-  # bepool-obs-internal-qa = { ip_addresses = ["1.1.1.1"] }
+  # # QA placeholders
+  # be-qa-app = { ip_addresses = ["<QA_APP_IP>"] }
+  # be-qa-obs = { ip_addresses = ["<QA_OBS_IP>"] }
 }
 
+
+# Probes (NO publiclayers)
+
 probes = {
-  probe-app-dev = {
+  probe-dev-app = {
     protocol            = "Https"
     host                = "dev.horizon.intterra.io"
     path                = "/api/identity/health/ready"
@@ -109,7 +269,7 @@ probes = {
     match_status_codes  = ["200-399"]
   }
 
-  probe-obs-internal-dev = {
+  probe-dev-obs = {
     protocol            = "Https"
     host                = "internal.dev.horizon.intterra.io"
     path                = "/logs/login"
@@ -119,7 +279,8 @@ probes = {
     match_status_codes  = ["200-399"]
   }
 
-  # probe-app-qa = {
+  # # QA placeholders
+  # probe-qa-app = {
   #   protocol            = "Https"
   #   host                = "qa.horizon.intterra.io"
   #   path                = "/api/identity/health/ready"
@@ -129,7 +290,7 @@ probes = {
   #   match_status_codes  = ["200-399"]
   # }
   #
-  # probe-obs-internal-qa = {
+  # probe-qa-obs = {
   #   protocol            = "Https"
   #   host                = "internal.qa.horizon.intterra.io"
   #   path                = "/logs/login"
@@ -140,282 +301,300 @@ probes = {
   # }
 }
 
+# Backend HTTP settings (NO publiclayers)
 backend_http_settings = {
-  bhs-app-dev-https = {
-    port                          = 443
-    protocol                      = "Https"
-    request_timeout               = 20
-    cookie_based_affinity         = "Disabled"
-    probe_name                    = "probe-app-dev"
-    host_name                     = "dev.horizon.intterra.io"
+  bhs-dev-app-https = {
+    port                                = 443
+    protocol                            = "Https"
+    request_timeout                     = 20
+    cookie_based_affinity               = "Disabled"
+    probe_name                          = "probe-dev-app"
+    host_name                           = "dev.horizon.intterra.io"
     pick_host_name_from_backend_address = false
   }
 
-  bhs-obs-internal-dev-https = {
-    port                          = 443
-    protocol                      = "Https"
-    request_timeout               = 20
-    cookie_based_affinity         = "Disabled"
-    probe_name                    = "probe-obs-internal-dev"
-    host_name                     = "internal.dev.horizon.intterra.io"
+  bhs-dev-obs-https = {
+    port                                = 443
+    protocol                            = "Https"
+    request_timeout                     = 20
+    cookie_based_affinity               = "Disabled"
+    probe_name                          = "probe-dev-obs"
+    host_name                           = "internal.dev.horizon.intterra.io"
     pick_host_name_from_backend_address = false
   }
 
-  # bhs-app-qa-https = {
-  #   port                          = 443
-  #   protocol                      = "Https"
-  #   request_timeout               = 20
-  #   cookie_based_affinity         = "Disabled"
-  #   probe_name                    = "probe-app-qa"
-  #   host_name                     = "qa.horizon.intterra.io"
+  # # QA placeholders
+  # bhs-qa-app-https = {
+  #   port                                = 443
+  #   protocol                            = "Https"
+  #   request_timeout                     = 20
+  #   cookie_based_affinity               = "Disabled"
+  #   probe_name                          = "probe-qa-app"
+  #   host_name                           = "qa.horizon.intterra.io"
   #   pick_host_name_from_backend_address = false
   # }
   #
-  # bhs-obs-internal-qa-https = {
-  #   port                          = 443
-  #   protocol                      = "Https"
-  #   request_timeout               = 20
-  #   cookie_based_affinity         = "Disabled"
-  #   probe_name                    = "probe-obs-internal-qa"
-  #   host_name                     = "internal.qa.horizon.intterra.io"
+  # bhs-qa-obs-https = {
+  #   port                                = 443
+  #   protocol                            = "Https"
+  #   request_timeout                     = 20
+  #   cookie_based_affinity               = "Disabled"
+  #   probe_name                          = "probe-qa-obs"
+  #   host_name                           = "internal.qa.horizon.intterra.io"
   #   pick_host_name_from_backend_address = false
   # }
 }
 
+# Listeners
 listeners = {
-  listener-app-dev-http-public = {
+  # DEV APP (PUBLIC) - AFD-only
+  lis-dev-app-http-public = {
     frontend_port_name = "feport-80"
     protocol           = "Http"
-    host_name          = "dev.horizon.intterra.io"
+    host_name          = "origin-horizon.dev.horizon.intterra.io"
     frontend           = "public"
-    waf_policy_key     = "app-main-dev"
+    waf_policy_key     = "app-dev-afd-only"
   }
 
-  listener-app-dev-https-public = {
+  lis-dev-app-https-public = {
     frontend_port_name   = "feport-443"
     protocol             = "Https"
-    host_name            = "dev.horizon.intterra.io"
-    ssl_certificate_name = "appgw-gateway-cert-horizon-dev"
+    host_name            = "origin-horizon.dev.horizon.intterra.io"
+    ssl_certificate_name = "appgw-cert-hrz-dev"
     require_sni          = true
     frontend             = "public"
-    waf_policy_key       = "app-main-dev"
+    waf_policy_key       = "app-dev-afd-only"
   }
 
-  listener-app-dev-http-private = {
+  # DEV APP (PRIVATE) - somevpn
+  lis-dev-app-http-private = {
     frontend_port_name = "feport-80"
     protocol           = "Http"
     host_name          = "dev.horizon.intterra.io"
     frontend           = "private"
-    waf_policy_key     = "app-main-dev"
+    waf_policy_key     = "app-dev-somevpn"
   }
 
-  listener-app-dev-https-private = {
+  lis-dev-app-https-private = {
     frontend_port_name   = "feport-443"
     protocol             = "Https"
     host_name            = "dev.horizon.intterra.io"
-    ssl_certificate_name = "appgw-gateway-cert-horizon-dev"
+    ssl_certificate_name = "appgw-cert-hrz-dev"
     require_sni          = true
     frontend             = "private"
-    waf_policy_key       = "app-main-dev"
+    waf_policy_key       = "app-dev-somevpn"
   }
 
-  listener-obs-internal-dev-http-private = {
+  # DEV OBS (PRIVATE ONLY) - protected
+  lis-dev-obs-http-private = {
     frontend_port_name = "feport-80"
     protocol           = "Http"
     host_name          = "internal.dev.horizon.intterra.io"
     frontend           = "private"
-    waf_policy_key     = "obs-internal-dev"
+    waf_policy_key     = "app-dev-protected"
   }
 
-  listener-obs-internal-dev-https-private = {
+  lis-dev-obs-https-private = {
     frontend_port_name   = "feport-443"
     protocol             = "Https"
     host_name            = "internal.dev.horizon.intterra.io"
-    ssl_certificate_name = "appgw-gateway-cert-horizon-dev"
+    ssl_certificate_name = "appgw-cert-hrz-dev"
     require_sni          = true
     frontend             = "private"
-    waf_policy_key       = "obs-internal-dev"
+    waf_policy_key       = "app-dev-protected"
   }
 
-  # --- QA (structure mirrors dev) ---
-  # listener-app-qa-http-public = {
+  # QA placeholders
+
+  # lis-qa-app-http-public = {
   #   frontend_port_name = "feport-80"
   #   protocol           = "Http"
-  #   host_name          = "qa.horizon.intterra.io"
+  #   host_name          = "origin-horizon.qa.horizon.intterra.io"
   #   frontend           = "public"
-  #   waf_policy_key     = "app-main-qa"
+  #   waf_policy_key     = "app-qa-afd-only"
   # }
   #
-  # listener-app-qa-https-public = {
+  # lis-qa-app-https-public = {
   #   frontend_port_name   = "feport-443"
   #   protocol             = "Https"
-  #   host_name            = "qa.horizon.intterra.io"
-  #   ssl_certificate_name = "appgw-gateway-cert-horizon-qa"
+  #   host_name            = "origin-horizon.qa.horizon.intterra.io"
+  #   ssl_certificate_name = "appgw-cert-hrz-qa"
   #   require_sni          = true
   #   frontend             = "public"
-  #   waf_policy_key       = "app-main-qa"
+  #   waf_policy_key       = "app-qa-afd-only"
   # }
   #
-  # listener-app-qa-http-private = {
+  # lis-qa-app-http-private = {
   #   frontend_port_name = "feport-80"
   #   protocol           = "Http"
   #   host_name          = "qa.horizon.intterra.io"
   #   frontend           = "private"
-  #   waf_policy_key     = "app-main-qa"
+  #   waf_policy_key     = "app-qa-somevpn"
   # }
   #
-  # listener-app-qa-https-private = {
+  # lis-qa-app-https-private = {
   #   frontend_port_name   = "feport-443"
   #   protocol             = "Https"
   #   host_name            = "qa.horizon.intterra.io"
-  #   ssl_certificate_name = "appgw-gateway-cert-horizon-qa"
+  #   ssl_certificate_name = "appgw-cert-hrz-qa"
   #   require_sni          = true
   #   frontend             = "private"
-  #   waf_policy_key       = "app-main-qa"
+  #   waf_policy_key       = "app-qa-somevpn"
   # }
   #
-  # listener-obs-internal-qa-http-private = {
+  # lis-qa-obs-http-private = {
   #   frontend_port_name = "feport-80"
   #   protocol           = "Http"
   #   host_name          = "internal.qa.horizon.intterra.io"
   #   frontend           = "private"
-  #   waf_policy_key     = "obs-internal-qa"
+  #   waf_policy_key     = "app-qa-protected"
   # }
   #
-  # listener-obs-internal-qa-https-private = {
+  # lis-qa-obs-https-private = {
   #   frontend_port_name   = "feport-443"
   #   protocol             = "Https"
   #   host_name            = "internal.qa.horizon.intterra.io"
-  #   ssl_certificate_name = "appgw-gateway-cert-horizon-qa"
+  #   ssl_certificate_name = "appgw-cert-hrz-qa"
   #   require_sni          = true
   #   frontend             = "private"
-  #   waf_policy_key       = "obs-internal-qa"
+  #   waf_policy_key       = "app-qa-protected"
   # }
 }
 
+# Redirects
 redirect_configurations = {
-  redir-app-dev-http-to-https-public = {
-    target_listener_name = "listener-app-dev-https-public"
+  redir-dev-app-http-to-https-public = {
+    target_listener_name = "lis-dev-app-https-public"
     redirect_type        = "Permanent"
     include_path         = true
     include_query_string = true
   }
 
-  redir-app-dev-http-to-https-private = {
-    target_listener_name = "listener-app-dev-https-private"
+  redir-dev-app-http-to-https-private = {
+    target_listener_name = "lis-dev-app-https-private"
     redirect_type        = "Permanent"
     include_path         = true
     include_query_string = true
   }
 
-  redir-obs-internal-dev-http-to-https-private = {
-    target_listener_name = "listener-obs-internal-dev-https-private"
+  redir-dev-obs-http-to-https-private = {
+    target_listener_name = "lis-dev-obs-https-private"
     redirect_type        = "Permanent"
     include_path         = true
     include_query_string = true
   }
 
-  # redir-app-qa-http-to-https-public = {
-  #   target_listener_name = "listener-app-qa-https-public"
+  # # QA placeholders
+  # redir-qa-app-http-to-https-public = {
+  #   target_listener_name = "lis-qa-app-https-public"
   #   redirect_type        = "Permanent"
   #   include_path         = true
   #   include_query_string = true
   # }
   #
-  # redir-app-qa-http-to-https-private = {
-  #   target_listener_name = "listener-app-qa-https-private"
+  # redir-qa-app-http-to-https-private = {
+  #   target_listener_name = "lis-qa-app-https-private"
   #   redirect_type        = "Permanent"
   #   include_path         = true
   #   include_query_string = true
   # }
   #
-  # redir-obs-internal-qa-http-to-https-private = {
-  #   target_listener_name = "listener-obs-internal-qa-https-private"
+  # redir-qa-obs-http-to-https-private = {
+  #   target_listener_name = "lis-qa-obs-https-private"
   #   redirect_type        = "Permanent"
   #   include_path         = true
   #   include_query_string = true
   # }
 }
+
+
+# Routing rules
 
 routing_rules = [
+  # DEV APP (PUBLIC)
   {
-    name                        = "rule-app-dev-http-redirect-public"
+    name                        = "rule-dev-app-http-redirect-public"
     priority                    = 90
-    http_listener_name          = "listener-app-dev-http-public"
-    redirect_configuration_name = "redir-app-dev-http-to-https-public"
+    http_listener_name          = "lis-dev-app-http-public"
+    redirect_configuration_name = "redir-dev-app-http-to-https-public"
   },
   {
-    name                       = "rule-app-dev-https-public"
+    name                       = "rule-dev-app-https-public"
     priority                   = 100
-    http_listener_name         = "listener-app-dev-https-public"
-    backend_address_pool_name  = "bepool-app-dev"
-    backend_http_settings_name = "bhs-app-dev-https"
+    http_listener_name         = "lis-dev-app-https-public"
+    backend_address_pool_name  = "be-dev-app"
+    backend_http_settings_name = "bhs-dev-app-https"
   },
+
+  # DEV APP (PRIVATE)
   {
-    name                        = "rule-app-dev-http-redirect-private"
+    name                        = "rule-dev-app-http-redirect-private"
     priority                    = 190
-    http_listener_name          = "listener-app-dev-http-private"
-    redirect_configuration_name = "redir-app-dev-http-to-https-private"
+    http_listener_name          = "lis-dev-app-http-private"
+    redirect_configuration_name = "redir-dev-app-http-to-https-private"
   },
   {
-    name                       = "rule-app-dev-https-private"
+    name                       = "rule-dev-app-https-private"
     priority                   = 200
-    http_listener_name         = "listener-app-dev-https-private"
-    backend_address_pool_name  = "bepool-app-dev"
-    backend_http_settings_name = "bhs-app-dev-https"
+    http_listener_name         = "lis-dev-app-https-private"
+    backend_address_pool_name  = "be-dev-app"
+    backend_http_settings_name = "bhs-dev-app-https"
   },
+
+  # DEV OBS (PRIVATE)
   {
-    name                        = "rule-obs-internal-dev-http-redirect-private"
+    name                        = "rule-dev-obs-http-redirect-private"
     priority                    = 210
-    http_listener_name          = "listener-obs-internal-dev-http-private"
-    redirect_configuration_name = "redir-obs-internal-dev-http-to-https-private"
+    http_listener_name          = "lis-dev-obs-http-private"
+    redirect_configuration_name = "redir-dev-obs-http-to-https-private"
   },
   {
-    name                       = "rule-obs-internal-dev-https-private"
+    name                       = "rule-dev-obs-https-private"
     priority                   = 220
-    http_listener_name         = "listener-obs-internal-dev-https-private"
-    backend_address_pool_name  = "bepool-obs-internal-dev"
-    backend_http_settings_name = "bhs-obs-internal-dev-https"
+    http_listener_name         = "lis-dev-obs-https-private"
+    backend_address_pool_name  = "be-dev-obs"
+    backend_http_settings_name = "bhs-dev-obs-https"
   }
 
-  # --- QA (mirrors dev priorities; adjust if you need gaps) ---
+  # # QA placeholders (commented out)
+  # ,
   # {
-  #   name                        = "rule-app-qa-http-redirect-public"
+  #   name                        = "rule-qa-app-http-redirect-public"
   #   priority                    = 91
-  #   http_listener_name          = "listener-app-qa-http-public"
-  #   redirect_configuration_name = "redir-app-qa-http-to-https-public"
+  #   http_listener_name          = "lis-qa-app-http-public"
+  #   redirect_configuration_name = "redir-qa-app-http-to-https-public"
   # },
   # {
-  #   name                       = "rule-app-qa-https-public"
+  #   name                       = "rule-qa-app-https-public"
   #   priority                   = 101
-  #   http_listener_name         = "listener-app-qa-https-public"
-  #   backend_address_pool_name  = "bepool-app-qa"
-  #   backend_http_settings_name = "bhs-app-qa-https"
+  #   http_listener_name         = "lis-qa-app-https-public"
+  #   backend_address_pool_name  = "be-qa-app"
+  #   backend_http_settings_name = "bhs-qa-app-https"
   # },
   # {
-  #   name                        = "rule-app-qa-http-redirect-private"
+  #   name                        = "rule-qa-app-http-redirect-private"
   #   priority                    = 191
-  #   http_listener_name          = "listener-app-qa-http-private"
-  #   redirect_configuration_name = "redir-app-qa-http-to-https-private"
+  #   http_listener_name          = "lis-qa-app-http-private"
+  #   redirect_configuration_name = "redir-qa-app-http-to-https-private"
   # },
   # {
-  #   name                       = "rule-app-qa-https-private"
+  #   name                       = "rule-qa-app-https-private"
   #   priority                   = 201
-  #   http_listener_name         = "listener-app-qa-https-private"
-  #   backend_address_pool_name  = "bepool-app-qa"
-  #   backend_http_settings_name = "bhs-app-qa-https"
+  #   http_listener_name         = "lis-qa-app-https-private"
+  #   backend_address_pool_name  = "be-qa-app"
+  #   backend_http_settings_name = "bhs-qa-app-https"
   # },
   # {
-  #   name                        = "rule-obs-internal-qa-http-redirect-private"
+  #   name                        = "rule-qa-obs-http-redirect-private"
   #   priority                    = 211
-  #   http_listener_name          = "listener-obs-internal-qa-http-private"
-  #   redirect_configuration_name = "redir-obs-internal-qa-http-to-https-private"
+  #   http_listener_name          = "lis-qa-obs-http-private"
+  #   redirect_configuration_name = "redir-qa-obs-http-to-https-private"
   # },
   # {
-  #   name                       = "rule-obs-internal-qa-https-private"
+  #   name                       = "rule-qa-obs-https-private"
   #   priority                   = 221
-  #   http_listener_name         = "listener-obs-internal-qa-https-private"
-  #   backend_address_pool_name  = "bepool-obs-internal-qa"
-  #   backend_http_settings_name = "bhs-obs-internal-qa-https"
+  #   http_listener_name         = "lis-qa-obs-https-private"
+  #   backend_address_pool_name  = "be-qa-obs"
+  #   backend_http_settings_name = "bhs-qa-obs-https"
   # }
 ]

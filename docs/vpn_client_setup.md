@@ -119,7 +119,7 @@ Replace these URLs with your actual blob or repo URLs.
 | Plane | Download |
 |-------|----------|
 | Nonprod | [`Download`](azurevpnconfig_np_pub_vpn.xml) |
-| Prod    | [`Download`](azurevpnconfig_pr_pub_vpn.xml) |
+| Prod    | [`Download`](azurevpnconfig_pr_pub_vpn___NOTREADY.xml) |
 
 ---
 

@@ -41,6 +41,7 @@ resource "azurerm_eventhub_namespace" "ns" {
 resource "azurerm_eventhub" "hub" {
   name                = var.eventhub_name
   namespace_name      = azurerm_eventhub_namespace.ns.name
+  # namespace_id = azurerm_eventhub_namespace.ns.id
   resource_group_name = var.resource_group_name
 
   partition_count   = var.partition_count

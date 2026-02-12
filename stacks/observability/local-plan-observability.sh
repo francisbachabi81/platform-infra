@@ -64,6 +64,10 @@ export ARM_USE_AZUREAD=true
 export ARM_ENVIRONMENT="$([ "$PRODUCT_IN" = "hrz" ] && echo usgovernment || echo public)"
 export ARM_TENANT_ID="$TENANT_ID"
 
+export TF_VAR_state_rg="$STATE_RG"
+export TF_VAR_state_sa="$STATE_SA"
+export TF_VAR_state_container="$STATE_CONTAINER"
+
 export TF_VAR_tenant_id="$TENANT_ID"
 export TF_VAR_product="$PRODUCT_IN"
 export TF_VAR_env="$ENV_IN"
@@ -76,19 +80,30 @@ export TF_VAR_env_tenant_id="$TENANT_ID"
 
 export TF_VAR_dev_subscription_id="$DEV_SUB"
 export TF_VAR_dev_tenant_id="$TENANT_ID"
-# export TF_VAR_qa_subscription_id="$QA_SUB"
-# export TF_VAR_qa_tenant_id="$TENANT_ID"
+export TF_VAR_qa_subscription_id="$QA_SUB"
+export TF_VAR_qa_tenant_id="$TENANT_ID"
 
-# export TF_VAR_prod_subscription_id="$PROD_SUB"
-# export TF_VAR_prod_tenant_id="$TENANT_ID"
-# export TF_VAR_uat_subscription_id="$UAT_SUB"
-# export TF_VAR_uat_tenant_id="$TENANT_ID"
+export TF_VAR_prod_subscription_id="$PROD_SUB"
+export TF_VAR_prod_tenant_id="$TENANT_ID"
+export TF_VAR_uat_subscription_id="$UAT_SUB"
+export TF_VAR_uat_tenant_id="$TENANT_ID"
+
+# ---------------------------
+# Cloud selection
+# ---------------------------
+echo "☁️ Setting Azure cloud based on product..."
+if [ "$PRODUCT_IN" = "hrz" ]; then
+  az cloud set --name AzureUSGovernment
+else
+  az cloud set --name AzureCloud
+fi
+az cloud show --query name -o tsv
 
 # ---------------------------
 # Login + INIT on STATE subscription (backend)
 # ---------------------------
 echo "🔐 az login (STATE_SUB=$STATE_SUB)"
-az cloud set --name AzureUSGovernment
+# az cloud set --name AzureUSGovernment
 # az account clear 2>/dev/null || true
 az cloud show --query name -o tsv
 az account show --query "{tenantId:tenantId, subscriptionId:id, name:name}" -o json
@@ -97,7 +112,7 @@ az account set --subscription "$STATE_SUB"
 # pushd "$STACK_DIR" >/dev/null
 
 terraform init -input=false -reconfigure \
-  -backend-config="environment=usgovernment" \
+  -backend-config="environment=${ARM_ENVIRONMENT}" \
   -backend-config="tenant_id=${TENANT_ID}" \
   -backend-config="subscription_id=${STATE_SUB}" \
   -backend-config="resource_group_name=${STATE_RG}" \
@@ -122,7 +137,6 @@ terraform plan -input=false -lock-timeout=5m \
   -var "product=${PRODUCT_IN}" \
   -var "env=${ENV_IN}" \
   -detailed-exitcode -out=tfplan \
-  -var "hub_subscription_id=${HUB_SUB}" \
   -var "tenant_id=${TENANT_ID}"
   2>&1 | tee plan-raw.txt
 ec=${PIPESTATUS[0]}
@@ -140,7 +154,7 @@ fi
 
 exit "$ec"
 
-
+# HRZ -----------------------------------------------------------------------------
 # export ENV_IN=dev
 # export PRODUCT_IN=hrz
 # export TENANT_ID="ed7990c3-61c2-477d-85e9-1a396c19ae94"
@@ -151,6 +165,42 @@ exit "$ec"
 # export QA_SUB="d4c1d472-722c-49c2-857f-4243441104c8"
 # export PROD_SUB="641d3872-8322-4bdb-83ce-bfbc119fa3cd"
 # export UAT_SUB="4d2bdae0-9da9-4657-827d-d44867ec2f0a"
+
+# export ENV_IN=prod
+# export PRODUCT_IN=hrz
+# export TENANT_ID="ed7990c3-61c2-477d-85e9-1a396c19ae94"
+# export STATE_SUB="641d3872-8322-4bdb-83ce-bfbc119fa3cd"
+# export HUB_SUB="d072f6c1-7c2d-4d27-8ffb-fd96f828c3b6"
+# export TARGET_SUB="641d3872-8322-4bdb-83ce-bfbc119fa3cd"
+# export DEV_SUB="62ae6908-cbcb-40cb-8773-54bd318ff7f9"
+# export QA_SUB="d4c1d472-722c-49c2-857f-4243441104c8"
+# export PROD_SUB="641d3872-8322-4bdb-83ce-bfbc119fa3cd"
+# export UAT_SUB="4d2bdae0-9da9-4657-827d-d44867ec2f0a"
+# HRZ -----------------------------------------------------------------------------
+
+# PUB -----------------------------------------------------------------------------
+# export ENV_IN=dev
+# export PRODUCT_IN=pub
+# export TENANT_ID="dd58f16c-b85a-4d66-99e1-f86905453853"
+# export STATE_SUB="ee8a4693-54d4-4de8-842b-b6f35fc0674d"
+# export HUB_SUB="ee8a4693-54d4-4de8-842b-b6f35fc0674d"
+# export TARGET_SUB="57f8aa30-981c-4764-94f6-6691c4d5c01c"
+# export DEV_SUB="57f8aa30-981c-4764-94f6-6691c4d5c01c"
+# export QA_SUB="647feab6-e53a-4db2-99ab-55d04a5997d7"
+# export PROD_SUB="7043433f-e23e-4206-9930-314695d94a6c"
+# export UAT_SUB="11494ded-2cf5-44b7-9b1c-58fd64125c20"
+
+# export ENV_IN=prod
+# export PRODUCT_IN=pub
+# export TENANT_ID="dd58f16c-b85a-4d66-99e1-f86905453853"
+# export STATE_SUB="ee8a4693-54d4-4de8-842b-b6f35fc0674d"
+# export HUB_SUB="ec41aef1-269c-4633-8637-924c395ad181"
+# export TARGET_SUB="7043433f-e23e-4206-9930-314695d94a6c"
+# export DEV_SUB="57f8aa30-981c-4764-94f6-6691c4d5c01c"
+# export QA_SUB="647feab6-e53a-4db2-99ab-55d04a5997d7"
+# export PROD_SUB="7043433f-e23e-4206-9930-314695d94a6c"
+# export UAT_SUB="11494ded-2cf5-44b7-9b1c-58fd64125c20"
+# PUB -----------------------------------------------------------------------------
 
 # env | grep -E '^(ENV_IN|PRODUCT_IN|TENANT_ID|STATE_SUB|HUB_SUB|TARGET_SUB|DEV_SUB|QA_SUB|PROD_SUB|UAT_SUB)='
 
@@ -164,5 +214,9 @@ exit "$ec"
 # unset QA_SUB
 # unset PROD_SUB
 # unset UAT_SUB
+
+# unset STATE_RG
+# unset STATE_SA
+# unset STATE_CONTAINER
 
 # bash ./local-plan-observability.sh

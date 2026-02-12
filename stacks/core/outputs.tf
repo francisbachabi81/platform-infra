@@ -13,10 +13,10 @@ output "meta" {
 
 output "action_group" {
   value = try({
-    id        = azurerm_monitor_action_group.core[0].id
-    name      = azurerm_monitor_action_group.core[0].name
-    short_name= local.action_group_short_name
-    rg_name   = local.rg_name_core
+    id         = azurerm_monitor_action_group.core[0].id
+    name       = azurerm_monitor_action_group.core[0].name
+    short_name = local.action_group_short_name
+    rg_name    = local.rg_name_core
   }, null)
 }
 
@@ -26,10 +26,10 @@ output "features" {
     enable_hrz_features    = local.enable_hrz_features
     create_scope_both      = local.create_scope_both
 
-    create_rg_core_platform = var.create_rg_core_platform
-    create_log_analytics    = var.create_log_analytics
+    create_rg_core_platform     = var.create_rg_core_platform
+    create_log_analytics        = var.create_log_analytics
     create_application_insights = var.create_application_insights
-    create_recovery_vault   = var.create_recovery_vault
+    create_recovery_vault       = var.create_recovery_vault
 
     rg_core_platform_created = try(length(module.rg_core_platform) > 0, false)
     law_created              = try(length(azurerm_log_analytics_workspace.plane) > 0, false)
@@ -49,7 +49,7 @@ output "resource_group" {
 output "ids" {
   value = {
     law  = try(one(azurerm_log_analytics_workspace.plane[*].id), null)
-    appi = try(one(azurerm_application_insights.plane[*].id),    null)
+    appi = try(one(azurerm_application_insights.plane[*].id), null)
     rsv  = try(one(azurerm_recovery_services_vault.plane[*].id), null)
   }
 }
@@ -57,24 +57,24 @@ output "ids" {
 output "names" {
   value = {
     law  = try(one(azurerm_log_analytics_workspace.plane[*].name), null)
-    appi = try(one(azurerm_application_insights.plane[*].name),     null)
-    rsv  = try(one(azurerm_recovery_services_vault.plane[*].name),  null)
+    appi = try(one(azurerm_application_insights.plane[*].name), null)
+    rsv  = try(one(azurerm_recovery_services_vault.plane[*].name), null)
   }
 }
 
 output "log_analytics" {
   value = {
-    id               = try(one(azurerm_log_analytics_workspace.plane[*].id), null)
-    name             = try(one(azurerm_log_analytics_workspace.plane[*].name), null)
-    sku              = try(var.law_sku, null)
+    id                = try(one(azurerm_log_analytics_workspace.plane[*].id), null)
+    name              = try(one(azurerm_log_analytics_workspace.plane[*].name), null)
+    sku               = try(var.law_sku, null)
     retention_in_days = try(var.law_retention_days, null)
   }
 }
 
 output "application_insights" {
   value = {
-    id     = try(one(azurerm_application_insights.plane[*].id), null)
-    name   = try(one(azurerm_application_insights.plane[*].name), null)
+    id                         = try(one(azurerm_application_insights.plane[*].id), null)
+    name                       = try(one(azurerm_application_insights.plane[*].name), null)
     internet_ingestion_enabled = try(var.appi_internet_ingestion_enabled, null)
     internet_query_enabled     = try(var.appi_internet_query_enabled, null)
   }
@@ -90,11 +90,11 @@ output "recovery_services_vault" {
 
 output "observability" {
   value = {
-    law_workspace_id         = try(one(azurerm_log_analytics_workspace.plane[*].id),               null)
-    appi_resource_id         = try(one(azurerm_application_insights.plane[*].id),                  null)
-    appi_connection_string   = try(one(azurerm_application_insights.plane[*].connection_string),   null)
+    law_workspace_id         = try(one(azurerm_log_analytics_workspace.plane[*].id), null)
+    appi_resource_id         = try(one(azurerm_application_insights.plane[*].id), null)
+    appi_connection_string   = try(one(azurerm_application_insights.plane[*].connection_string), null)
     appi_instrumentation_key = try(one(azurerm_application_insights.plane[*].instrumentation_key), null)
-    law_workspace_guid       = try(one(azurerm_log_analytics_workspace.plane[*].workspace_id),     null)
+    law_workspace_guid       = try(one(azurerm_log_analytics_workspace.plane[*].workspace_id), null)
   }
   sensitive = true
 }
@@ -102,10 +102,10 @@ output "observability" {
 output "communication_services" {
   value = {
     communication_service = try({
-      id           = module.communication.acs.id
-      name         = module.communication.acs.name
+      id   = module.communication.acs.id
+      name = module.communication.acs.name
       # Only ACS has connection strings
-      primary_key  = module.communication.acs_keys.primary_key
+      primary_key               = module.communication.acs_keys.primary_key
       primary_connection_string = module.communication.acs_keys.primary_connection_string
     }, null)
 
@@ -123,15 +123,14 @@ output "communication_services" {
     features = try(module.communication.features, null)
   }
 
-  sensitive = true  # because it contains ACS keys/connection strings
+  sensitive = true # because it contains ACS keys/connection strings
 }
 
 output "core_key_vault" {
   value = length(module.kv_core) == 0 ? null : {
-    id        = try(module.kv_core[0].id, null)
-    name      = try(module.kv_core[0].name, null)
+    id   = try(module.kv_core[0].id, null)
+    name = try(module.kv_core[0].name, null)
 
-    # Try multiple common output names the keyvault module might use
     vault_uri = coalesce(
       try(module.kv_core[0].vault_uri, null),
       try(module.kv_core[0].uri, null),
@@ -145,10 +144,10 @@ output "core_key_vault" {
 
 output "storage_cmk" {
   value = {
-    key_vault_id  = try(module.kv_core[0].id, null)
-    key_id        = try(azurerm_key_vault_key.storage_cmk[0].id, null)
-    key_name      = try(azurerm_key_vault_key.storage_cmk[0].name, null)
-    key_version   = try(azurerm_key_vault_key.storage_cmk[0].version, null)
+    key_vault_id = try(module.kv_core[0].id, null)
+    key_id       = try(azurerm_key_vault_key.storage_cmk[0].id, null)
+    key_name     = try(azurerm_key_vault_key.storage_cmk[0].name, null)
+    key_version  = try(azurerm_key_vault_key.storage_cmk[0].version, null)
   }
 }
 

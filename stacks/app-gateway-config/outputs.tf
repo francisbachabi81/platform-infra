@@ -42,8 +42,8 @@ output "debug_appgw_config" {
       for name, sid in local.ssl_cert_secret_ids :
       name
       if sid != null && trimspace(sid) != "" &&
-         can(local.ssl_secret_to_cert_name[sid]) &&
-         local.ssl_secret_to_cert_name[sid] != name
+      can(local.ssl_secret_to_cert_name[sid]) &&
+      local.ssl_secret_to_cert_name[sid] != name
     ]
   }
 }

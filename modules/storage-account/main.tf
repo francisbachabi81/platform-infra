@@ -6,6 +6,8 @@ terraform {
   }
 }
 
+data "azurerm_client_config" "current" {}
+
 resource "azurerm_storage_account" "sa" {
   name                            = var.name
   resource_group_name             = var.resource_group_name
@@ -14,7 +16,7 @@ resource "azurerm_storage_account" "sa" {
   account_replication_type        = var.replication_type
   min_tls_version                 = "TLS1_2"
   public_network_access_enabled   = false
-  allow_nested_items_to_be_public = false
+  allow_nested_items_to_be_public = var.allow_blob_public_access
   default_to_oauth_authentication = true
   tags                            = var.tags
 
@@ -24,6 +26,14 @@ resource "azurerm_storage_account" "sa" {
     content {
       default_action = "Deny"
       bypass         = ["AzureServices"]
+
+      dynamic "private_link_access" {
+        for_each = var.enable_storage_data_scanner_private_link_access ? [1] : []
+        content {
+          endpoint_resource_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/providers/Microsoft.Security/datascanners/storageDataScanner"
+          endpoint_tenant_id   = data.azurerm_client_config.current.tenant_id
+        }
+      }
     }
   }
 
@@ -41,6 +51,13 @@ resource "azurerm_storage_account" "sa" {
     ]
   }
 }
+
+# resource "azurerm_storage_container" "containers" {
+#   for_each              = toset(var.container_names)
+#   name                  = each.value
+#   storage_account_name  = azurerm_storage_account.sa.name
+#   container_access_type = "private"
+# }
 
 resource "azurerm_storage_container" "containers" {
   for_each              = toset(var.container_names)

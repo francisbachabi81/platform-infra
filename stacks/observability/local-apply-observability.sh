@@ -45,6 +45,10 @@ export ARM_USE_AZUREAD=true
 export ARM_ENVIRONMENT="$([ "$PRODUCT_IN" = "hrz" ] && echo usgovernment || echo public)"
 export ARM_TENANT_ID="$TENANT_ID"
 
+export TF_VAR_state_rg="$STATE_RG"
+export TF_VAR_state_sa="$STATE_SA"
+export TF_VAR_state_container="$STATE_CONTAINER"
+
 export TF_VAR_tenant_id="$TENANT_ID"
 export TF_VAR_product="$PRODUCT_IN"
 export TF_VAR_env="$ENV_IN"
@@ -57,13 +61,13 @@ export TF_VAR_env_tenant_id="$TENANT_ID"
 
 export TF_VAR_dev_subscription_id="$DEV_SUB"
 export TF_VAR_dev_tenant_id="$TENANT_ID"
-# export TF_VAR_qa_subscription_id="$QA_SUB"
-# export TF_VAR_qa_tenant_id="$TENANT_ID"
+export TF_VAR_qa_subscription_id="$QA_SUB"
+export TF_VAR_qa_tenant_id="$TENANT_ID"
 
-# export TF_VAR_prod_subscription_id="$PROD_SUB"
-# export TF_VAR_prod_tenant_id="$TENANT_ID"
-# export TF_VAR_uat_subscription_id="$UAT_SUB"
-# export TF_VAR_uat_tenant_id="$TENANT_ID"
+export TF_VAR_prod_subscription_id="$PROD_SUB"
+export TF_VAR_prod_tenant_id="$TENANT_ID"
+export TF_VAR_uat_subscription_id="$UAT_SUB"
+export TF_VAR_uat_tenant_id="$TENANT_ID"
 
 # ---------------------------
 # Preflight: ensure tfplan exists
@@ -116,10 +120,10 @@ echo " - state key: $STATE_KEY"
 echo " - tfplan:    $TFPLAN_PATH"
 echo
 
-if [ "$APPLY" != "yes" ]; then
-  echo "Dry-run mode: set APPLY=yes to actually apply."
-  exit 0
-fi
+# if [ "$APPLY" != "yes" ]; then
+#   echo "Dry-run mode: set APPLY=yes to actually apply."
+#   exit 0
+# fi
 
 # if [ "$AUTO_APPROVE" = "yes" ]; then
 #   terraform apply -input=false -lock-timeout="$LOCK_TIMEOUT" -auto-approve "$TFPLAN_PATH"
@@ -128,4 +132,7 @@ fi
 # fi
 
 # terraform apply -input=false "$TFPLAN_PATH"
+
 terraform apply -input=false tfplan
+
+echo "✅ Apply complete."

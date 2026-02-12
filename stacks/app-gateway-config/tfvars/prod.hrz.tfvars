@@ -1,6 +1,7 @@
-product  = "hrz"
-plane    = "prod"
-location = "USGov Arizona"
+product = "hrz"
+plane   = "prod"
+
+location = "usgovarizona"
 region   = "usaz"
 
 tags = {
@@ -12,75 +13,229 @@ shared_network_state = {
   resource_group_name  = "rg-core-infra-state"
   storage_account_name = "sacoretfstateinfra"
   container_name       = "tfstate"
-  key                  = "shared-network/hrz/usaz/pr.tfstate"
+  key                  = "shared-network/hrz/usaz/np.tfstate"
 }
 
 core_state = {
   resource_group_name  = "rg-core-infra-state"
   storage_account_name = "sacoretfstateinfra"
   container_name       = "tfstate"
-  key                  = "core/hrz/usaz/pr.tfstate"
+  key                  = "core/hrz/usaz/np.tfstate"
 }
 
+# WAF policies
 waf_policies = {
-  app-main-prod = {
-    mode              = "Prevention"
-    vpn_cidrs          = ["192.168.1.0/24"]
-    restricted_paths   = ["/admin"]
-    allowed_countries  = ["US"]
+
+  # PROD (PUBLIC APP) - AFD-only allow-list
+
+  "app-prod-afd-only" = {
+    mode = "Prevention"
+
     disabled_rules_by_group = {
-      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200","942260","942340","942370","942330","942440"]
+      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260", "942330", "942340", "942370", "942440"]
       "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
-      "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300","920320"]
+      "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
     }
+
+    custom_rules = [
+      {
+        name     = "BlockNonAFD"
+        priority = 5
+        action   = "Block"
+        match_conditions = [
+          {
+            match_variable     = "RequestHeaders"
+            selector           = "X-Azure-FDID"
+            operator           = "Equal"
+            match_values       = ["d0d30354-45c6-454a-9493-33340d3190cd"] # <-- replace with HRZ AFD profile FDID
+            negation_condition = true
+          }
+        ]
+      }
+    ]
   }
 
-  obs-internal-prod = {
-    mode                       = "Prevention"
-    vpn_cidrs                  = ["192.168.1.0/24"]
-    restricted_paths           = []
-    allowed_countries          = ["US"]
-    vpn_required_for_all_paths = true
+  # PROD (APP - private/frontend) - Geo + VPN restriction for /admin
+  "app-prod-somevpn" = {
+    mode = "Prevention"
+
     disabled_rules_by_group = {
-      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200","942260","942340","942370","942330","942440"]
+      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260", "942330", "942340", "942370", "942440"]
       "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
-      "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300","920320"]
+      "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
     }
+
+    custom_rules = [
+      # {
+      #   name     = "BlockNonAllowedCountries"
+      #   priority = 5
+      #   action   = "Block"
+      #   match_conditions = [
+      #     {
+      #       match_variable     = "RemoteAddr"
+      #       operator           = "GeoMatch"
+      #       match_values       = ["US"]
+      #       negation_condition = true
+      #     }
+      #   ]
+      # },
+      {
+        name     = "BlockNonvpnRestrictedPaths"
+        priority = 10
+        action   = "Block"
+        match_conditions = [
+          {
+            match_variable = "RequestUri"
+            operator       = "BeginsWith"
+            match_values   = ["/admin"]
+            transforms     = ["Lowercase"]
+          },
+          {
+            match_variable     = "RemoteAddr"
+            operator           = "IPMatch"
+            match_values       = ["192.168.1.0/24"]
+            negation_condition = true
+          }
+        ]
+      }
+    ]
   }
 
-  # --- UAT (copy of prod; update CIDRs/paths if needed) ---
-  # app-main-uat = {
-  #   mode              = "Prevention"
-  #   vpn_cidrs          = ["192.168.1.0/24"]
-  #   restricted_paths   = ["/admin"]
-  #   allowed_countries  = ["US"]
+  # PROD (OBS INTERNAL) - VPN required for all paths
+  "app-prod-protected" = {
+    mode = "Prevention"
+
+    disabled_rules_by_group = {
+      "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260", "942330", "942340", "942370", "942440"]
+      "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
+      "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
+    }
+
+    custom_rules = [
+      {
+        name     = "BlockNonVpnAllPaths"
+        priority = 10
+        action   = "Block"
+        match_conditions = [
+          {
+            match_variable     = "RemoteAddr"
+            operator           = "IPMatch"
+            match_values       = ["192.168.1.0/24"]
+            negation_condition = true
+          }
+        ]
+      }
+    ]
+  }
+
+  # UAT placeholders (commented out)
+
+  # "app-uat-afd-only" = {
+  #   mode = "Prevention"
+  #
   #   disabled_rules_by_group = {
-  #     "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200","942260","942340","942370","942330","942440"]
+  #     "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260", "942330", "942340", "942370", "942440"]
   #     "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
-  #     "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300","920320"]
+  #     "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
   #   }
+  #
+  #   custom_rules = [
+  #     {
+  #       name     = "BlockNonAFD"
+  #       priority = 5
+  #       action   = "Block"
+  #       match_conditions = [
+  #         {
+  #           match_variable     = "RequestHeaders"
+  #           selector           = "X-Azure-FDID"
+  #           operator           = "Equal"
+  #           match_values       = ["<HRZ_UAT_AFD_FDID_GUID>"]
+  #           negation_condition = true
+  #         }
+  #       ]
+  #     }
+  #   ]
   # }
   #
-  # obs-internal-uat = {
-  #   mode                       = "Prevention"
-  #   vpn_cidrs                  = ["192.168.1.0/24"]
-  #   restricted_paths           = []
-  #   allowed_countries          = ["US"]
-  #   vpn_required_for_all_paths = true
+  # "app-uat-somevpn" = {
+  #   mode = "Prevention"
+  #
   #   disabled_rules_by_group = {
-  #     "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200","942260","942340","942370","942330","942440"]
+  #     "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260", "942330", "942340", "942370", "942440"]
   #     "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
-  #     "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300","920320"]
+  #     "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
   #   }
+  #
+  #   custom_rules = [
+  #     {
+  #       name     = "BlockNonAllowedCountries"
+  #       priority = 5
+  #       action   = "Block"
+  #       match_conditions = [
+  #         {
+  #           match_variable     = "RemoteAddr"
+  #           operator           = "GeoMatch"
+  #           match_values       = ["US"]
+  #           negation_condition = true
+  #         }
+  #       ]
+  #     },
+  #     {
+  #       name     = "BlockNonvpnRestrictedPaths"
+  #       priority = 10
+  #       action   = "Block"
+  #       match_conditions = [
+  #         {
+  #           match_variable = "RequestUri"
+  #           operator       = "BeginsWith"
+  #           match_values   = ["/admin"]
+  #           transforms     = ["Lowercase"]
+  #         },
+  #         {
+  #           match_variable     = "RemoteAddr"
+  #           operator           = "IPMatch"
+  #           match_values       = ["192.168.1.0/24"]
+  #           negation_condition = true
+  #         }
+  #       ]
+  #     }
+  #   ]
+  # }
+  #
+  # "app-uat-protected" = {
+  #   mode = "Prevention"
+  #
+  #   disabled_rules_by_group = {
+  #     "REQUEST-942-APPLICATION-ATTACK-SQLI" = ["942200", "942260", "942330", "942340", "942370", "942440"]
+  #     "REQUEST-931-APPLICATION-ATTACK-RFI"  = ["931130"]
+  #     "REQUEST-920-PROTOCOL-ENFORCEMENT"    = ["920300", "920320"]
+  #   }
+  #
+  #   custom_rules = [
+  #     {
+  #       name     = "BlockNonVpnAllPaths"
+  #       priority = 10
+  #       action   = "Block"
+  #       match_conditions = [
+  #         {
+  #           match_variable     = "RemoteAddr"
+  #           operator           = "IPMatch"
+  #           match_values       = ["192.168.1.0/24"]
+  #           negation_condition = true
+  #         }
+  #       ]
+  #     }
+  #   ]
   # }
 }
 
+# certs (prod now; uat later)
 ssl_certificates = {
-  appgw-gateway-cert-horizon-prod = {
+  appgw-cert-hrz-prod = {
     secret_name = "appgw-gateway-cert-horizon-prod"
   }
 
-  # appgw-gateway-cert-horizon-uat = {
+  # appgw-cert-hrz-uat = {
   #   secret_name = "appgw-gateway-cert-horizon-uat"
   # }
 }
@@ -90,16 +245,19 @@ frontend_ports = {
   feport-443 = 443
 }
 
+# Backends (NO publiclayers)
 backend_pools = {
-  bepool-app-prod          = { ip_addresses = ["62.10.212.49"] }
-  bepool-obs-internal-prod = { ip_addresses = ["62.10.212.49"] }
+  be-prod-app = { ip_addresses = ["52.244.243.161"] }
+  be-prod-obs = { ip_addresses = ["1.1.1.1"] }
 
-  # bepool-app-uat          = { ip_addresses = ["62.10.212.50"] }
-  # bepool-obs-internal-uat = { ip_addresses = ["62.10.212.50"] }
+  # # UAT placeholders
+  # be-uat-app = { ip_addresses = ["<UAT_APP_IP>"] }
+  # be-uat-obs = { ip_addresses = ["<UAT_OBS_IP>"] }
 }
 
+# Probes (NO publiclayers)
 probes = {
-  probe-app-prod = {
+  probe-prod-app = {
     protocol            = "Https"
     host                = "horizon.intterra.io"
     path                = "/api/identity/health/ready"
@@ -109,7 +267,7 @@ probes = {
     match_status_codes  = ["200-399"]
   }
 
-  probe-obs-internal-prod = {
+  probe-prod-obs = {
     protocol            = "Https"
     host                = "internal.horizon.intterra.io"
     path                = "/logs/login"
@@ -119,7 +277,8 @@ probes = {
     match_status_codes  = ["200-399"]
   }
 
-  # probe-app-uat = {
+  # # UAT placeholders
+  # probe-uat-app = {
   #   protocol            = "Https"
   #   host                = "uat.horizon.intterra.io"
   #   path                = "/api/identity/health/ready"
@@ -129,7 +288,7 @@ probes = {
   #   match_status_codes  = ["200-399"]
   # }
   #
-  # probe-obs-internal-uat = {
+  # probe-uat-obs = {
   #   protocol            = "Https"
   #   host                = "internal.uat.horizon.intterra.io"
   #   path                = "/logs/login"
@@ -140,282 +299,298 @@ probes = {
   # }
 }
 
+# Backend HTTP settings (NO publiclayers)
 backend_http_settings = {
-  bhs-app-prod-https = {
-    port                          = 443
-    protocol                      = "Https"
-    request_timeout               = 20
-    cookie_based_affinity         = "Disabled"
-    probe_name                    = "probe-app-prod"
-    host_name                     = "horizon.intterra.io"
+  bhs-prod-app-https = {
+    port                                = 443
+    protocol                            = "Https"
+    request_timeout                     = 20
+    cookie_based_affinity               = "Disabled"
+    probe_name                          = "probe-prod-app"
+    host_name                           = "horizon.intterra.io"
     pick_host_name_from_backend_address = false
   }
 
-  bhs-obs-internal-prod-https = {
-    port                          = 443
-    protocol                      = "Https"
-    request_timeout               = 20
-    cookie_based_affinity         = "Disabled"
-    probe_name                    = "probe-obs-internal-prod"
-    host_name                     = "internal.horizon.intterra.io"
+  bhs-prod-obs-https = {
+    port                                = 443
+    protocol                            = "Https"
+    request_timeout                     = 20
+    cookie_based_affinity               = "Disabled"
+    probe_name                          = "probe-prod-obs"
+    host_name                           = "internal.horizon.intterra.io"
     pick_host_name_from_backend_address = false
   }
 
-  # bhs-app-uat-https = {
-  #   port                          = 443
-  #   protocol                      = "Https"
-  #   request_timeout               = 20
-  #   cookie_based_affinity         = "Disabled"
-  #   probe_name                    = "probe-app-uat"
-  #   host_name                     = "uat.horizon.intterra.io"
+  # # UAT placeholders
+  # bhs-uat-app-https = {
+  #   port                                = 443
+  #   protocol                            = "Https"
+  #   request_timeout                     = 20
+  #   cookie_based_affinity               = "Disabled"
+  #   probe_name                          = "probe-uat-app"
+  #   host_name                           = "uat.horizon.intterra.io"
   #   pick_host_name_from_backend_address = false
   # }
   #
-  # bhs-obs-internal-uat-https = {
-  #   port                          = 443
-  #   protocol                      = "Https"
-  #   request_timeout               = 20
-  #   cookie_based_affinity         = "Disabled"
-  #   probe_name                    = "probe-obs-internal-uat"
-  #   host_name                     = "internal.uat.horizon.intterra.io"
+  # bhs-uat-obs-https = {
+  #   port                                = 443
+  #   protocol                            = "Https"
+  #   request_timeout                     = 20
+  #   cookie_based_affinity               = "Disabled"
+  #   probe_name                          = "probe-uat-obs"
+  #   host_name                           = "internal.uat.horizon.intterra.io"
   #   pick_host_name_from_backend_address = false
   # }
 }
 
+# Listeners
 listeners = {
-  listener-app-prod-http-public = {
+  # PROD APP (PUBLIC) - AFD-only
+  lis-prod-app-http-public = {
     frontend_port_name = "feport-80"
     protocol           = "Http"
-    host_name          = "horizon.intterra.io"
+    host_name          = "origin-horizon.horizon.intterra.io"
     frontend           = "public"
-    waf_policy_key     = "app-main-prod"
+    waf_policy_key     = "app-prod-afd-only"
   }
 
-  listener-app-prod-https-public = {
+  lis-prod-app-https-public = {
     frontend_port_name   = "feport-443"
     protocol             = "Https"
-    host_name            = "horizon.intterra.io"
-    ssl_certificate_name = "appgw-gateway-cert-horizon-prod"
+    host_name            = "origin-horizon.horizon.intterra.io"
+    ssl_certificate_name = "appgw-cert-hrz-prod"
     require_sni          = true
     frontend             = "public"
-    waf_policy_key       = "app-main-prod"
+    waf_policy_key       = "app-prod-afd-only"
   }
 
-  listener-app-prod-http-private = {
+  # PROD APP (PRIVATE) - somevpn
+  lis-prod-app-http-private = {
     frontend_port_name = "feport-80"
     protocol           = "Http"
     host_name          = "horizon.intterra.io"
     frontend           = "private"
-    waf_policy_key     = "app-main-prod"
+    waf_policy_key     = "app-prod-somevpn"
   }
 
-  listener-app-prod-https-private = {
+  lis-prod-app-https-private = {
     frontend_port_name   = "feport-443"
     protocol             = "Https"
     host_name            = "horizon.intterra.io"
-    ssl_certificate_name = "appgw-gateway-cert-horizon-prod"
+    ssl_certificate_name = "appgw-cert-hrz-prod"
     require_sni          = true
     frontend             = "private"
-    waf_policy_key       = "app-main-prod"
+    waf_policy_key       = "app-prod-somevpn"
   }
 
-  listener-obs-internal-prod-http-private = {
+  # PROD OBS (PRIVATE ONLY) - protected
+  lis-prod-obs-http-private = {
     frontend_port_name = "feport-80"
     protocol           = "Http"
     host_name          = "internal.horizon.intterra.io"
     frontend           = "private"
-    waf_policy_key     = "obs-internal-prod"
+    waf_policy_key     = "app-prod-protected"
   }
 
-  listener-obs-internal-prod-https-private = {
+  lis-prod-obs-https-private = {
     frontend_port_name   = "feport-443"
     protocol             = "Https"
     host_name            = "internal.horizon.intterra.io"
-    ssl_certificate_name = "appgw-gateway-cert-horizon-prod"
+    ssl_certificate_name = "appgw-cert-hrz-prod"
     require_sni          = true
     frontend             = "private"
-    waf_policy_key       = "obs-internal-prod"
+    waf_policy_key       = "app-prod-protected"
   }
 
-  # --- UAT (structure mirrors prod) ---
-  # listener-app-uat-http-public = {
+  # UAT placeholders
+
+  # lis-uat-app-http-public = {
   #   frontend_port_name = "feport-80"
   #   protocol           = "Http"
-  #   host_name          = "uat.horizon.intterra.io"
+  #   host_name          = "origin-horizon.uat.horizon.intterra.io"
   #   frontend           = "public"
-  #   waf_policy_key     = "app-main-uat"
+  #   waf_policy_key     = "app-uat-afd-only"
   # }
   #
-  # listener-app-uat-https-public = {
+  # lis-uat-app-https-public = {
   #   frontend_port_name   = "feport-443"
   #   protocol             = "Https"
-  #   host_name            = "uat.horizon.intterra.io"
-  #   ssl_certificate_name = "appgw-gateway-cert-horizon-uat"
+  #   host_name            = "origin-horizon.uat.horizon.intterra.io"
+  #   ssl_certificate_name = "appgw-cert-hrz-uat"
   #   require_sni          = true
   #   frontend             = "public"
-  #   waf_policy_key       = "app-main-uat"
+  #   waf_policy_key       = "app-uat-afd-only"
   # }
   #
-  # listener-app-uat-http-private = {
+  # lis-uat-app-http-private = {
   #   frontend_port_name = "feport-80"
   #   protocol           = "Http"
   #   host_name          = "uat.horizon.intterra.io"
   #   frontend           = "private"
-  #   waf_policy_key     = "app-main-uat"
+  #   waf_policy_key     = "app-uat-somevpn"
   # }
   #
-  # listener-app-uat-https-private = {
+  # lis-uat-app-https-private = {
   #   frontend_port_name   = "feport-443"
   #   protocol             = "Https"
   #   host_name            = "uat.horizon.intterra.io"
-  #   ssl_certificate_name = "appgw-gateway-cert-horizon-uat"
+  #   ssl_certificate_name = "appgw-cert-hrz-uat"
   #   require_sni          = true
   #   frontend             = "private"
-  #   waf_policy_key       = "app-main-uat"
+  #   waf_policy_key       = "app-uat-somevpn"
   # }
   #
-  # listener-obs-internal-uat-http-private = {
+  # lis-uat-obs-http-private = {
   #   frontend_port_name = "feport-80"
   #   protocol           = "Http"
   #   host_name          = "internal.uat.horizon.intterra.io"
   #   frontend           = "private"
-  #   waf_policy_key     = "obs-internal-uat"
+  #   waf_policy_key     = "app-uat-protected"
   # }
   #
-  # listener-obs-internal-uat-https-private = {
+  # lis-uat-obs-https-private = {
   #   frontend_port_name   = "feport-443"
   #   protocol             = "Https"
   #   host_name            = "internal.uat.horizon.intterra.io"
-  #   ssl_certificate_name = "appgw-gateway-cert-horizon-uat"
+  #   ssl_certificate_name = "appgw-cert-hrz-uat"
   #   require_sni          = true
   #   frontend             = "private"
-  #   waf_policy_key       = "obs-internal-uat"
+  #   waf_policy_key       = "app-uat-protected"
   # }
 }
 
+# Redirects
 redirect_configurations = {
-  redir-app-prod-http-to-https-public = {
-    target_listener_name = "listener-app-prod-https-public"
+  redir-prod-app-http-to-https-public = {
+    target_listener_name = "lis-prod-app-https-public"
     redirect_type        = "Permanent"
     include_path         = true
     include_query_string = true
   }
 
-  redir-app-prod-http-to-https-private = {
-    target_listener_name = "listener-app-prod-https-private"
+  redir-prod-app-http-to-https-private = {
+    target_listener_name = "lis-prod-app-https-private"
     redirect_type        = "Permanent"
     include_path         = true
     include_query_string = true
   }
 
-  redir-obs-internal-prod-http-to-https-private = {
-    target_listener_name = "listener-obs-internal-prod-https-private"
+  redir-prod-obs-http-to-https-private = {
+    target_listener_name = "lis-prod-obs-https-private"
     redirect_type        = "Permanent"
     include_path         = true
     include_query_string = true
   }
 
-  # redir-app-uat-http-to-https-public = {
-  #   target_listener_name = "listener-app-uat-https-public"
+  # # UAT placeholders
+  # redir-uat-app-http-to-https-public = {
+  #   target_listener_name = "lis-uat-app-https-public"
   #   redirect_type        = "Permanent"
   #   include_path         = true
   #   include_query_string = true
   # }
   #
-  # redir-app-uat-http-to-https-private = {
-  #   target_listener_name = "listener-app-uat-https-private"
+  # redir-uat-app-http-to-https-private = {
+  #   target_listener_name = "lis-uat-app-https-private"
   #   redirect_type        = "Permanent"
   #   include_path         = true
   #   include_query_string = true
   # }
   #
-  # redir-obs-internal-uat-http-to-https-private = {
-  #   target_listener_name = "listener-obs-internal-uat-https-private"
+  # redir-uat-obs-http-to-https-private = {
+  #   target_listener_name = "lis-uat-obs-https-private"
   #   redirect_type        = "Permanent"
   #   include_path         = true
   #   include_query_string = true
   # }
 }
 
+# Routing rules
 routing_rules = [
+  # PROD APP (PUBLIC)
   {
-    name                        = "rule-app-prod-http-redirect-public"
+    name                        = "rule-prod-app-http-redirect-public"
     priority                    = 90
-    http_listener_name          = "listener-app-prod-http-public"
-    redirect_configuration_name = "redir-app-prod-http-to-https-public"
+    http_listener_name          = "lis-prod-app-http-public"
+    redirect_configuration_name = "redir-prod-app-http-to-https-public"
   },
   {
-    name                       = "rule-app-prod-https-public"
+    name                       = "rule-prod-app-https-public"
     priority                   = 100
-    http_listener_name         = "listener-app-prod-https-public"
-    backend_address_pool_name  = "bepool-app-prod"
-    backend_http_settings_name = "bhs-app-prod-https"
+    http_listener_name         = "lis-prod-app-https-public"
+    backend_address_pool_name  = "be-prod-app"
+    backend_http_settings_name = "bhs-prod-app-https"
   },
+
+  # PROD APP (PRIVATE)
   {
-    name                        = "rule-app-prod-http-redirect-private"
+    name                        = "rule-prod-app-http-redirect-private"
     priority                    = 190
-    http_listener_name          = "listener-app-prod-http-private"
-    redirect_configuration_name = "redir-app-prod-http-to-https-private"
+    http_listener_name          = "lis-prod-app-http-private"
+    redirect_configuration_name = "redir-prod-app-http-to-https-private"
   },
   {
-    name                       = "rule-app-prod-https-private"
+    name                       = "rule-prod-app-https-private"
     priority                   = 200
-    http_listener_name         = "listener-app-prod-https-private"
-    backend_address_pool_name  = "bepool-app-prod"
-    backend_http_settings_name = "bhs-app-prod-https"
+    http_listener_name         = "lis-prod-app-https-private"
+    backend_address_pool_name  = "be-prod-app"
+    backend_http_settings_name = "bhs-prod-app-https"
   },
+
+  # PROD OBS (PRIVATE)
   {
-    name                        = "rule-obs-internal-prod-http-redirect-private"
+    name                        = "rule-prod-obs-http-redirect-private"
     priority                    = 210
-    http_listener_name          = "listener-obs-internal-prod-http-private"
-    redirect_configuration_name = "redir-obs-internal-prod-http-to-https-private"
+    http_listener_name          = "lis-prod-obs-http-private"
+    redirect_configuration_name = "redir-prod-obs-http-to-https-private"
   },
   {
-    name                       = "rule-obs-internal-prod-https-private"
+    name                       = "rule-prod-obs-https-private"
     priority                   = 220
-    http_listener_name         = "listener-obs-internal-prod-https-private"
-    backend_address_pool_name  = "bepool-obs-internal-prod"
-    backend_http_settings_name = "bhs-obs-internal-prod-https"
+    http_listener_name         = "lis-prod-obs-https-private"
+    backend_address_pool_name  = "be-prod-obs"
+    backend_http_settings_name = "bhs-prod-obs-https"
   }
 
-  # --- UAT (mirrors prod priorities; adjust if you want gaps) ---
+  # # UAT placeholders (commented out)
+  # ,
   # {
-  #   name                        = "rule-app-uat-http-redirect-public"
-  #   priority                    = 290
-  #   http_listener_name          = "listener-app-uat-http-public"
-  #   redirect_configuration_name = "redir-app-uat-http-to-https-public"
+  #   name                        = "rule-uat-app-http-redirect-public"
+  #   priority                    = 91
+  #   http_listener_name          = "lis-uat-app-http-public"
+  #   redirect_configuration_name = "redir-uat-app-http-to-https-public"
   # },
   # {
-  #   name                       = "rule-app-uat-https-public"
-  #   priority                   = 300
-  #   http_listener_name         = "listener-app-uat-https-public"
-  #   backend_address_pool_name  = "bepool-app-uat"
-  #   backend_http_settings_name = "bhs-app-uat-https"
+  #   name                       = "rule-uat-app-https-public"
+  #   priority                   = 101
+  #   http_listener_name         = "lis-uat-app-https-public"
+  #   backend_address_pool_name  = "be-uat-app"
+  #   backend_http_settings_name = "bhs-uat-app-https"
   # },
   # {
-  #   name                        = "rule-app-uat-http-redirect-private"
-  #   priority                    = 390
-  #   http_listener_name          = "listener-app-uat-http-private"
-  #   redirect_configuration_name = "redir-app-uat-http-to-https-private"
+  #   name                        = "rule-uat-app-http-redirect-private"
+  #   priority                    = 191
+  #   http_listener_name          = "lis-uat-app-http-private"
+  #   redirect_configuration_name = "redir-uat-app-http-to-https-private"
   # },
   # {
-  #   name                       = "rule-app-uat-https-private"
-  #   priority                   = 400
-  #   http_listener_name         = "listener-app-uat-https-private"
-  #   backend_address_pool_name  = "bepool-app-uat"
-  #   backend_http_settings_name = "bhs-app-uat-https"
+  #   name                       = "rule-uat-app-https-private"
+  #   priority                   = 201
+  #   http_listener_name         = "lis-uat-app-https-private"
+  #   backend_address_pool_name  = "be-uat-app"
+  #   backend_http_settings_name = "bhs-uat-app-https"
   # },
   # {
-  #   name                        = "rule-obs-internal-uat-http-redirect-private"
-  #   priority                    = 410
-  #   http_listener_name          = "listener-obs-internal-uat-http-private"
-  #   redirect_configuration_name = "redir-obs-internal-uat-http-to-https-private"
+  #   name                        = "rule-uat-obs-http-redirect-private"
+  #   priority                    = 211
+  #   http_listener_name          = "lis-uat-obs-http-private"
+  #   redirect_configuration_name = "redir-uat-obs-http-to-https-private"
   # },
   # {
-  #   name                       = "rule-obs-internal-uat-https-private"
-  #   priority                   = 420
-  #   http_listener_name         = "listener-obs-internal-uat-https-private"
-  #   backend_address_pool_name  = "bepool-obs-internal-uat"
-  #   backend_http_settings_name = "bhs-obs-internal-uat-https"
+  #   name                       = "rule-uat-obs-https-private"
+  #   priority                   = 221
+  #   http_listener_name         = "lis-uat-obs-https-private"
+  #   backend_address_pool_name  = "be-uat-obs"
+  #   backend_http_settings_name = "bhs-uat-obs-https"
   # }
 ]

@@ -1,6 +1,6 @@
-variable "product" { 
-  type = string 
-  } # hrz | pub
+variable "product" {
+  type = string
+} # hrz | pub
 
 variable "env" {
   type        = string
@@ -8,9 +8,9 @@ variable "env" {
   description = "(Optional) used only for tagging/labels. Do NOT use for state selection."
 }
 
-variable "tags" { 
-  type = map(string) 
-  default = {} 
+variable "tags" {
+  type    = map(string)
+  default = {}
 }
 
 variable "plane" {
@@ -60,7 +60,7 @@ variable "core_state" {
 variable "frontend_ports" {
   description = "Map of frontend port name => port number."
   type        = map(number)
-  default     = {
+  default = {
     feport-80  = 80
     feport-443 = 443
   }
@@ -107,14 +107,13 @@ variable "backend_http_settings" {
 variable "listeners" {
   description = "Map of listener name => listener settings."
   type = map(object({
-    frontend_port_name             = string
-    protocol                       = string # Http|Https
-    host_name                      = optional(string)
-    ssl_certificate_name           = optional(string)
-    require_sni                    = optional(bool, false)
-    # frontend_ip_configuration_name = optional(string, "feip")
-    frontend                       = optional(string, "public") # public|private
-    waf_policy_key                 = optional(string)
+    frontend_port_name   = string
+    protocol             = string # Http|Https
+    host_name            = optional(string)
+    ssl_certificate_name = optional(string)
+    require_sni          = optional(bool, false)
+    frontend             = optional(string, "public") # public|private
+    waf_policy_key       = optional(string)
   }))
   default = {}
 }
@@ -122,13 +121,13 @@ variable "listeners" {
 variable "routing_rules" {
   description = "List of routing rules. Provide either backend_* OR redirect_configuration_name."
   type = list(object({
-    name                        = string
-    priority                    = number
-    rule_type                   = optional(string, "Basic")
-    http_listener_name          = string
+    name               = string
+    priority           = number
+    rule_type          = optional(string, "Basic")
+    http_listener_name = string
 
-    backend_address_pool_name   = optional(string)
-    backend_http_settings_name  = optional(string)
+    backend_address_pool_name  = optional(string)
+    backend_http_settings_name = optional(string)
 
     redirect_configuration_name = optional(string)
   }))
@@ -138,10 +137,10 @@ variable "routing_rules" {
 variable "redirect_configurations" {
   description = "Map of redirect configuration name => redirect settings (commonly HTTP -> HTTPS)."
   type = map(object({
-    target_listener_name   = string
-    redirect_type          = optional(string, "Permanent") # Permanent|Found|SeeOther|Temporary
-    include_path           = optional(bool, true)
-    include_query_string   = optional(bool, true)
+    target_listener_name = string
+    redirect_type        = optional(string, "Permanent") # Permanent|Found|SeeOther|Temporary
+    include_path         = optional(bool, true)
+    include_query_string = optional(bool, true)
   }))
   default = {}
 }
@@ -149,38 +148,16 @@ variable "redirect_configurations" {
 variable "ssl_certificates" {
   description = "Map of AGW sslCertificate name => Key Vault secret reference."
   type = map(object({
-    key_vault_secret_id = optional(string)  # full https://.../secrets/.../version
-    secret_name         = optional(string)  # if building from kv_uri
+    key_vault_secret_id = optional(string) # full https://.../secrets/.../version
+    secret_name         = optional(string) # if building from kv_uri
     secret_version      = optional(string)
   }))
   default = {}
 }
 
-# variable "waf_policies" {
-#   type = map(object({
-#     mode              = optional(string, "Prevention") # Detection|Prevention
-#     vpn_cidrs         = list(string)                   # e.g. ["192.168.1.0/24"]
-#     restricted_paths  = list(string)                   # e.g. ["/admin"]
-#     blocked_countries = optional(list(string), [])     # e.g. ["CN","RU"]
-
-#     managed_rule_set = optional(object({
-#       type    = string
-#       version = string
-#     }), { type = "OWASP", version = "3.2" })
-
-#     # NEW: disable OWASP managed rules by rule group name
-#     disabled_rules_by_group = optional(map(list(string)), {})
-#   }))
-#   default = {}
-# }
 variable "waf_policies" {
   type = map(object({
-    mode              = optional(string, "Prevention") # Detection|Prevention
-    vpn_cidrs         = list(string)                   # e.g. ["192.168.1.0/24"]
-    restricted_paths  = list(string)                   # e.g. ["/admin"]
-
-    # NEW: allow list (we will implement “implicit deny” by blocking NOT in this list)
-    allowed_countries = optional(list(string), ["US"]) # ISO 2-letter codes
+    mode = optional(string, "Prevention") # Detection|Prevention
 
     managed_rule_set = optional(object({
       type    = string
@@ -189,8 +166,21 @@ variable "waf_policies" {
 
     disabled_rules_by_group = optional(map(list(string)), {})
 
-    # NEW: if true, require VPN for ALL paths (not just restricted_paths)
-    vpn_required_for_all_paths = optional(bool, false)
+    custom_rules = optional(list(object({
+      name     = string
+      priority = number
+      action   = string # "Block" | "Allow" | "Log"
+
+      match_conditions = list(object({
+        match_variable     = string           # e.g. "RequestHeaders"
+        selector           = optional(string) # e.g. "X-Azure-FDID"
+        operator           = string           # "Equal" etc.
+        match_values       = list(string)
+        negation_condition = optional(bool, false)
+        transforms         = optional(list(string))
+      }))
+    })), [])
   }))
+
   default = {}
 }
