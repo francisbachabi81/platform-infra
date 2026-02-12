@@ -1,0 +1,160 @@
+name: Terraform PR Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-tf-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  # Default "product" / "env_or_plane" if PR has no labels
+  DEFAULT_PRODUCT: pub
+  DEFAULT_ENV_OR_PLANE: dev
+
+jobs:
+  detect:
+    name: Detect changed stacks + inputs
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      changed_any: ${{ steps.matrix.outputs.changed_any }}
+      product: ${{ steps.inputs.outputs.product }}
+      env_or_plane: ${{ steps.inputs.outputs.env_or_plane }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1) Detect which stacks changed (edit patterns to match your repo)
+      - name: Paths filter
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            core:
+              - 'stacks/core/**'
+            shared-network:
+              - 'stacks/shared-network/**'
+            platform-app:
+              - 'stacks/platform-app/**'
+            observability:
+              - 'stacks/observability/**'
+            platform-registry:
+              - 'stacks/platform-registry/**'
+            app-gateway-config:
+              - 'stacks/app-gateway-config/**'
+
+      # 2) Parse PR labels to pick product + env_or_plane
+      # Labels supported:
+      #   product:pub OR product:ent
+      #   env:dev OR env:prod (for env-based stacks)
+      #   plane:dev OR plane:prod (for plane-based stacks)
+      - name: Parse PR labels -> product/env_or_plane
+        id: inputs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = (context.payload.pull_request.labels || []).map(l => l.name);
+            const findVal = (prefix) => {
+              const hit = labels.find(n => n.toLowerCase().startsWith(prefix));
+              return hit ? hit.substring(prefix.length) : null;
+            };
+
+            const product = findVal("product:") || process.env.DEFAULT_PRODUCT;
+            // Prefer env:..., else plane:..., else default
+            const env = findVal("env:");
+            const plane = findVal("plane:");
+            const envOrPlane = env || plane || process.env.DEFAULT_ENV_OR_PLANE;
+
+            core.info(`Labels: ${labels.join(", ")}`);
+            core.info(`Resolved product=${product}, env_or_plane=${envOrPlane}`);
+
+            core.setOutput("product", product);
+            core.setOutput("env_or_plane", envOrPlane);
+
+      # 3) Build dynamic matrix JSON containing only changed stacks
+      - name: Build matrix
+        id: matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          stacks=()
+
+          [[ "${{ steps.filter.outputs.core }}" == "true" ]] && stacks+=("core")
+          [[ "${{ steps.filter.outputs.shared-network }}" == "true" ]] && stacks+=("shared-network")
+          [[ "${{ steps.filter.outputs.platform-app }}" == "true" ]] && stacks+=("platform-app")
+          [[ "${{ steps.filter.outputs.observability }}" == "true" ]] && stacks+=("observability")
+          [[ "${{ steps.filter.outputs.platform-registry }}" == "true" ]] && stacks+=("platform-registry")
+          [[ "${{ steps.filter.outputs.app-gateway-config }}" == "true" ]] && stacks+=("app-gateway-config")
+
+          if (( ${#stacks[@]} == 0 )); then
+            echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
+            echo "changed_any=false" >> "$GITHUB_OUTPUT"
+            echo "No stack changes detected."
+            exit 0
+          fi
+
+          json='{"include":['
+          first=1
+          for s in "${stacks[@]}"; do
+            [[ $first -eq 1 ]] || json+=','
+            first=0
+            json+='{"stack":"'"$s"'"}'
+          done
+          json+=']}'
+
+          echo "matrix=$json" >> "$GITHUB_OUTPUT"
+          echo "changed_any=true" >> "$GITHUB_OUTPUT"
+
+          echo "Detected stacks: ${stacks[*]}"
+
+      - name: Job summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Terraform PR Gate"
+            echo ""
+            echo "- Product: \`${{ steps.inputs.outputs.product }}\`"
+            echo "- Env/Plane: \`${{ steps.inputs.outputs.env_or_plane }}\`"
+            echo ""
+            echo "### Changed stacks"
+            if [[ "${{ steps.matrix.outputs.changed_any }}" != "true" ]]; then
+              echo "_None_"
+            else
+              echo '```json'
+              echo '${{ steps.matrix.outputs.matrix }}'
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  plan:
+    name: Run plans (matrix)
+    needs: detect
+    if: ${{ needs.detect.outputs.changed_any == 'true' && !github.event.pull_request.draft }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    uses: ./.github/workflows/_dispatch-stack-plan.yml
+    with:
+      stack: ${{ matrix.stack }}
+      product: ${{ needs.detect.outputs.product }}
+      env_or_plane: ${{ needs.detect.outputs.env_or_plane }}
+      pr_number: ${{ github.event.pull_request.number }}
+      gate: pr
+    secrets: inherit
+
+  no-changes:
+    name: No stack changes
+    needs: detect
+    if: ${{ needs.detect.outputs.changed_any != 'true' || github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "No plans required (no stack changes or PR is draft)."
