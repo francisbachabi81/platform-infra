@@ -52,7 +52,7 @@ permissions:
 env:
   TF_IN_AUTOMATION: true
   # ARM_USE_OIDC: true
-  APPROVERS_CSV: "francisbachabi1206,gessnerda"
+  APPROVERS_CSV: "francisbachabi81,user2"
 
 jobs:
   # ---------------------------------------------------------------------------
