@@ -46,7 +46,7 @@ permissions:
 
 env:
   TF_IN_AUTOMATION: true
-  APPROVERS_CSV: "francisbachabi1206,gessnerda"
+  APPROVERS_CSV: "francisbachabi81,user2"
   ARM_USE_CLI: true
   ARM_USE_AZUREAD: true
   ARM_USE_MSI: false
