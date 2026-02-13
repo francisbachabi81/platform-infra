@@ -31,7 +31,7 @@ env:
 jobs:
   # SECURITY GATE (ENTIRE REPO)
   veracode:
-    name: Security Scan (Veracode)
+    name: Veracode
     runs-on: ubuntu-latest
 
     steps:
