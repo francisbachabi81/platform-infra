@@ -12,36 +12,43 @@ concurrency:
   cancel-in-progress: ${{ inputs.mode == 'plan' }}
 
 on:
+  workflow_call:
+    inputs:
+      mode: { type: string, required: true }
+      env: { type: string, required: true }
+      product: { type: string, required: true }
+      terraform_version: { type: string, required: false, default: "1.13.3" }
+      plan_run_id: { type: string, required: false }
+      gate:
+        description: "pr|governed"
+        type: string
+        required: false
+        default: "governed"
+
   workflow_dispatch:
     inputs:
       mode:
-        description: "Mode"
         type: choice
         options: [plan, apply]
         default: plan
-
       env:
-        description: "Environment (dev, qa, uat, prod)"
         type: choice
         options: [dev, qa, uat, prod]
         default: dev
-
       product:
-        description: "Product (hrz = Azure Gov, pub = Azure Commercial)"
         type: choice
         options: [hrz, pub]
         default: hrz
-
       terraform_version:
-        description: "Terraform version"
         type: string
         default: "1.13.3"
-
-      # Used only when mode=apply (govern listener provides this)
       plan_run_id:
-        description: "Plan run id (required for apply mode)"
         type: string
         required: false
+      gate:
+        type: choice
+        options: [pr, governed]
+        default: governed
 
 permissions:
   id-token: write
@@ -121,7 +128,8 @@ jobs:
             AUDIENCE="api://AzureADTokenExchangeUSGov"
 
             # State backend subscription
-            STATE_SUB='${{ secrets.AZ_SUB_STATE_HRZ }}'
+            # STATE_SUB='${{ secrets.AZ_SUB_STATE_HRZ }}'
+            STATE_SUB='${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}'
             # Core/hub subscription (shared-network/core)
             HUB_SUB='${{ secrets.AZ_SUB_HRZ_CORE }}'
 
@@ -147,7 +155,8 @@ jobs:
             AUDIENCE="api://AzureADTokenExchange"
 
             # State backend subscription
-            STATE_SUB='${{ secrets.AZ_SUB_STATE_PUB }}'
+            # STATE_SUB='${{ secrets.AZ_SUB_STATE_PUB }}'
+            STATE_SUB='${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}'
             # Core/hub subscription (shared-network/core)
             HUB_SUB='${{ secrets.AZ_SUB_PUB_CORE }}'
 
@@ -290,7 +299,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          terraform fmt -recursive
+      
+          if [ "${{ inputs.gate || 'governed' }}" = "pr" ]; then
+            echo "PR gate: running fmt in check mode"
+            terraform fmt -check -recursive
+          else
+            echo "Governed: formatting in-place"
+            terraform fmt -recursive
+          fi
+      
           terraform validate
 
       - name: Plan (detailed exit code)
@@ -444,7 +461,8 @@ jobs:
             ${{ github.workspace }}/stacks/platform-app/error_excerpt.txt
 
   plan_post:
-    if: ${{ inputs.mode == 'plan' }}
+    # if: ${{ inputs.mode == 'plan' }}
+    if: ${{ inputs.mode == 'plan' && (inputs.gate || 'governed') != 'pr' }}
     name: "Post | approval issue"
     needs: [plan]
     runs-on: ubuntu-latest
