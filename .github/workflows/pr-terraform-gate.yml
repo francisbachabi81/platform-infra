@@ -260,7 +260,8 @@ jobs:
 
   plan:
     name: (${{ matrix.stack }})
-    needs: detect
+    # needs: detect
+    needs: [veracode, detect]
     if: ${{ needs.detect.outputs.changed_any == 'true' && !github.event.pull_request.draft }}
     strategy:
       fail-fast: false
