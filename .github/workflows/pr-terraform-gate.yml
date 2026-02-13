@@ -1,4 +1,4 @@
-name: Terraform PR Gate
+name: PR Gate
 
 on:
   pull_request:
