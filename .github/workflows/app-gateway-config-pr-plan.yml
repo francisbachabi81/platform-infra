@@ -124,7 +124,8 @@ jobs:
   # PLAN (PR GATE)
   # --------------------------
   plan:
-    name: "Plan (app-gateway-config)"
+    # name: "Plan (app-gateway-config)"
+    name: "Plan"
     if: ${{ (inputs.mode || 'plan') == 'plan' }}
     # needs: [veracode_gate]
     runs-on: ubuntu-latest
