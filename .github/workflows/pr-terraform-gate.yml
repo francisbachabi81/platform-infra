@@ -29,6 +29,57 @@ env:
   DEFAULT_CORE_PLANE: np
 
 jobs:
+  veracode:
+    name: Veracode Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Veracode IaC/Secrets Scan
+        uses: veracode/container_iac_secrets_scanning@v1.0.6
+        with:
+          vid: ${{ secrets.VERACODE_API_ID }}
+          vkey: ${{ secrets.VERACODE_API_KEY }}
+          command: "scan"
+          type: "directory"
+          source: "."                    # scan entire repo
+          format: "json"
+          debug: false
+          fail_build: true
+
+      - name: Upload Veracode results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: veracode-results-${{ github.run_id }}
+          path: results.json
+
+      - name: Gate on IaC findings (Critical/High) + Secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FILE="results.json"
+          if [ ! -f "$FILE" ]; then
+            echo "❌ $FILE not found"
+            exit 1
+          fi
+
+          CRIT_FAIL=$(jq '[.configs // [] | .[] | select((.Status // "") == "FAIL") | select((.Severity // "") == "CRITICAL")] | length' "$FILE")
+          HIGH_FAIL=$(jq '[.configs // [] | .[] | select((.Status // "") == "FAIL") | select((.Severity // "") == "HIGH")]     | length' "$FILE")
+          SECRETS=$(jq '(.secrets // []) | length' "$FILE")
+
+          echo "IaC FAIL counts => CRITICAL: $CRIT_FAIL, HIGH: $HIGH_FAIL"
+          echo "Secrets found   => $SECRETS"
+
+          if [ "$CRIT_FAIL" -gt 0 ] || [ "$HIGH_FAIL" -gt 0 ] || [ "$SECRETS" -gt 0 ]; then
+            echo "❌ Failing build: Critical/High IaC FAIL findings and/or secrets detected."
+            exit 1
+          fi
+
+          echo "✅ Veracode Gate passed."
+          
   detect:
     name: Detect changed stacks + inputs
     runs-on: ubuntu-latest
