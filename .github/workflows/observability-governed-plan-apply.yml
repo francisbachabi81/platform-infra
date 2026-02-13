@@ -9,9 +9,38 @@ run-name: >-
 
 concurrency:
   group: obs-governed-${{ inputs.mode }}-${{ inputs.product }}-${{ inputs.env }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ inputs.mode == 'plan' }}
 
 on:
+  workflow_call:
+    inputs:
+      mode:
+        description: "mode=plan (creates approval issue unless gate=pr) or mode=apply (uses approved plan artifact)"
+        type: string
+        required: true
+      env:
+        description: "Environment"
+        type: string
+        required: true
+      product:
+        description: "Product"
+        type: string
+        required: true
+      plan_run_id:
+        description: "Required when mode=apply (Actions run id from the approved plan)"
+        type: string
+        required: false
+      terraform_version:
+        description: "Terraform version (plan only)"
+        type: string
+        required: false
+        default: "1.13.3"
+      gate:
+        description: "pr|governed"
+        type: string
+        required: false
+        default: "governed"
+
   workflow_dispatch:
     inputs:
       mode:
@@ -37,6 +66,11 @@ on:
         description: "Terraform version (plan only)"
         type: string
         default: "1.13.3"
+      gate:
+        description: "pr|governed"
+        type: choice
+        options: [pr, governed]
+        default: governed
 
 permissions:
   id-token: write
@@ -448,7 +482,8 @@ jobs:
             ${{ github.workspace }}/stacks/observability/error_excerpt.txt
 
   plan_post:
-    if: ${{ inputs.mode == 'plan' }}
+    # if: ${{ inputs.mode == 'plan' }}
+    if: ${{ inputs.mode == 'plan' && (inputs.gate || 'governed') != 'pr' }}
     name: "Post | approval issue"
     needs: [plan]
     runs-on: ubuntu-latest
