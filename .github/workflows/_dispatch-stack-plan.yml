@@ -36,7 +36,8 @@ on:
 
 jobs:
   # CORE
-  core_pr:
+  # core_pr:
+  core:
     if: ${{ inputs.stack == 'core' && (inputs.gate || 'pr') == 'pr' }}
     uses: ./.github/workflows/core-pr-plan.yml
     with:
@@ -59,7 +60,8 @@ jobs:
   #   secrets: inherit
 
   # SHARED-NETWORK
-  shared_network_pr:
+  # shared_network_pr:
+  net:
     if: ${{ inputs.stack == 'shared-network' && (inputs.gate || 'pr') == 'pr' }}
     uses: ./.github/workflows/shared-network-pr-plan.yml
     with:
@@ -82,7 +84,8 @@ jobs:
   #   secrets: inherit
 
   # PLATFORM-APP
-  platform_app_pr:
+  # platform_app_pr:
+  plat:
     if: ${{ inputs.stack == 'platform-app' && (inputs.gate || 'pr') == 'pr' }}
     uses: ./.github/workflows/platform-app-pr-plan.yml
     with:
@@ -105,7 +108,8 @@ jobs:
   #   secrets: inherit
 
   # OBSERVABILITY
-  observability_pr:
+  # observability_pr:
+  obs:
     if: ${{ inputs.stack == 'observability' && (inputs.gate || 'pr') == 'pr' }}
     uses: ./.github/workflows/observability-pr-plan.yml
     with:
@@ -128,7 +132,8 @@ jobs:
   #   secrets: inherit
 
   # APP-GATEWAY-CONFIG
-  app_gateway_config_pr:
+  # app_gateway_config_pr:
+  agw:
     if: ${{ inputs.stack == 'app-gateway-config' && (inputs.gate || 'pr') == 'pr' }}
     uses: ./.github/workflows/app-gateway-config-pr-plan.yml
     with:
@@ -151,7 +156,8 @@ jobs:
   #   secrets: inherit
 
   # AFD-CONFIG
-  afd_config_pr:
+  # afd_config_pr:
+  afd:
     if: ${{ inputs.stack == 'afd-config' && (inputs.gate || 'pr') == 'pr' }}
     uses: ./.github/workflows/afd-config-pr-plan.yml
     with:
