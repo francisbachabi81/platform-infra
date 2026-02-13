@@ -1,0 +1,413 @@
+# .github/workflows/platform-app-pr-plan.yml
+name: "PR • Platform App"
+
+run-name: >-
+  ${{
+    format('🧪 PR Platform App | PLAN | {0}-{1} | {2} | #{3}',
+      inputs.product, inputs.env, github.ref_name, github.run_number)
+  }}
+
+concurrency:
+  group: pr-platform-app-plan-${{ inputs.product }}-${{ inputs.env }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_call:
+    inputs:
+      pr_number:
+        type: string
+        required: false
+      mode:
+        description: "Mode (PR workflow supports plan only)"
+        type: string
+        required: false
+        default: "plan"
+      env:
+        description: "Environment"
+        type: string
+        required: true
+      product:
+        description: "Product"
+        type: string
+        required: true
+      terraform_version:
+        description: "Terraform version (plan only)"
+        type: string
+        required: false
+        default: "1.13.3"
+      gate:
+        description: "pr|governed (PR workflow forces pr behavior)"
+        type: string
+        required: false
+        default: "pr"
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+  actions: read
+
+env:
+  TF_IN_AUTOMATION: true
+
+jobs:
+  # --------------------------
+  # SECURITY GATE (PLAN ONLY)
+  # --------------------------
+  veracode_gate:
+    name: "Veracode Gate"
+    if: ${{ (inputs.mode || 'plan') == 'plan' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Veracode IaC/Secrets (gated)
+        uses: veracode/container_iac_secrets_scanning@v1.0.6
+        with:
+          vid: ${{ secrets.VERACODE_API_ID }}
+          vkey: ${{ secrets.VERACODE_API_KEY }}
+          command: "scan"
+          type: "directory"
+          source: "./stacks/platform-app"
+          format: "json"
+          debug: false
+          fail_build: true
+
+      - name: Upload Veracode results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: veracode-results-${{ github.run_id }}
+          path: results.json
+
+      - name: Gate on IaC findings (Critical/High) + Secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FILE="results.json"
+          if [ ! -f "$FILE" ]; then
+            echo "❌ $FILE not found in $(pwd)"
+            echo "Nearby JSON files:"
+            find . -maxdepth 3 -type f -name "*.json" -print
+            exit 1
+          fi
+
+          CRIT_FAIL=$(jq '[.configs // [] | .[] | select((.Status // "") == "FAIL") | select((.Severity // "") == "CRITICAL")] | length' "$FILE")
+          HIGH_FAIL=$(jq '[.configs // [] | .[] | select((.Status // "") == "FAIL") | select((.Severity // "") == "HIGH")]     | length' "$FILE")
+          SECRETS=$(jq '(.secrets // []) | length' "$FILE")
+
+          echo "IaC FAIL counts => CRITICAL: $CRIT_FAIL, HIGH: $HIGH_FAIL"
+          echo "Secrets found   => $SECRETS"
+
+          if [ "$CRIT_FAIL" -gt 0 ] || [ "$HIGH_FAIL" -gt 0 ] || [ "$SECRETS" -gt 0 ]; then
+            echo "❌ Failing build: Critical/High IaC FAIL findings and/or secrets detected."
+            echo
+            echo "Top failing IaC checks:"
+            jq -r '
+              (.configs // [])
+              | map(select((.Status // "") == "FAIL"))
+              | map(select((.Severity // "") == "CRITICAL" or (.Severity // "") == "HIGH"))
+              | .[:20]
+              | .[]
+              | "- [\(.Severity)] \(.ID // .AVDID // "unknown") :: \(.Title // "no title")"
+            ' "$FILE" || true
+            exit 1
+          fi
+
+          echo "✅ Gate passed (no Critical/High FAILs and no secrets)."
+
+  # --------------------------
+  # PLAN (PR GATE)
+  # --------------------------
+  plan:
+    name: "Plan (platform-app)"
+    if: ${{ (inputs.mode || 'plan') == 'plan' }}
+    needs: [veracode_gate]
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.env }}
+    defaults:
+      run:
+        working-directory: stacks/platform-app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine Terraform version
+        id: tfver
+        shell: bash
+        run: |
+          set -euo pipefail
+          TV="${{ inputs.terraform_version }}"
+          if [ -z "$TV" ]; then TV="1.13.3"; fi
+          echo "version=$TV" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Terraform plugins
+        uses: actions/cache@v4
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: tf-${{ runner.os }}-${{ steps.tfver.outputs.version }}
+
+      - name: Configure Terraform plugin cache dir
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.terraform.d/plugin-cache
+          echo 'plugin_cache_dir="~/.terraform.d/plugin-cache"' > ~/.terraformrc
+
+      - name: Select cloud + subscriptions
+        id: sel
+        shell: bash
+        run: |
+          set -euo pipefail
+          trim(){ printf "%s" "$1" | tr -d '[:space:]'; }
+
+          ENV_IN="${{ inputs.env }}"
+          PRODUCT_IN="${{ inputs.product }}"
+          if [ -z "${ENV_IN:-}" ]; then ENV_IN="prod"; fi
+          if [ -z "${PRODUCT_IN:-}" ]; then PRODUCT_IN="hrz"; fi
+
+          # Derive plane from env (for TF_VAR_plane)
+          case "$ENV_IN" in
+            dev|qa|np)   PLANE="nonprod" ;;
+            uat|prod|pr) PLANE="prod" ;;
+            *) echo "Unknown env: $ENV_IN"; exit 1 ;;
+          esac
+
+          if [ "$PRODUCT_IN" = "hrz" ]; then
+            CLOUD_ENV="AzureUSGovernment"
+            ARM_ENV="usgovernment"
+            TENANT_RAW='${{ secrets.AZ_TENANT_HRZ }}'
+            CLIENT_ID_RAW='${{ secrets.AZURE_CLIENT_ID_HRZ }}'
+            AUDIENCE="api://AzureADTokenExchangeUSGov"
+
+            STATE_SUB_RAW='${{ secrets.AZ_SUB_STATE_HRZ != '' && secrets.AZ_SUB_STATE_HRZ || secrets.AZ_SUB_HRZ_PROD }}'
+            HUB_SUB_RAW='${{ secrets.AZ_SUB_HRZ_CORE }}'
+
+            case "$ENV_IN" in
+              dev)  TARGET_SUB_RAW='${{ secrets.AZ_SUB_HRZ_DEV }}' ;;
+              qa)   TARGET_SUB_RAW='${{ secrets.AZ_SUB_HRZ_QA }}' ;;
+              uat)  TARGET_SUB_RAW='${{ secrets.AZ_SUB_HRZ_PROD }}' ;;
+              prod) TARGET_SUB_RAW='${{ secrets.AZ_SUB_HRZ_PROD }}' ;;
+              *) echo "Unknown env for HRZ: $ENV_IN"; exit 1 ;;
+            esac
+
+            CDBPG_ADMIN_PASSWORD_RAW='${{ secrets.CDBPG_ADMIN_PASSWORD_HRZ }}'
+            PG_ADMIN_PASSWORD_RAW='${{ secrets.PG_ADMIN_PASSWORD_HRZ }}'
+            PG_AUTH_ADMIN_PASSWORD_RAW='${{ secrets.PG_AUTH_ADMIN_PASSWORD_HRZ }}'
+          else
+            CLOUD_ENV="AzureCloud"
+            ARM_ENV="public"
+            TENANT_RAW='${{ secrets.AZ_TENANT_PUB }}'
+            CLIENT_ID_RAW='${{ secrets.AZURE_CLIENT_ID_PUB }}'
+            AUDIENCE="api://AzureADTokenExchange"
+
+            STATE_SUB_RAW='${{ secrets.AZ_SUB_STATE_PUB != '' && secrets.AZ_SUB_STATE_PUB || secrets.AZ_SUB_PUB_PROD }}'
+            HUB_SUB_RAW='${{ secrets.AZ_SUB_PUB_CORE }}'
+
+            case "$ENV_IN" in
+              dev)  TARGET_SUB_RAW='${{ secrets.AZ_SUB_PUB_DEV }}' ;;
+              qa)   TARGET_SUB_RAW='${{ secrets.AZ_SUB_PUB_QA }}' ;;
+              uat)  TARGET_SUB_RAW='${{ secrets.AZ_SUB_PUB_UAT }}' ;;
+              prod) TARGET_SUB_RAW='${{ secrets.AZ_SUB_PUB_PROD }}' ;;
+              *) echo "Unknown env for PUB: $ENV_IN"; exit 1 ;;
+            esac
+
+            CDBPG_ADMIN_PASSWORD_RAW='${{ secrets.CDBPG_ADMIN_PASSWORD_PUB }}'
+            PG_ADMIN_PASSWORD_RAW='${{ secrets.PG_ADMIN_PASSWORD_PUB }}'
+            PG_AUTH_ADMIN_PASSWORD_RAW='${{ secrets.PG_AUTH_ADMIN_PASSWORD_PUB }}'
+          fi
+
+          TENANT="$(trim "$TENANT_RAW")"
+          CLIENT_ID="$(trim "$CLIENT_ID_RAW")"
+          STATE_SUB="$(trim "$STATE_SUB_RAW")"
+          HUB_SUB="$(trim "$HUB_SUB_RAW")"
+          TARGET_SUB="$(trim "$TARGET_SUB_RAW")"
+
+          CDBPG_ADMIN_PASSWORD="$(trim "$CDBPG_ADMIN_PASSWORD_RAW")"
+          PG_ADMIN_PASSWORD="$(trim "$PG_ADMIN_PASSWORD_RAW")"
+          PG_AUTH_ADMIN_PASSWORD="$(trim "$PG_AUTH_ADMIN_PASSWORD_RAW")"
+
+          echo "ENV=$ENV_IN"            >> "$GITHUB_OUTPUT"
+          echo "PRODUCT=$PRODUCT_IN"    >> "$GITHUB_OUTPUT"
+          echo "PLANE=$PLANE"           >> "$GITHUB_OUTPUT"
+          echo "CLOUD_ENV=$CLOUD_ENV"   >> "$GITHUB_OUTPUT"
+          echo "ARM_ENV=$ARM_ENV"       >> "$GITHUB_OUTPUT"
+          echo "TENANT=$TENANT"         >> "$GITHUB_OUTPUT"
+          echo "CLIENT_ID=$CLIENT_ID"   >> "$GITHUB_OUTPUT"
+          echo "AUDIENCE=$AUDIENCE"     >> "$GITHUB_OUTPUT"
+          echo "STATE_SUB=$STATE_SUB"   >> "$GITHUB_OUTPUT"
+          echo "TARGET_SUB=$TARGET_SUB" >> "$GITHUB_OUTPUT"
+          echo "HUB_SUB=$HUB_SUB"       >> "$GITHUB_OUTPUT"
+
+          {
+            echo "ARM_ENVIRONMENT=$ARM_ENV"
+            echo "ARM_TENANT_ID=$TENANT"
+            echo "ARM_CLIENT_ID=$CLIENT_ID"
+
+            echo "TF_VAR_tenant_id=$TENANT"
+            echo "TF_VAR_product=$PRODUCT_IN"
+            echo "TF_VAR_env=$ENV_IN"
+            echo "TF_VAR_plane=$PLANE"
+
+            echo "TF_VAR_subscription_id=$TARGET_SUB"
+
+            echo "TF_VAR_hub_tenant_id=$TENANT"
+            echo "TF_VAR_hub_subscription_id=$HUB_SUB"
+
+            echo "TF_VAR_cdbpg_admin_password=$CDBPG_ADMIN_PASSWORD"
+            echo "TF_VAR_pg_admin_password=$PG_ADMIN_PASSWORD"
+            echo "TF_VAR_pg_auth_admin_password=$PG_AUTH_ADMIN_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Resolve tfvars & backend key
+        id: paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENV="${{ steps.sel.outputs.ENV }}"
+          PRODUCT="${{ steps.sel.outputs.PRODUCT }}"
+
+          TFVARS_DIR="${GITHUB_WORKSPACE}/stacks/platform-app/tfvars"
+          echo "🔎 Listing $TFVARS_DIR:"; ls -la "$TFVARS_DIR" || true
+
+          candidates=(
+            "${ENV}.${PRODUCT}.tfvars"
+            "${ENV}.tfvars"
+            "default.${ENV}.tfvars"
+            "default.tfvars"
+          )
+
+          TFVARS_PATH=""
+          for f in "${candidates[@]}"; do
+            if [ -f "${TFVARS_DIR}/${f}" ]; then
+              TFVARS_PATH="${TFVARS_DIR}/${f}"
+              echo "✅ Using tfvars: ${f}"
+              break
+            fi
+          done
+          [ -n "${TFVARS_PATH}" ] || { echo "❌ Missing tfvars. Tried: ${candidates[*]}"; exit 1; }
+
+          echo "TFVARS_PATH=$TFVARS_PATH" >> "$GITHUB_OUTPUT"
+          echo "STATE_RG=rg-core-tfstate-01"     >> "$GITHUB_OUTPUT"
+          echo "STATE_SA=sacoretfstateinfra"      >> "$GITHUB_OUTPUT"
+          echo "STATE_CONTAINER=tfstate"          >> "$GITHUB_OUTPUT"
+          echo "STATE_KEY=platform-app/${PRODUCT}/${ENV}/terraform.tfstate" >> "$GITHUB_OUTPUT"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ steps.tfver.outputs.version }}
+
+      - name: Azure Login (state subscription for backend)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ steps.sel.outputs.CLIENT_ID }}
+          tenant-id:       ${{ steps.sel.outputs.TENANT }}
+          subscription-id: ${{ steps.sel.outputs.STATE_SUB }}
+          environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
+          audience:        ${{ steps.sel.outputs.AUDIENCE }}
+
+      - name: Terraform Init (backend in state subscription)
+        env:
+          ARM_USE_CLI: true
+          ARM_USE_AZUREAD: true
+          ARM_CLIENT_ID:       ${{ steps.sel.outputs.CLIENT_ID }}
+          ARM_TENANT_ID:       ${{ steps.sel.outputs.TENANT }}
+          ARM_SUBSCRIPTION_ID: ${{ steps.sel.outputs.STATE_SUB }}
+          ARM_ENVIRONMENT:     ${{ steps.sel.outputs.ARM_ENV }}
+        run: |
+          terraform init -input=false -reconfigure \
+            -backend-config="environment=${{ steps.sel.outputs.ARM_ENV }}" \
+            -backend-config="tenant_id=${{ steps.sel.outputs.TENANT }}" \
+            -backend-config="subscription_id=${{ steps.sel.outputs.STATE_SUB }}" \
+            -backend-config="resource_group_name=${{ steps.paths.outputs.STATE_RG }}" \
+            -backend-config="storage_account_name=${{ steps.paths.outputs.STATE_SA }}" \
+            -backend-config="container_name=${{ steps.paths.outputs.STATE_CONTAINER }}" \
+            -backend-config="key=${{ steps.paths.outputs.STATE_KEY }}" \
+            -backend-config="use_azuread_auth=true" \
+            -backend-config="use_cli=true"
+
+      - name: Azure Login (target subscription for plan)
+        uses: azure/login@v2
+        with:
+          client-id:       ${{ steps.sel.outputs.CLIENT_ID }}
+          tenant-id:       ${{ steps.sel.outputs.TENANT }}
+          subscription-id: ${{ steps.sel.outputs.TARGET_SUB }}
+          environment:     ${{ steps.sel.outputs.CLOUD_ENV }}
+          audience:        ${{ steps.sel.outputs.AUDIENCE }}
+
+      - name: Terraform Fmt & Validate (PR gate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform fmt -check -recursive
+          terraform validate
+
+      - name: Plan (detailed exit code)
+        id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          terraform plan -input=false -lock-timeout=5m \
+            -var-file="${{ steps.paths.outputs.TFVARS_PATH }}" \
+            -var "product=${{ steps.sel.outputs.PRODUCT }}" \
+            -var "env=${{ steps.sel.outputs.ENV }}" \
+            -detailed-exitcode -out=tfplan \
+            2>&1 | tee plan-raw.txt
+          ec=${PIPESTATUS[0]}
+          set -e
+          echo "exitcode=${ec}" >> "$GITHUB_OUTPUT"
+
+          if [ "$ec" = "0" ] || [ "$ec" = "2" ]; then
+            terraform show -no-color tfplan > plan.txt
+            terraform show -json tfplan > plan.json
+          else
+            if [ ! -f tfplan ]; then
+              cp plan-raw.txt plan.txt
+            fi
+          fi
+
+      - name: Sanity check plan output (no embedded errors)
+        if: ${{ success() && (steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -q '^Error:' plan.txt; then
+            echo "Found 'Error:' lines in plan.txt; failing."
+            exit 1
+          fi
+
+      - name: Summarize plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -qiE "^no changes(\.|)$" plan.txt; then
+            SUM="No changes. Infrastructure is up-to-date."
+          else
+            SUM="$(grep -E '^Plan: ' plan.txt | tail -n1 || true)"
+            [ -n "${SUM}" ] || SUM="(No 'Plan:' line found)"
+          fi
+          {
+            echo "## Terraform plan summary"
+            echo
+            echo "${SUM}"
+            echo
+            echo "- Product: \`${{ steps.sel.outputs.PRODUCT }}\`"
+            echo "- Env: \`${{ steps.sel.outputs.ENV }}\`"
+            echo
+            echo "[View full run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+            echo
+            echo "Artifact: \`platform-plan-${{ github.run_id }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload plan
+        if: ${{ success() && (steps.plan.outputs.exitcode == '0' || steps.plan.outputs.exitcode == '2') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-plan-${{ github.run_id }}
+          if-no-files-found: error
+          path: |
+            ${{ github.workspace }}/stacks/platform-app/tfplan
+            ${{ github.workspace }}/stacks/platform-app/plan.txt
+            ${{ github.workspace }}/stacks/platform-app/plan.json
