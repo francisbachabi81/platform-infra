@@ -510,8 +510,10 @@ jobs:
         run: |
           echo "name=shared-network-plan-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
 
+  # plan_post:
+  #   if: ${{ inputs.mode == 'plan' }}
   plan_post:
-    if: ${{ inputs.mode == 'plan' }}
+    if: ${{ inputs.mode == 'plan' && (inputs.gate || 'governed') != 'pr' }}
     name: "Post | approval issue"
     needs: [plan_run]
     runs-on: ubuntu-latest
