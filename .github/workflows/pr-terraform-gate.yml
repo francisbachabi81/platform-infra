@@ -45,8 +45,6 @@ jobs:
               - 'stacks/platform-app/**'
             observability:
               - 'stacks/observability/**'
-            platform-registry:
-              - 'stacks/platform-registry/**'
             app-gateway-config:
               - 'stacks/app-gateway-config/**'
 
@@ -91,7 +89,6 @@ jobs:
           [[ "${{ steps.filter.outputs.shared-network }}" == "true" ]] && stacks+=("shared-network")
           [[ "${{ steps.filter.outputs.platform-app }}" == "true" ]] && stacks+=("platform-app")
           [[ "${{ steps.filter.outputs.observability }}" == "true" ]] && stacks+=("observability")
-          [[ "${{ steps.filter.outputs.platform-registry }}" == "true" ]] && stacks+=("platform-registry")
           [[ "${{ steps.filter.outputs.app-gateway-config }}" == "true" ]] && stacks+=("app-gateway-config")
 
           if (( ${#stacks[@]} == 0 )); then
