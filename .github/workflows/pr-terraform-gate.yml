@@ -8,9 +8,9 @@ on:
 permissions:
   contents: read
   pull-requests: write
-  id-token: write     # needed for azure/login OIDC
-  actions: read       # needed to download artifacts / query runs sometimes
-  issues: write       # workflows declare it; caller must allow it
+  id-token: write
+  actions: read
+  issues: write
 
 concurrency:
   group: pr-tf-gate-${{ github.event.pull_request.number }}
@@ -22,7 +22,7 @@ env:
   # Env-based stacks (platform-app, observability, etc.)
   DEFAULT_ENV: dev
 
-  # Plane-based stacks that use nonprod/prod (shared-network, app-gateway-config, etc.)
+  # Plane-based stacks that use nonprod/prod (shared-network, app-gateway-config, afd-config, etc.)
   DEFAULT_PLANE_STD: nonprod
 
   # Core-only plane (np/pr)
@@ -48,6 +48,7 @@ jobs:
         id: filter
         with:
           filters: |
+            # Per-stack changes
             core:
               - 'stacks/core/**'
             shared-network:
@@ -61,17 +62,24 @@ jobs:
             afd-config:
               - 'stacks/afd-config/**'
 
-      # Labels supported:
-      #   product:hrz | product:pub
-      #   env:dev | env:qa | env:uat | env:prod
-      #   plane:nonprod | plane:prod
-      #   core-plane:np | core-plane:pr   (core only)
-      #
-      # Behavior:
-      # - env defaults to DEFAULT_ENV
-      # - plane_std defaults from env (dev/qa -> nonprod, uat/prod -> prod) unless plane:... override
-      # - core_plane defaults from plane_std (nonprod -> np, prod -> pr) unless core-plane:... override
-      # - If user mistakenly uses plane:np/pr, we treat that as core-plane override
+            # Shared changes that can affect multiple stacks -> run ALL stacks
+            global:
+              - 'modules/**'
+              - 'scripts/**'
+              - '.github/workflows/**'
+              - '.github/actions/**'
+              - 'stacks/**/modules/**'
+              - '**/*.tf'
+              - '**/*.tfvars'
+              - '**/*.tftpl'
+              - '**/*.sh'
+              - '**/*.ps1'
+
+            # Docs-only changes (PR gate runs, but no terraform plans by default)
+            docs-only:
+              - 'README*'
+              - 'docs/**'
+
       - name: Parse PR labels -> product/env/plane_std/core_plane
         id: inputs
         uses: actions/github-script@v7
@@ -105,7 +113,6 @@ jobs:
 
             // Derive plane_std from env if not explicitly set
             const derivedPlaneStd = (envVal === "dev" || envVal === "qa") ? "nonprod" : "prod";
-
             if (!planeStd) planeStd = (process.env.DEFAULT_PLANE_STD || derivedPlaneStd).toLowerCase();
 
             if (planeStd !== "nonprod" && planeStd !== "prod") {
@@ -135,18 +142,28 @@ jobs:
         run: |
           set -euo pipefail
 
-          stacks=()
-          [[ "${{ steps.filter.outputs.core }}" == "true" ]] && stacks+=("core")
-          [[ "${{ steps.filter.outputs.shared-network }}" == "true" ]] && stacks+=("shared-network")
-          [[ "${{ steps.filter.outputs.platform-app }}" == "true" ]] && stacks+=("platform-app")
-          [[ "${{ steps.filter.outputs.observability }}" == "true" ]] && stacks+=("observability")
-          [[ "${{ steps.filter.outputs.app-gateway-config }}" == "true" ]] && stacks+=("app-gateway-config")
-          [[ "${{ steps.filter.outputs.afd-config }}" == "true" ]] && stacks+=("afd-config")
+          # Stacks known to gate
+          ALL_STACKS=(core shared-network platform-app observability app-gateway-config afd-config)
 
+          stacks=()
+
+          # If "global" changed, run ALL stacks
+          if [[ "${{ steps.filter.outputs.global }}" == "true" ]]; then
+            stacks=("${ALL_STACKS[@]}")
+          else
+            [[ "${{ steps.filter.outputs.core }}" == "true" ]] && stacks+=("core")
+            [[ "${{ steps.filter.outputs.shared-network }}" == "true" ]] && stacks+=("shared-network")
+            [[ "${{ steps.filter.outputs.platform-app }}" == "true" ]] && stacks+=("platform-app")
+            [[ "${{ steps.filter.outputs.observability }}" == "true" ]] && stacks+=("observability")
+            [[ "${{ steps.filter.outputs.app-gateway-config }}" == "true" ]] && stacks+=("app-gateway-config")
+            [[ "${{ steps.filter.outputs.afd-config }}" == "true" ]] && stacks+=("afd-config")
+          fi
+
+          # If only docs changed (and not global / stacks), don't run plans
           if (( ${#stacks[@]} == 0 )); then
             echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
             echo "changed_any=false" >> "$GITHUB_OUTPUT"
-            echo "No stack changes detected."
+            echo "No Terraform-impacting changes detected."
             exit 0
           fi
 
@@ -176,6 +193,10 @@ jobs:
             echo "- Plane (std): \`${{ steps.inputs.outputs.plane_std }}\`"
             echo "- Core plane: \`${{ steps.inputs.outputs.core_plane }}\`"
             echo ""
+            echo "### Change classification"
+            echo "- global: \`${{ steps.filter.outputs.global }}\`"
+            echo "- docs-only: \`${{ steps.filter.outputs.docs-only }}\`"
+            echo ""
             echo "### Changed stacks"
             if [[ "${{ steps.matrix.outputs.changed_any }}" != "true" ]]; then
               echo "_None_"
@@ -187,7 +208,6 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   plan:
-    # name: Run plans (matrix)
     name: Plan (${{ matrix.stack }})
     needs: detect
     if: ${{ needs.detect.outputs.changed_any == 'true' && !github.event.pull_request.draft }}
@@ -206,9 +226,9 @@ jobs:
     secrets: inherit
 
   no-changes:
-    name: No stack changes
+    name: No Terraform plans required
     needs: detect
     if: ${{ needs.detect.outputs.changed_any != 'true' || github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     steps:
-      - run: echo "No plans required (no stack changes or PR is draft)."
+      - run: echo "No plans required (no Terraform-impacting changes or PR is draft)."
