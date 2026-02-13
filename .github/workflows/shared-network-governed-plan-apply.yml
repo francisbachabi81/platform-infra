@@ -14,6 +14,9 @@ concurrency:
 on:
   workflow_call:
     inputs:
+      pr_number:
+        type: string
+        required: false
       mode:
         description: "Mode"
         type: string
