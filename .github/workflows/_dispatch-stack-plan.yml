@@ -88,6 +88,17 @@ jobs:
       plane: ${{ inputs.plane_std }}      # nonprod/prod
       pr_number: ${{ inputs.pr_number }}
     secrets: inherit
+    
+  afd-config:
+    if: ${{ inputs.stack == 'afd-config' }}
+    uses: ./.github/workflows/afd-config-governed-plan-apply.yml
+    with:
+      mode: plan
+      gate: ${{ inputs.gate }}
+      product: ${{ inputs.product }}
+      plane: ${{ inputs.plane_std }}    # assuming nonprod/prod
+      pr_number: ${{ inputs.pr_number }}
+    secrets: inherit
 
   unknown:
     if: >-
@@ -96,7 +107,8 @@ jobs:
         inputs.stack != 'shared-network' &&
         inputs.stack != 'platform-app' &&
         inputs.stack != 'observability' &&
-        inputs.stack != 'app-gateway-config'
+        inputs.stack != 'app-gateway-config' &&
+        inputs.stack != 'afd-config'
       }}
     runs-on: ubuntu-latest
     steps:
