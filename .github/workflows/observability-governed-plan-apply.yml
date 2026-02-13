@@ -14,6 +14,9 @@ concurrency:
 on:
   workflow_call:
     inputs:
+      pr_number:
+        type: string
+        required: false
       mode:
         description: "mode=plan (creates approval issue unless gate=pr) or mode=apply (uses approved plan artifact)"
         type: string
