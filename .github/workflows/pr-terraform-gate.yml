@@ -10,7 +10,7 @@ permissions:
   pull-requests: write
   id-token: write     # needed for azure/login OIDC
   actions: read       # needed to download artifacts / query runs sometimes
-  issues: write       # your workflows declare it; caller must allow it
+  issues: write       # workflows declare it; caller must allow it
 
 concurrency:
   group: pr-tf-gate-${{ github.event.pull_request.number }}
