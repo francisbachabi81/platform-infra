@@ -58,6 +58,8 @@ jobs:
               - 'stacks/observability/**'
             app-gateway-config:
               - 'stacks/app-gateway-config/**'
+            afd-config:
+              - 'stacks/afd-config/**'
 
       # Labels supported:
       #   product:hrz | product:pub
@@ -139,6 +141,7 @@ jobs:
           [[ "${{ steps.filter.outputs.platform-app }}" == "true" ]] && stacks+=("platform-app")
           [[ "${{ steps.filter.outputs.observability }}" == "true" ]] && stacks+=("observability")
           [[ "${{ steps.filter.outputs.app-gateway-config }}" == "true" ]] && stacks+=("app-gateway-config")
+          [[ "${{ steps.filter.outputs.afd-config }}" == "true" ]] && stacks+=("afd-config")
 
           if (( ${#stacks[@]} == 0 )); then
             echo 'matrix={"include":[]}' >> "$GITHUB_OUTPUT"
