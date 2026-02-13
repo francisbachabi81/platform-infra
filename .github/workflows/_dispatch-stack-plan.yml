@@ -28,78 +28,152 @@ on:
       pr_number:
         type: string
         required: false
+
       gate:
         type: string
         required: false
         default: pr
 
 jobs:
-  core:
-    if: ${{ inputs.stack == 'core' }}
+  # CORE
+  core_pr:
+    if: ${{ inputs.stack == 'core' && (inputs.gate || 'pr') == 'pr' }}
+    uses: ./.github/workflows/core-pr-plan.yml
+    with:
+      mode: plan
+      gate: pr
+      product: ${{ inputs.product }}
+      plane: ${{ inputs.core_plane }} # np/pr
+      pr_number: ${{ inputs.pr_number }}
+    secrets: inherit
+
+  core_governed:
+    if: ${{ inputs.stack == 'core' && (inputs.gate || 'pr') != 'pr' }}
     uses: ./.github/workflows/core-governed-plan-apply.yml
     with:
       mode: plan
       gate: ${{ inputs.gate }}
       product: ${{ inputs.product }}
-      plane: ${{ inputs.core_plane }}     # np/pr
+      plane: ${{ inputs.core_plane }} # np/pr
       pr_number: ${{ inputs.pr_number }}
     secrets: inherit
 
-  shared-network:
-    if: ${{ inputs.stack == 'shared-network' }}
+  # SHARED-NETWORK
+  shared_network_pr:
+    if: ${{ inputs.stack == 'shared-network' && (inputs.gate || 'pr') == 'pr' }}
+    uses: ./.github/workflows/shared-network-pr-plan.yml
+    with:
+      mode: plan
+      gate: pr
+      product: ${{ inputs.product }}
+      plane: ${{ inputs.plane_std }} # nonprod/prod
+      pr_number: ${{ inputs.pr_number }}
+    secrets: inherit
+
+  shared_network_governed:
+    if: ${{ inputs.stack == 'shared-network' && (inputs.gate || 'pr') != 'pr' }}
     uses: ./.github/workflows/shared-network-governed-plan-apply.yml
     with:
       mode: plan
       gate: ${{ inputs.gate }}
       product: ${{ inputs.product }}
-      plane: ${{ inputs.plane_std }}      # nonprod/prod
+      plane: ${{ inputs.plane_std }}
       pr_number: ${{ inputs.pr_number }}
     secrets: inherit
 
-  platform-app:
-    if: ${{ inputs.stack == 'platform-app' }}
+  # PLATFORM-APP
+  platform_app_pr:
+    if: ${{ inputs.stack == 'platform-app' && (inputs.gate || 'pr') == 'pr' }}
+    uses: ./.github/workflows/platform-app-pr-plan.yml
+    with:
+      mode: plan
+      gate: pr
+      product: ${{ inputs.product }}
+      env: ${{ inputs.env }} # dev/qa/uat/prod
+      pr_number: ${{ inputs.pr_number }}
+    secrets: inherit
+
+  platform_app_governed:
+    if: ${{ inputs.stack == 'platform-app' && (inputs.gate || 'pr') != 'pr' }}
     uses: ./.github/workflows/platform-app-governed-plan-apply.yml
     with:
       mode: plan
       gate: ${{ inputs.gate }}
       product: ${{ inputs.product }}
-      env: ${{ inputs.env }}              # dev/qa/uat/prod
+      env: ${{ inputs.env }}
       pr_number: ${{ inputs.pr_number }}
     secrets: inherit
 
-  observability:
-    if: ${{ inputs.stack == 'observability' }}
+  # OBSERVABILITY
+  observability_pr:
+    if: ${{ inputs.stack == 'observability' && (inputs.gate || 'pr') == 'pr' }}
+    uses: ./.github/workflows/observability-pr-plan.yml
+    with:
+      mode: plan
+      gate: pr
+      product: ${{ inputs.product }}
+      env: ${{ inputs.env }}
+      pr_number: ${{ inputs.pr_number }}
+    secrets: inherit
+
+  observability_governed:
+    if: ${{ inputs.stack == 'observability' && (inputs.gate || 'pr') != 'pr' }}
     uses: ./.github/workflows/observability-governed-plan-apply.yml
     with:
       mode: plan
       gate: ${{ inputs.gate }}
       product: ${{ inputs.product }}
-      env: ${{ inputs.env }}              # dev/qa/uat/prod
+      env: ${{ inputs.env }}
       pr_number: ${{ inputs.pr_number }}
     secrets: inherit
 
-  app-gateway-config:
-    if: ${{ inputs.stack == 'app-gateway-config' }}
+  # APP-GATEWAY-CONFIG
+  app_gateway_config_pr:
+    if: ${{ inputs.stack == 'app-gateway-config' && (inputs.gate || 'pr') == 'pr' }}
+    uses: ./.github/workflows/app-gateway-config-pr-plan.yml
+    with:
+      mode: plan
+      gate: pr
+      product: ${{ inputs.product }}
+      plane: ${{ inputs.plane_std }}
+      pr_number: ${{ inputs.pr_number }}
+    secrets: inherit
+
+  app_gateway_config_governed:
+    if: ${{ inputs.stack == 'app-gateway-config' && (inputs.gate || 'pr') != 'pr' }}
     uses: ./.github/workflows/app-gateway-config-governed-plan-apply.yml
     with:
       mode: plan
       gate: ${{ inputs.gate }}
       product: ${{ inputs.product }}
-      plane: ${{ inputs.plane_std }}      # nonprod/prod
+      plane: ${{ inputs.plane_std }}
       pr_number: ${{ inputs.pr_number }}
     secrets: inherit
-    
-  afd-config:
-    if: ${{ inputs.stack == 'afd-config' }}
+
+  # AFD-CONFIG
+  afd_config_pr:
+    if: ${{ inputs.stack == 'afd-config' && (inputs.gate || 'pr') == 'pr' }}
+    uses: ./.github/workflows/afd-config-pr-plan.yml
+    with:
+      mode: plan
+      gate: pr
+      product: ${{ inputs.product }}
+      plane: ${{ inputs.plane_std }}
+      pr_number: ${{ inputs.pr_number }}
+    secrets: inherit
+
+  afd_config_governed:
+    if: ${{ inputs.stack == 'afd-config' && (inputs.gate || 'pr') != 'pr' }}
     uses: ./.github/workflows/afd-config-governed-plan-apply.yml
     with:
       mode: plan
       gate: ${{ inputs.gate }}
       product: ${{ inputs.product }}
-      plane: ${{ inputs.plane_std }}    # assuming nonprod/prod
+      plane: ${{ inputs.plane_std }}
       pr_number: ${{ inputs.pr_number }}
     secrets: inherit
 
+  # UNKNOWN STACK
   unknown:
     if: >-
       ${{
