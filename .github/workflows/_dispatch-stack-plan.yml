@@ -9,9 +9,22 @@ on:
       product:
         type: string
         required: true
-      env_or_plane:
+
+      # env-based stacks: dev/qa/uat/prod
+      env:
         type: string
         required: true
+
+      # nonprod/prod plane stacks
+      plane_std:
+        type: string
+        required: true
+
+      # core-only plane: np/pr
+      core_plane:
+        type: string
+        required: true
+
       pr_number:
         type: string
         required: false
@@ -28,7 +41,7 @@ jobs:
       mode: plan
       gate: ${{ inputs.gate }}
       product: ${{ inputs.product }}
-      plane: ${{ inputs.env_or_plane }}
+      plane: ${{ inputs.core_plane }}     # np/pr
       pr_number: ${{ inputs.pr_number }}
     secrets: inherit
 
@@ -39,7 +52,7 @@ jobs:
       mode: plan
       gate: ${{ inputs.gate }}
       product: ${{ inputs.product }}
-      plane: ${{ inputs.env_or_plane }}
+      plane: ${{ inputs.plane_std }}      # nonprod/prod
       pr_number: ${{ inputs.pr_number }}
     secrets: inherit
 
@@ -50,7 +63,7 @@ jobs:
       mode: plan
       gate: ${{ inputs.gate }}
       product: ${{ inputs.product }}
-      env: ${{ inputs.env_or_plane }}
+      env: ${{ inputs.env }}              # dev/qa/uat/prod
       pr_number: ${{ inputs.pr_number }}
     secrets: inherit
 
@@ -61,7 +74,7 @@ jobs:
       mode: plan
       gate: ${{ inputs.gate }}
       product: ${{ inputs.product }}
-      env: ${{ inputs.env_or_plane }}
+      env: ${{ inputs.env }}              # dev/qa/uat/prod
       pr_number: ${{ inputs.pr_number }}
     secrets: inherit
 
@@ -72,7 +85,7 @@ jobs:
       mode: plan
       gate: ${{ inputs.gate }}
       product: ${{ inputs.product }}
-      plane: ${{ inputs.env_or_plane }}
+      plane: ${{ inputs.plane_std }}      # nonprod/prod
       pr_number: ${{ inputs.pr_number }}
     secrets: inherit
 
