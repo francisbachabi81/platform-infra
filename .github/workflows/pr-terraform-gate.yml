@@ -187,7 +187,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   plan:
-    name: Run plans (matrix)
+    # name: Run plans (matrix)
+    name: Plan (${{ matrix.stack }})
     needs: detect
     if: ${{ needs.detect.outputs.changed_any == 'true' && !github.event.pull_request.draft }}
     strategy:
