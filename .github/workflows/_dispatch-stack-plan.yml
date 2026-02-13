@@ -83,7 +83,6 @@ jobs:
         inputs.stack != 'shared-network' &&
         inputs.stack != 'platform-app' &&
         inputs.stack != 'observability' &&
-        inputs.stack != 'platform-registry' &&
         inputs.stack != 'app-gateway-config'
       }}
     runs-on: ubuntu-latest
