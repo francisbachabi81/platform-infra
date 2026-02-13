@@ -32,7 +32,14 @@ locals {
   prod_ten = (var.prod_tenant_id != null && trimspace(var.prod_tenant_id) != "") ? var.prod_tenant_id : var.hub_tenant_id
 }
 
-provider "azapi" {}
+provider "azapi" {
+  use_msi  = false
+  use_oidc = true
+
+  # optional but recommended for clarity/consistency
+  subscription_id = var.hub_subscription_id
+  tenant_id       = var.hub_tenant_id
+}
 
 # Default = HUB subscription
 provider "azurerm" {
