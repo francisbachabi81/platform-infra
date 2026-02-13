@@ -275,7 +275,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          terraform fmt -recursive
+      
+          if [ "${{ inputs.gate || 'governed' }}" = "pr" ]; then
+            echo "PR gate: running fmt in check mode"
+            terraform fmt -check -recursive
+          else
+            echo "Governed: formatting in-place"
+            terraform fmt -recursive
+          fi
+      
           terraform validate
 
       - name: Plan (detailed exit code)
