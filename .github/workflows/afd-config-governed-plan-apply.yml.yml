@@ -1,0 +1,69 @@
+name: "AFD Config • Plan / Apply (Dummy)"
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: "plan | apply"
+        type: string
+        required: true
+
+      product:
+        description: "hrz | pub"
+        type: string
+        required: true
+
+      plane:
+        description: "nonprod | prod"
+        type: string
+        required: true
+
+      gate:
+        description: "pr | governed"
+        type: string
+        required: false
+        default: governed
+
+      pr_number:
+        description: "PR number (optional)"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    if: ${{ inputs.mode == 'plan' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Print inputs
+        run: |
+          echo "AFD CONFIG DUMMY PLAN"
+          echo "Mode:     ${{ inputs.mode }}"
+          echo "Product:  ${{ inputs.product }}"
+          echo "Plane:    ${{ inputs.plane }}"
+          echo "Gate:     ${{ inputs.gate }}"
+          echo "PR:       ${{ inputs.pr_number }}"
+
+      - name: Simulate plan
+        run: |
+          echo "Simulating terraform plan..."
+          echo "No changes. Infrastructure is up-to-date."
+
+  apply:
+    if: ${{ inputs.mode == 'apply' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Print inputs
+        run: |
+          echo "AFD CONFIG DUMMY APPLY"
+          echo "Product: ${{ inputs.product }}"
+          echo "Plane:   ${{ inputs.plane }}"
+          echo "Gate:    ${{ inputs.gate }}"
+
+      - name: Simulate apply
+        run: |
+          echo "Simulating terraform apply..."
