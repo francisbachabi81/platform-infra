@@ -68,7 +68,8 @@ jobs:
             // Prefer env:..., else plane:..., else default
             const env = findVal("env:");
             const plane = findVal("plane:");
-            const envOrPlane = env || plane || process.env.DEFAULT_ENV_OR_PLANE;
+            const envOrPlane = plane || env || process.env.DEFAULT_ENV_OR_PLANE;
+            # const envOrPlane = env || plane || process.env.DEFAULT_ENV_OR_PLANE;
 
             core.info(`Labels: ${labels.join(", ")}`);
             core.info(`Resolved product=${product}, env_or_plane=${envOrPlane}`);
