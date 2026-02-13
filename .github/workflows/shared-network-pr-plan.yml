@@ -116,7 +116,8 @@ jobs:
   #         echo "✅ Gate passed (no Critical/High FAILs and no secrets)."
 
   plan_run:
-    name: "Plan (Shared Network)"
+    # name: "Plan (Shared Network)"
+    name: "Plan"
     if: ${{ (inputs.mode || 'plan') == 'plan' }}
     # needs: [veracode_gate]
     runs-on: ubuntu-latest
