@@ -1,5 +1,5 @@
 # Observability Stack
-# TEST
+
 This stack manages **environment-specific observability and diagnostics** configuration for platform and core resources.
 
 It now also includes:
