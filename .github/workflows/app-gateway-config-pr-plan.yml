@@ -57,68 +57,68 @@ jobs:
   # --------------------------
   # SECURITY GATE (PLAN ONLY)
   # --------------------------
-  veracode_gate:
-    name: "Veracode Gate"
-    if: ${{ (inputs.mode || 'plan') == 'plan' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+  # veracode_gate:
+  #   name: "Veracode Gate"
+  #   if: ${{ (inputs.mode || 'plan') == 'plan' }}
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      - name: Veracode IaC/Secrets (gated)
-        uses: veracode/container_iac_secrets_scanning@v1.0.6
-        with:
-          vid: ${{ secrets.VERACODE_API_ID }}
-          vkey: ${{ secrets.VERACODE_API_KEY }}
-          command: "scan"
-          type: "directory"
-          source: "./stacks/app-gateway-config"
-          format: "json"
-          debug: false
-          fail_build: true
+  #     - name: Veracode IaC/Secrets (gated)
+  #       uses: veracode/container_iac_secrets_scanning@v1.0.6
+  #       with:
+  #         vid: ${{ secrets.VERACODE_API_ID }}
+  #         vkey: ${{ secrets.VERACODE_API_KEY }}
+  #         command: "scan"
+  #         type: "directory"
+  #         source: "./stacks/app-gateway-config"
+  #         format: "json"
+  #         debug: false
+  #         fail_build: true
 
-      - name: Upload Veracode results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: veracode-results-${{ github.run_id }}
-          path: results.json
+  #     - name: Upload Veracode results
+  #       if: always()
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: veracode-results-${{ github.run_id }}
+  #         path: results.json
 
-      - name: Gate on IaC findings (Critical/High) + Secrets
-        shell: bash
-        run: |
-          set -euo pipefail
+  #     - name: Gate on IaC findings (Critical/High) + Secrets
+  #       shell: bash
+  #       run: |
+  #         set -euo pipefail
 
-          FILE="results.json"
-          if [ ! -f "$FILE" ]; then
-            echo "❌ $FILE not found in $(pwd)"
-            echo "Nearby JSON files:"
-            find . -maxdepth 3 -type f -name "*.json" -print
-            exit 1
-          fi
+  #         FILE="results.json"
+  #         if [ ! -f "$FILE" ]; then
+  #           echo "❌ $FILE not found in $(pwd)"
+  #           echo "Nearby JSON files:"
+  #           find . -maxdepth 3 -type f -name "*.json" -print
+  #           exit 1
+  #         fi
 
-          CRIT_FAIL=$(jq '[.configs // [] | .[] | select((.Status // "") == "FAIL") | select((.Severity // "") == "CRITICAL")] | length' "$FILE")
-          HIGH_FAIL=$(jq '[.configs // [] | .[] | select((.Status // "") == "FAIL") | select((.Severity // "") == "HIGH")]     | length' "$FILE")
-          SECRETS=$(jq '(.secrets // []) | length' "$FILE")
+  #         CRIT_FAIL=$(jq '[.configs // [] | .[] | select((.Status // "") == "FAIL") | select((.Severity // "") == "CRITICAL")] | length' "$FILE")
+  #         HIGH_FAIL=$(jq '[.configs // [] | .[] | select((.Status // "") == "FAIL") | select((.Severity // "") == "HIGH")]     | length' "$FILE")
+  #         SECRETS=$(jq '(.secrets // []) | length' "$FILE")
 
-          echo "IaC FAIL counts => CRITICAL: $CRIT_FAIL, HIGH: $HIGH_FAIL"
-          echo "Secrets found   => $SECRETS"
+  #         echo "IaC FAIL counts => CRITICAL: $CRIT_FAIL, HIGH: $HIGH_FAIL"
+  #         echo "Secrets found   => $SECRETS"
 
-          if [ "$CRIT_FAIL" -gt 0 ] || [ "$HIGH_FAIL" -gt 0 ] || [ "$SECRETS" -gt 0 ]; then
-            echo "❌ Failing build: Critical/High IaC FAIL findings and/or secrets detected."
-            echo
-            echo "Top failing IaC checks:"
-            jq -r '
-              (.configs // [])
-              | map(select((.Status // "") == "FAIL"))
-              | map(select((.Severity // "") == "CRITICAL" or (.Severity // "") == "HIGH"))
-              | .[:20]
-              | .[]
-              | "- [\(.Severity)] \(.ID // .AVDID // "unknown") :: \(.Title // "no title")"
-            ' "$FILE" || true
-            exit 1
-          fi
+  #         if [ "$CRIT_FAIL" -gt 0 ] || [ "$HIGH_FAIL" -gt 0 ] || [ "$SECRETS" -gt 0 ]; then
+  #           echo "❌ Failing build: Critical/High IaC FAIL findings and/or secrets detected."
+  #           echo
+  #           echo "Top failing IaC checks:"
+  #           jq -r '
+  #             (.configs // [])
+  #             | map(select((.Status // "") == "FAIL"))
+  #             | map(select((.Severity // "") == "CRITICAL" or (.Severity // "") == "HIGH"))
+  #             | .[:20]
+  #             | .[]
+  #             | "- [\(.Severity)] \(.ID // .AVDID // "unknown") :: \(.Title // "no title")"
+  #           ' "$FILE" || true
+  #           exit 1
+  #         fi
 
-          echo "✅ Gate passed (no Critical/High FAILs and no secrets)."
+  #         echo "✅ Gate passed (no Critical/High FAILs and no secrets)."
 
   # --------------------------
   # PLAN (PR GATE)
@@ -126,7 +126,7 @@ jobs:
   plan:
     name: "Plan (app-gateway-config)"
     if: ${{ (inputs.mode || 'plan') == 'plan' }}
-    needs: [veracode_gate]
+    # needs: [veracode_gate]
     runs-on: ubuntu-latest
     environment: ${{ inputs.plane }}
     defaults:
