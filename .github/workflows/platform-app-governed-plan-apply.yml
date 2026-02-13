@@ -14,6 +14,9 @@ concurrency:
 on:
   workflow_call:
     inputs:
+      pr_number:
+        type: string
+        required: false
       mode: { type: string, required: true }
       env: { type: string, required: true }
       product: { type: string, required: true }
