@@ -14,9 +14,16 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Default "product" / "env_or_plane" if PR has no labels
   DEFAULT_PRODUCT: pub
-  DEFAULT_ENV_OR_PLANE: dev
+
+  # Env-based stacks (platform-app, observability, etc.)
+  DEFAULT_ENV: dev
+
+  # Plane-based stacks that use nonprod/prod (shared-network, app-gateway-config, etc.)
+  DEFAULT_PLANE_STD: nonprod
+
+  # Core-only plane (np/pr)
+  DEFAULT_CORE_PLANE: np
 
 jobs:
   detect:
@@ -26,12 +33,13 @@ jobs:
       matrix: ${{ steps.matrix.outputs.matrix }}
       changed_any: ${{ steps.matrix.outputs.changed_any }}
       product: ${{ steps.inputs.outputs.product }}
-      env_or_plane: ${{ steps.inputs.outputs.env_or_plane }}
+      env: ${{ steps.inputs.outputs.env }}
+      plane_std: ${{ steps.inputs.outputs.plane_std }}
+      core_plane: ${{ steps.inputs.outputs.core_plane }}
 
     steps:
       - uses: actions/checkout@v4
 
-      # 1) Detect which stacks changed (edit patterns to match your repo)
       - name: Paths filter
         uses: dorny/paths-filter@v3
         id: filter
@@ -48,36 +56,74 @@ jobs:
             app-gateway-config:
               - 'stacks/app-gateway-config/**'
 
-      # 2) Parse PR labels to pick product + env_or_plane
       # Labels supported:
-      #   product:pub OR product:ent
-      #   env:dev OR env:prod (for env-based stacks)
-      #   plane:dev OR plane:prod (for plane-based stacks)
-      - name: Parse PR labels -> product/env_or_plane
+      #   product:hrz | product:pub
+      #   env:dev | env:qa | env:uat | env:prod
+      #   plane:nonprod | plane:prod
+      #   core-plane:np | core-plane:pr   (core only)
+      #
+      # Behavior:
+      # - env defaults to DEFAULT_ENV
+      # - plane_std defaults from env (dev/qa -> nonprod, uat/prod -> prod) unless plane:... override
+      # - core_plane defaults from plane_std (nonprod -> np, prod -> pr) unless core-plane:... override
+      # - If user mistakenly uses plane:np/pr, we treat that as core-plane override
+      - name: Parse PR labels -> product/env/plane_std/core_plane
         id: inputs
         uses: actions/github-script@v7
         with:
           script: |
             const labels = (context.payload.pull_request.labels || []).map(l => l.name);
+
             const findVal = (prefix) => {
               const hit = labels.find(n => n.toLowerCase().startsWith(prefix));
-              return hit ? hit.substring(prefix.length) : null;
+              return hit ? hit.substring(prefix.length).trim() : null;
             };
 
-            const product = findVal("product:") || process.env.DEFAULT_PRODUCT;
-            // Prefer env:..., else plane:..., else default
-            const env = findVal("env:");
-            const plane = findVal("plane:");
-            const envOrPlane = plane || env || process.env.DEFAULT_ENV_OR_PLANE;
-            # const envOrPlane = env || plane || process.env.DEFAULT_ENV_OR_PLANE;
+            const product = (findVal("product:") || process.env.DEFAULT_PRODUCT).toLowerCase();
+            const envVal  = (findVal("env:") || process.env.DEFAULT_ENV).toLowerCase();
+
+            let planeStd  = (findVal("plane:") || "").toLowerCase();          // nonprod/prod
+            let corePlane = (findVal("core-plane:") || "").toLowerCase();     // np/pr
+
+            // If someone used plane:np/pr, treat it as a core-plane override
+            if (planeStd === "np" || planeStd === "pr") {
+              corePlane = planeStd;
+              planeStd = "";
+            }
+
+            // Validate env
+            const validEnvs = new Set(["dev","qa","uat","prod"]);
+            if (!validEnvs.has(envVal)) {
+              core.setFailed(`Invalid env '${envVal}'. Use env:dev|qa|uat|prod.`);
+              return;
+            }
+
+            // Derive plane_std from env if not explicitly set
+            const derivedPlaneStd = (envVal === "dev" || envVal === "qa") ? "nonprod" : "prod";
+
+            if (!planeStd) planeStd = (process.env.DEFAULT_PLANE_STD || derivedPlaneStd).toLowerCase();
+
+            if (planeStd !== "nonprod" && planeStd !== "prod") {
+              core.setFailed(`Invalid plane '${planeStd}'. Use plane:nonprod or plane:prod (or core-plane:np/pr for core).`);
+              return;
+            }
+
+            // Default core_plane from plane_std if not explicitly set
+            if (!corePlane) corePlane = (planeStd === "prod") ? "pr" : "np";
+
+            if (corePlane !== "np" && corePlane !== "pr") {
+              core.setFailed(`Invalid core-plane '${corePlane}'. Use core-plane:np or core-plane:pr.`);
+              return;
+            }
 
             core.info(`Labels: ${labels.join(", ")}`);
-            core.info(`Resolved product=${product}, env_or_plane=${envOrPlane}`);
+            core.info(`Resolved product=${product}, env=${envVal}, plane_std=${planeStd}, core_plane=${corePlane}`);
 
             core.setOutput("product", product);
-            core.setOutput("env_or_plane", envOrPlane);
+            core.setOutput("env", envVal);
+            core.setOutput("plane_std", planeStd);
+            core.setOutput("core_plane", corePlane);
 
-      # 3) Build dynamic matrix JSON containing only changed stacks
       - name: Build matrix
         id: matrix
         shell: bash
@@ -85,7 +131,6 @@ jobs:
           set -euo pipefail
 
           stacks=()
-
           [[ "${{ steps.filter.outputs.core }}" == "true" ]] && stacks+=("core")
           [[ "${{ steps.filter.outputs.shared-network }}" == "true" ]] && stacks+=("shared-network")
           [[ "${{ steps.filter.outputs.platform-app }}" == "true" ]] && stacks+=("platform-app")
@@ -121,7 +166,9 @@ jobs:
             echo "## Terraform PR Gate"
             echo ""
             echo "- Product: \`${{ steps.inputs.outputs.product }}\`"
-            echo "- Env/Plane: \`${{ steps.inputs.outputs.env_or_plane }}\`"
+            echo "- Env: \`${{ steps.inputs.outputs.env }}\`"
+            echo "- Plane (std): \`${{ steps.inputs.outputs.plane_std }}\`"
+            echo "- Core plane: \`${{ steps.inputs.outputs.core_plane }}\`"
             echo ""
             echo "### Changed stacks"
             if [[ "${{ steps.matrix.outputs.changed_any }}" != "true" ]]; then
@@ -144,7 +191,9 @@ jobs:
     with:
       stack: ${{ matrix.stack }}
       product: ${{ needs.detect.outputs.product }}
-      env_or_plane: ${{ needs.detect.outputs.env_or_plane }}
+      env: ${{ needs.detect.outputs.env }}
+      plane_std: ${{ needs.detect.outputs.plane_std }}
+      core_plane: ${{ needs.detect.outputs.core_plane }}
       pr_number: ${{ github.event.pull_request.number }}
       gate: pr
     secrets: inherit
