@@ -511,7 +511,7 @@ jobs:
       - name: Set meta artifact name outputs
         id: artmeta
         if: ${{ always() }}
-       shell: bash
+        shell: bash
         run: |
           echo "name=core-plan-meta-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
 
