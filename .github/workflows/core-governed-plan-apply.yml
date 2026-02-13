@@ -91,14 +91,75 @@ env:
   APPROVERS_CSV: "francisbachabi81,user2"
 
 jobs:
-  # ---------------------------------------------------------------------------
+  # SECURITY GATE (Veracode) - PLAN ONLY
+  veracode_gate:
+    if: ${{ inputs.mode == 'plan' }}
+    name: "Veracode Gate"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Veracode IaC/Secrets (gated)
+        uses: veracode/container_iac_secrets_scanning@v1.0.6
+        with:
+          vid: ${{ secrets.VERACODE_API_ID }}
+          vkey: ${{ secrets.VERACODE_API_KEY }}
+          command: "scan"
+          type: "directory"
+          source: "./stacks/core"
+          format: "json"
+          debug: false
+          fail_build: true
+
+      - name: Upload Veracode results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: veracode-results-${{ github.run_id }}
+          path: results.json
+
+      - name: Gate on IaC findings (Critical/High) + Secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FILE="results.json"
+          if [ ! -f "$FILE" ]; then
+            echo "❌ $FILE not found in $(pwd)"
+            echo "Nearby JSON files:"
+            find . -maxdepth 3 -type f -name "*.json" -print
+            exit 1
+          fi
+
+          CRIT_FAIL=$(jq '[.configs // [] | .[] | select((.Status // "") == "FAIL") | select((.Severity // "") == "CRITICAL")] | length' "$FILE")
+          HIGH_FAIL=$(jq '[.configs // [] | .[] | select((.Status // "") == "FAIL") | select((.Severity // "") == "HIGH")]     | length' "$FILE")
+          SECRETS=$(jq '(.secrets // []) | length' "$FILE")
+
+          echo "IaC FAIL counts => CRITICAL: $CRIT_FAIL, HIGH: $HIGH_FAIL"
+          echo "Secrets found   => $SECRETS"
+
+          if [ "$CRIT_FAIL" -gt 0 ] || [ "$HIGH_FAIL" -gt 0 ] || [ "$SECRETS" -gt 0 ]; then
+            echo "❌ Failing build: Critical/High IaC FAIL findings and/or secrets detected."
+            echo
+            echo "Top failing IaC checks:"
+            jq -r '
+              (.configs // [])
+              | map(select((.Status // "") == "FAIL"))
+              | map(select((.Severity // "") == "CRITICAL" or (.Severity // "") == "HIGH"))
+              | .[:20]
+              | .[]
+              | "- [\(.Severity)] \(.ID // .AVDID // "unknown") :: \(.Title // "no title")"
+            ' "$FILE" || true
+            exit 1
+          fi
+
+          echo "✅ Gate passed (no Critical/High FAILs and no secrets)."
+
   # PLAN FLOW
-  # ---------------------------------------------------------------------------
   plan_run:
     if: ${{ inputs.mode == 'plan' }}
-    # name: "Plan (core: ${{ inputs.plane }}.${{ inputs.product }})"
     name: "Plan (core)"
-    # runs-on: ubuntu-latest
+    needs: [veracode_gate]   # ✅ plan depends on Veracode gate
     runs-on:
       - self-hosted
       - ${{ inputs.plane == 'np' && 'nonprod' || 'prod' }}
@@ -278,7 +339,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-      
+
           if [ "${{ inputs.gate || 'governed' }}" = "pr" ]; then
             echo "PR gate: running fmt in check mode"
             terraform fmt -check -recursive
@@ -286,7 +347,7 @@ jobs:
             echo "Governed: formatting in-place"
             terraform fmt -recursive
           fi
-      
+
           terraform validate
 
       - name: Plan (detailed exit code)
@@ -450,13 +511,12 @@ jobs:
       - name: Set meta artifact name outputs
         id: artmeta
         if: ${{ always() }}
-        shell: bash
+       shell: bash
         run: |
           echo "name=core-plan-meta-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
 
   plan_post:
     if: ${{ inputs.mode == 'plan' && (inputs.gate || 'governed') != 'pr' }}
-    # if: ${{ inputs.mode == 'plan' }}
     name: "Post | approval issue"
     needs: [plan_run]
     runs-on: ubuntu-latest
@@ -587,14 +647,10 @@ jobs:
             });
             core.info(`Created issue #${resp.data.number}`);
 
-  # ---------------------------------------------------------------------------
   # APPLY FLOW
-  # ---------------------------------------------------------------------------
   apply:
     if: ${{ inputs.mode == 'apply' }}
-    # name: "Apply (core: ${{ inputs.plane }}.${{ inputs.product }})"
     name: "Apply (core)"
-    # runs-on: ubuntu-latest
     runs-on:
       - self-hosted
       - ${{ inputs.plane == 'np' && 'nonprod' || 'prod' }}
@@ -729,22 +785,6 @@ jobs:
             ls -la || true
             exit 1
           fi
-      - name: Traceability (plan ↔ apply)
-        shell: bash
-        env:
-          PLAN_RUN_ID: ${{ inputs.plan_run_id }}
-          PLAN_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ inputs.plan_run_id }}
-          APPLY_RUN_ID: ${{ github.run_id }}
-          APPLY_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          set -euo pipefail
-          {
-            echo "## Traceability"
-            echo "- Plan run id: ${PLAN_RUN_ID}"
-            echo "- Plan run url: ${PLAN_RUN_URL}"
-            echo "- Apply run id: ${APPLY_RUN_ID}"
-            echo "- Apply run url: ${APPLY_RUN_URL}"
-          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Terraform Apply (approved plan)
         run: terraform apply -input=false -auto-approve tfplan
