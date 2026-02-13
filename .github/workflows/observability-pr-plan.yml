@@ -311,6 +311,15 @@ jobs:
           write_output STATE_CONTAINER "tfstate"
           write_output STATE_KEY       "observability/${PRODUCT}/${ENV}/terraform.tfstate"
 
+      - name: Export remote-state vars to Terraform
+        shell: bash
+        run: |
+          set -euo pipefail
+          write_env() { printf '%s<<__ENV__\n%s\n__ENV__\n' "$1" "$2" >> "$GITHUB_ENV"; }
+          write_env TF_VAR_state_rg        "${{ steps.paths.outputs.STATE_RG }}"
+          write_env TF_VAR_state_sa        "${{ steps.paths.outputs.STATE_SA }}"
+          write_env TF_VAR_state_container "${{ steps.paths.outputs.STATE_CONTAINER }}"
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ steps.tfver.outputs.version }}
