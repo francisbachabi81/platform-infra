@@ -1,5 +1,5 @@
 # Azure Front Door Config Stack (`afd-config`)
-
+# Test
 This stack manages **Azure Front Door (AFD) Standard/Premium runtime configuration** separately from the `shared-network` stack.
 
 It is intentionally scoped to *high‑churn, application‑level routing concerns* such as:
