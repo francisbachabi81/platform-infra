@@ -65,17 +65,6 @@ jobs:
       pr_number: ${{ inputs.pr_number }}
     secrets: inherit
 
-  platform-registry:
-    if: ${{ inputs.stack == 'platform-registry' }}
-    uses: ./.github/workflows/platform-registry-governed-plan-apply.yml
-    with:
-      mode: plan
-      gate: ${{ inputs.gate }}
-      product: ${{ inputs.product }}
-      env: ${{ inputs.env_or_plane }}
-      pr_number: ${{ inputs.pr_number }}
-    secrets: inherit
-
   app-gateway-config:
     if: ${{ inputs.stack == 'app-gateway-config' }}
     uses: ./.github/workflows/app-gateway-config-governed-plan-apply.yml
@@ -83,7 +72,7 @@ jobs:
       mode: plan
       gate: ${{ inputs.gate }}
       product: ${{ inputs.product }}
-      env: ${{ inputs.env_or_plane }}
+      plane: ${{ inputs.env_or_plane }}
       pr_number: ${{ inputs.pr_number }}
     secrets: inherit
 
