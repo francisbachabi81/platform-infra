@@ -1,0 +1,104 @@
+name: Dispatch Stack Plan
+
+on:
+  workflow_call:
+    inputs:
+      stack:
+        type: string
+        required: true
+      product:
+        type: string
+        required: true
+      env_or_plane:
+        type: string
+        required: true
+      pr_number:
+        type: string
+        required: false
+      gate:
+        type: string
+        required: false
+        default: pr
+
+jobs:
+  core:
+    if: ${{ inputs.stack == 'core' }}
+    uses: ./.github/workflows/core-governed-plan-apply.yml
+    with:
+      mode: plan
+      gate: ${{ inputs.gate }}
+      product: ${{ inputs.product }}
+      plane: ${{ inputs.env_or_plane }}
+      pr_number: ${{ inputs.pr_number }}
+    secrets: inherit
+
+  shared-network:
+    if: ${{ inputs.stack == 'shared-network' }}
+    uses: ./.github/workflows/shared-network-governed-plan-apply.yml
+    with:
+      mode: plan
+      gate: ${{ inputs.gate }}
+      product: ${{ inputs.product }}
+      plane: ${{ inputs.env_or_plane }}
+      pr_number: ${{ inputs.pr_number }}
+    secrets: inherit
+
+  platform-app:
+    if: ${{ inputs.stack == 'platform-app' }}
+    uses: ./.github/workflows/platform-app-governed-plan-apply.yml
+    with:
+      mode: plan
+      gate: ${{ inputs.gate }}
+      product: ${{ inputs.product }}
+      env: ${{ inputs.env_or_plane }}
+      pr_number: ${{ inputs.pr_number }}
+    secrets: inherit
+
+  observability:
+    if: ${{ inputs.stack == 'observability' }}
+    uses: ./.github/workflows/observability-governed-plan-apply.yml
+    with:
+      mode: plan
+      gate: ${{ inputs.gate }}
+      product: ${{ inputs.product }}
+      env: ${{ inputs.env_or_plane }}
+      pr_number: ${{ inputs.pr_number }}
+    secrets: inherit
+
+  platform-registry:
+    if: ${{ inputs.stack == 'platform-registry' }}
+    uses: ./.github/workflows/platform-registry-governed-plan-apply.yml
+    with:
+      mode: plan
+      gate: ${{ inputs.gate }}
+      product: ${{ inputs.product }}
+      env: ${{ inputs.env_or_plane }}
+      pr_number: ${{ inputs.pr_number }}
+    secrets: inherit
+
+  app-gateway-config:
+    if: ${{ inputs.stack == 'app-gateway-config' }}
+    uses: ./.github/workflows/app-gateway-config-governed-plan-apply.yml
+    with:
+      mode: plan
+      gate: ${{ inputs.gate }}
+      product: ${{ inputs.product }}
+      env: ${{ inputs.env_or_plane }}
+      pr_number: ${{ inputs.pr_number }}
+    secrets: inherit
+
+  unknown:
+    if: >-
+      ${{
+        inputs.stack != 'core' &&
+        inputs.stack != 'shared-network' &&
+        inputs.stack != 'platform-app' &&
+        inputs.stack != 'observability' &&
+        inputs.stack != 'platform-registry' &&
+        inputs.stack != 'app-gateway-config'
+      }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "::error::Unknown stack '${{ inputs.stack }}'"
+          exit 1
