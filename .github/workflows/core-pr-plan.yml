@@ -229,6 +229,16 @@ jobs:
           echo "STATE_CONTAINER=tfstate"      >> "$GITHUB_OUTPUT"
           echo "STATE_KEY=core/${PRODUCT}/${PLANE}/terraform.tfstate" >> "$GITHUB_OUTPUT"
 
+      - name: Export remote-state vars to Terraform
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "TF_VAR_state_rg=${{ steps.paths.outputs.STATE_RG }}"
+            echo "TF_VAR_state_sa=${{ steps.paths.outputs.STATE_SA }}"
+            echo "TF_VAR_state_container=${{ steps.paths.outputs.STATE_CONTAINER }}"
+          } >> "$GITHUB_ENV"
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ steps.tfver.outputs.version }}
