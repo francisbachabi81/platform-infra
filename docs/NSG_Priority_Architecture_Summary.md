@@ -2,8 +2,7 @@
 
 ## Overview
 
-This document summarizes the NSG restructuring and priority strategy
-implemented across:
+This document summarizes the NSG restructuring and priority strategy implemented across:
 
 -   Baseline (shared boundary & plane isolation)
 -   AKS (Ingress, Intra-cluster, Egress, PrivateLink, PGFlex)
