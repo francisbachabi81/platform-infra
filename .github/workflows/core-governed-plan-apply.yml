@@ -12,6 +12,35 @@ concurrency:
   cancel-in-progress: ${{ inputs.mode == 'plan' }}
 
 on:
+  workflow_call:
+    inputs:
+      mode:
+        description: "Mode"
+        type: string
+        required: true
+      plane:
+        description: "Plane (np = dev/qa, pr = uat/prod)"
+        type: string
+        required: true
+      product:
+        description: "Product (hrz = Azure Gov, pub = Azure Commercial)"
+        type: string
+        required: true
+      terraform_version:
+        description: "Terraform version"
+        type: string
+        required: false
+        default: "1.13.3"
+      plan_run_id:
+        description: "Plan run id (required for apply mode)"
+        type: string
+        required: false
+      gate:
+        description: "pr|governed"
+        type: string
+        required: false
+        default: "governed"
+
   workflow_dispatch:
     inputs:
       mode:
@@ -37,11 +66,16 @@ on:
         type: string
         default: "1.13.3"
 
-      # Used only when mode=apply (govern listener provides this)
       plan_run_id:
         description: "Plan run id (required for apply mode)"
         type: string
         required: false
+
+      gate:
+        description: "pr|governed"
+        type: choice
+        options: [pr, governed]
+        default: governed
 
 permissions:
   id-token: write
@@ -410,7 +444,8 @@ jobs:
           echo "name=core-plan-meta-${{ github.run_id }}" >> "$GITHUB_OUTPUT"
 
   plan_post:
-    if: ${{ inputs.mode == 'plan' }}
+    if: ${{ inputs.mode == 'plan' && (inputs.gate || 'governed') != 'pr' }}
+    # if: ${{ inputs.mode == 'plan' }}
     name: "Post | approval issue"
     needs: [plan_run]
     runs-on: ubuntu-latest
