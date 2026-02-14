@@ -161,31 +161,24 @@ jobs:
             if (stack === "shared-network") {
               workflow_id = "shared-network-governed-plan-apply.yml";
               inputs = { mode: "apply", product, plane: third, plan_run_id: planRunId };
-              // workflow_id = "network-apply.yml";
-              // inputs = { product, plane: third, plan_run_id: planRunId };
             } else if (stack === "core") {
               workflow_id = "core-governed-plan-apply.yml";
               inputs = { mode: "apply", product, plane: third, plan_run_id: planRunId };
-              // workflow_id = "core-apply.yml";
-              // inputs = { product, plane: third, plan_run_id: planRunId };
             } else if (stack === "platform-app") {
               workflow_id = "platform-app-governed-plan-apply.yml";
               inputs = { mode: "apply", product, env: third, plan_run_id: planRunId };
-              // workflow_id = "platform-apply.yml";
-              // inputs = { product, env: third, plan_run_id: planRunId }; // platform-app uses env
             } else if (stack === "observability") {
               workflow_id = "observability-governed-plan-apply.yml";
               inputs = { mode: "apply", product, env: third, plan_run_id: planRunId };
-              // workflow_id = "observability-apply.yml";
-              // inputs = { product, env: third, plan_run_id: planRunId };
             } else if (stack === "platform-registry") {
               workflow_id = "registry-apply.yml";
               inputs = { product, env: third, plan_run_id: planRunId };
             } else if (stack === "app-gateway-config") {
               workflow_id = "app-gateway-config-governed-plan-apply.yml";
-              inputs = { mode: "apply", product, env: third, plan_run_id: planRunId };
-              // workflow_id = "app-gateway-config-apply.yml";
-              // inputs = { product, plane: third, plan_run_id: planRunId };
+              inputs = { mode: "apply", product, plane: third, plan_run_id: planRunId };
+            } else if (stack === "afd-config") {
+              workflow_id = "afd-config-governed-plan-apply.yml";
+              inputs = { mode: "apply", product, plane: third, plan_run_id: planRunId };
             } else {
               core.setFailed(`Unknown stack in issue title: ${stack}`);
               return;
@@ -232,7 +225,7 @@ jobs:
               inputs
             });
 
-            // (Optional) best-effort: find the new apply run URL for the comment
+            // best-effort: find the new apply run URL for the comment
             const started = Date.now();
             const deadlineMs = 20000;
             const sleep = (ms) => new Promise(r => setTimeout(r, ms));
