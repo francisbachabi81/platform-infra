@@ -88,7 +88,7 @@ jobs:
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
       changed_any: ${{ steps.matrix.outputs.changed_any }}
-      docs_only: ${{ steps.filter.outputs.docs-only }}
+      docs_only: ${{ steps.filter.outputs['docs-only'] }}
       product: ${{ steps.inputs.outputs.product }}
       env: ${{ steps.inputs.outputs.env }}
       plane_std: ${{ steps.inputs.outputs.plane_std }}
@@ -245,7 +245,7 @@ jobs:
             echo ""
             echo "### Change classification"
             echo "- global: \`${{ steps.filter.outputs.global }}\`"
-            echo "- docs-only: \`${{ steps.filter.outputs.docs-only }}\`"
+            echo "- docs-only: \`${{ steps.filter.outputs['docs-only'] }}\`"
             echo ""
             echo "### Changed stacks"
             if [[ "${{ steps.matrix.outputs.changed_any }}" != "true" ]]; then
@@ -257,7 +257,28 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # STACK PLANS (MATRIX)
+  draft-checks:
+    name: Draft checks (fmt/validate only)
+    needs: [veracode, detect]
+    if: ${{ needs.detect.outputs.changed_any == 'true' && github.event.pull_request.draft }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+  
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.6
+  
+      - name: Run fmt/validate for ${{ matrix.stack }}
+        working-directory: stacks/${{ matrix.stack }}
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false -input=false
+          terraform validate
+  
   plan:
     name: Stack Plans
     needs: [veracode, detect]
@@ -276,20 +297,30 @@ jobs:
       gate: pr
     secrets: inherit
 
-  # DOCS
   docs-only:
     name: Documentation only (no Terraform plans)
     needs: [veracode, detect]
     if: ${{ needs.detect.outputs.changed_any != 'true' && needs.detect.outputs.docs_only == 'true' && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Docs-only change detected. No Terraform plans required."
+      - run: |
+          echo "Docs-only change detected. No Terraform plans required."
 
-  # FALLBACK
+  draft-no-changes:
+    name: Draft PR (no Terraform changes)
+    needs: [veracode, detect]
+    if: ${{ github.event.pull_request.draft && needs.detect.outputs.changed_any != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "Draft PR: no Terraform-impacting changes detected."
+
   no-changes:
     name: No Terraform plans required
     needs: [veracode, detect]
-    if: ${{ needs.detect.outputs.changed_any != 'true' || github.event.pull_request.draft }}
+    # if: ${{ !github.event.pull_request.draft && needs.detect.outputs.changed_any != 'true' }}
+    if: ${{ !github.event.pull_request.draft && needs.detect.outputs.changed_any != 'true' && needs.detect.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - run: echo "No plans required (no Terraform-impacting changes or PR is draft)."
+      - run: |
+          echo "No plans required (no Terraform-impacting changes)."
